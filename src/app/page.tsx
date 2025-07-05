@@ -1,5 +1,5 @@
 import React from 'react';
-"use client"; // This line is important for Next.js
+"use client";
 
 import { useState } from 'react';
 
@@ -41,7 +41,6 @@ export default function App() {
         setIsError(true);
       }
     } catch (error) {
-      // This is the corrected catch block
       setApiResponse(`Error: Failed to connect to the API. Please try again.`);
       setIsError(true);
     }
@@ -69,4 +68,62 @@ export default function App() {
         <h1 className="text-5xl md:text-6xl font-extrabold text-gray-900 leading-tight">
           Your Freelancing, Simplified.
         </h1>
-        <p className="mt-6 text-xl text-gray-600 max
+        <p className="mt-6 text-xl text-gray-600 max-w-2xl mx-auto">
+          Ten99 is the all-in-one platform that automates your invoicing, tracks
+          expenses, and prepares you for tax time, so you can focus on what you
+          do best.
+        </p>
+        <div className="mt-8">
+          <a
+            href="#process"
+            className="bg-indigo-600 text-white font-bold py-4 px-8 rounded-lg text-lg hover:bg-indigo-700 transition-colors duration-300 shadow-lg"
+          >
+            Get Started for Free
+          </a>
+        </div>
+      </main>
+
+      <section id="process" className="bg-white py-24">
+        <div className="container mx-auto px-6 max-w-xl">
+          <div className="text-center mb-12">
+            <h2 className="text-4xl font-bold text-gray-900">Process an Email</h2>
+            <p className="mt-4 text-lg text-gray-600">
+              Paste the body of a job offer email below to see the magic.
+            </p>
+          </div>
+          <div className="bg-white p-8 rounded-lg shadow-2xl">
+            <form onSubmit={handleSubmit}>
+              <textarea
+                value={emailText}
+                onChange={(e) => setEmailText(e.target.value)}
+                className="w-full h-40 p-4 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+                placeholder="Paste email text here..."
+              ></textarea>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="mt-6 w-full bg-indigo-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-indigo-700 transition-colors duration-300 disabled:bg-indigo-400 disabled:cursor-not-allowed"
+              >
+                {isLoading ? 'Processing...' : 'Extract Appointment Info'}
+              </button>
+            </form>
+            {apiResponse && (
+              <div className="mt-6 text-left">
+                <h3 className="font-semibold text-gray-800">Result:</h3>
+                <pre className={`mt-2 p-4 bg-gray-100 rounded-md whitespace-pre-wrap ${isError ? 'text-red-600' : ''}`}>
+                  {apiResponse}
+                </pre>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <footer className="bg-gray-800 text-white py-12">
+        <div className="container mx-auto px-6 text-center">
+          <p>&copy; {new Date().getFullYear()} Ten99. All rights reserved.</p>
+        </div>
+      </footer>
+    </div>
+  );
+}
