@@ -7,7 +7,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isError, setIsError] = useState(false);
 
-  const handleSubmit = async (event) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setIsLoading(true);
     setApiResponse('');
@@ -71,57 +71,3 @@ export default function App() {
           expenses, and prepares you for tax time, so you can focus on what you
           do best.
         </p>
-        <div className="mt-8">
-          <a
-            href="#process"
-            className="bg-indigo-600 text-white font-bold py-4 px-8 rounded-lg text-lg hover:bg-indigo-700 transition-colors duration-300 shadow-lg"
-          >
-            Get Started for Free
-          </a>
-        </div>
-      </main>
-
-      <section id="process" className="bg-white py-24">
-        <div className="container mx-auto px-6 max-w-xl">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold text-gray-900">Process an Email</h2>
-            <p className="mt-4 text-lg text-gray-600">
-              Paste the body of a job offer email below to see the magic.
-            </p>
-          </div>
-          <div className="bg-white p-8 rounded-lg shadow-2xl">
-            <form onSubmit={handleSubmit}>
-              <textarea
-                value={emailText}
-                onChange={(e) => setEmailText(e.target.value)}
-                className="w-full h-40 p-4 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
-                placeholder="Paste email text here..."
-              ></textarea>
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="mt-6 w-full bg-indigo-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-indigo-700 transition-colors duration-300 disabled:bg-indigo-400 disabled:cursor-not-allowed"
-              >
-                {isLoading ? 'Processing...' : 'Extract Appointment Info'}
-              </button>
-            </form>
-            {apiResponse && (
-              <div className="mt-6 text-left">
-                <h3 className="font-semibold text-gray-800">Result:</h3>
-                <pre className={`mt-2 p-4 bg-gray-100 rounded-md whitespace-pre-wrap ${isError ? 'text-red-600' : ''}`}>
-                  {apiResponse}
-                </pre>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
-      <footer className="bg-gray-800 text-white py-12">
-        <div className="container mx-auto px-6 text-center">
-          <p>&copy; {new Date().getFullYear()} Ten99. All rights reserved.</p>
-        </div>
-      </footer>
-    </div>
-  );
-}
