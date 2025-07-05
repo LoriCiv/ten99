@@ -1,3 +1,4 @@
+import React from 'react';
 "use client"; // This line is important for Next.js
 
 import { useState } from 'react';
@@ -69,4 +70,3 @@ export default function App() {
           Your Freelancing, Simplified.
         </h1>
         <p className="mt-6 text-xl text-gray-600 max
-        
