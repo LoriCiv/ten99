@@ -1,8 +1,5 @@
-// Forcing a final save
 "use client";
-import React from 'react';
-
-import { useState } from 'react';
+import React, { useState } from 'react';
 
 export default function App() {
   const [emailText, setEmailText] = useState('');
@@ -38,12 +35,13 @@ export default function App() {
         const cleanedResponse = data.aiResponse.replace(/```json\n|\n```/g, '');
         setApiResponse(JSON.stringify(JSON.parse(cleanedResponse), null, 2));
       } else {
-        setApiResponse(`Error from API: ${data.error}`);
+        setApiResponse(`Error from API: ${data.error || 'Unknown error'}`);
         setIsError(true);
+      }
     } catch {
-  setApiResponse(`Error: Failed to connect to the API. Please try again.`);
-  setIsError(true);
-}
+      setApiResponse(`Error: Failed to connect to the API. Please try again.`);
+      setIsError(true);
+    }
 
     setIsLoading(false);
   };
