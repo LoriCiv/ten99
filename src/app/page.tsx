@@ -40,11 +40,10 @@ export default function App() {
       } else {
         setApiResponse(`Error from API: ${data.error}`);
         setIsError(true);
-      }
-    } catch (error) {
-      setApiResponse(`Error: Failed to connect to the API. Please try again.`);
-      setIsError(true);
-    }
+    } catch {
+  setApiResponse(`Error: Failed to connect to the API. Please try again.`);
+  setIsError(true);
+}
 
     setIsLoading(false);
   };
