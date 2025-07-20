@@ -92,10 +92,20 @@ export default function InvoiceDetailModal({ invoice, clients, appointments, use
     };
     
     const handleSendInvoice = async () => {
-        if (!invoice || !client || !userProfile) return alert("Missing data.");
+        if (!invoice || !client || !userProfile) {
+            alert("Missing required data to send invoice.");
+            return;
+        }
+
         const recipientEmail = client.billingEmail || client.email;
-        if (!recipientEmail) return alert("Client has no email address.");
-        if (!window.confirm(`Send this invoice to ${recipientEmail}?`)) return;
+        if (!recipientEmail) {
+            alert("The selected client does not have an email address on file.");
+            return;
+        }
+
+        if (!window.confirm(`Send this invoice to ${recipientEmail}?`)) {
+            return;
+        }
         
         setIsSubmitting(true);
         try {
@@ -104,14 +114,18 @@ export default function InvoiceDetailModal({ invoice, clients, appointments, use
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ invoice, client, user: userProfile })
             });
+
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(errorData.error || "Failed to send email.");
             }
+
             await updateInvoice(TEMP_USER_ID, invoice.id!, { status: 'sent' });
+
             alert("Invoice sent successfully!");
             onSave();
             onClose();
+
         } catch (error) {
             console.error("Error sending invoice:", error);
             alert(`Failed to send invoice: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -231,6 +245,8 @@ export default function InvoiceDetailModal({ invoice, clients, appointments, use
                                     <button onClick={handleMarkAsPaid} className="flex items-center gap-2 bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700"><CheckCircle size={16}/>Mark as Paid</button>
                                 )}
                                 <button onClick={handleDelete} className="flex items-center gap-2 bg-destructive text-destructive-foreground font-semibold py-2 px-4 rounded-lg hover:bg-destructive/80"><Trash2 size={16}/>Delete</button>
+                                
+                                {/* ✅ THE FIX: The "Edit" button now appears for 'draft' OR 'sent' invoices */}
                                 {(invoice.status === 'draft' || invoice.status === 'sent') && (
                                     <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90"><Edit size={16}/>Edit</button>
                                 )}

@@ -15,10 +15,12 @@ export async function POST(request: Request) {
     }
     
     const recipientEmail = client.billingEmail || client.email;
-    const subject = `Invoice #${invoice.invoiceNumber} from ${user.professionalTitle || 'Your Name'}`;
+    
+    // ✅ THE FIX: Added a unique timestamp to the subject
+    const subject = `Invoice #${invoice.invoiceNumber} from ${user.professionalTitle || 'Your Name'} (${Date.now()})`;
 
     const { data, error } = await resend.emails.send({
-      from: 'invoices@ten99.app', // This must be a verified domain on Resend
+      from: 'invoices@ten99.app',
       to: [recipientEmail!],
       subject: subject,
       react: InvoiceEmail({ invoice, client, user }),
