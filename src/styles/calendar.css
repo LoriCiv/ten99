@@ -1,0 +1,62 @@
+/* src/styles/calendar.css */
+
+/* Make the calendar container and table full width */
+.rdp {
+    width: 100%;
+}
+.rdp-table {
+    width: 100%;
+}
+
+/* Style the header (Su, Mo, Tu, etc.) */
+.rdp-head_cell {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+}
+
+/* Make the day cells and buttons large and spacious */
+.rdp-cell {
+    padding: 0.25rem;
+}
+.rdp-day {
+    width: 100%;
+    height: 3.5rem; /* This creates the nice, spacious height */
+    border-radius: 0.5rem;
+    position: relative; /* Crucial for the dots */
+}
+
+/* Style for the day that is selected */
+.rdp-day_selected {
+    background-color: hsl(var(--primary)) !important;
+    color: hsl(var(--primary-foreground)) !important;
+}
+
+/* Style for today's date */
+.rdp-day_today {
+    background-color: hsl(var(--accent));
+    color: hsl(var(--accent-foreground));
+    font-weight: bold;
+}
+
+/* Style for the dots */
+.has-job-dot::after, .has-personal-dot::after, .has-billing-dot::after {
+    content: '';
+    position: absolute;
+    bottom: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 6px;
+    height: 6px;
+    border-radius: 9999px;
+}
+.has-job-dot::after { background-color: #22c55e; }
+.has-personal-dot::after { background-color: #3b82f6; }
+.has-billing-dot::after { background-color: #eab308; }
+
+/* Make dots visible on a selected day */
+.rdp-day_selected.has-job-dot::after,
+.rdp-day_selected.has-personal-dot::after,
+.rdp-day_selected.has-billing-dot::after {
+    background-color: hsl(var(--primary-foreground));
+}
