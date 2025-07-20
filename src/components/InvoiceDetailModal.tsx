@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import type { Invoice, Client, Appointment, UserProfile } from '@/types/app-interfaces';
 import { updateInvoice, deleteInvoice } from '@/utils/firestoreService';
 import { X, Edit, Trash2, Send, CheckCircle, Loader2 } from 'lucide-react';
@@ -16,9 +17,20 @@ interface InvoiceDetailModalProps {
     userProfile: UserProfile | null;
     onClose: () => void;
     onSave: () => void;
+    invoices: Invoice[];
 }
 
-export default function InvoiceDetailModal({ invoice, clients, appointments, userProfile, onClose, onSave }: InvoiceDetailModalProps) {
+const formatTime = (timeString?: string) => {
+    if (!timeString) return '';
+    const [hours, minutes] = timeString.split(':');
+    const hour = parseInt(hours, 10);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const formattedHour = hour % 12 || 12;
+    return `${formattedHour}:${minutes} ${ampm}`;
+};
+
+export default function InvoiceDetailModal({ invoice, clients, appointments, userProfile, onClose, onSave, invoices }: InvoiceDetailModalProps) {
+    const router = useRouter();
     const [isEditing, setIsEditing] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -80,20 +92,10 @@ export default function InvoiceDetailModal({ invoice, clients, appointments, use
     };
     
     const handleSendInvoice = async () => {
-        if (!invoice || !client || !userProfile) {
-            alert("Missing required data to send invoice.");
-            return;
-        }
-
+        if (!invoice || !client || !userProfile) return alert("Missing data.");
         const recipientEmail = client.billingEmail || client.email;
-        if (!recipientEmail) {
-            alert("The selected client does not have an email address on file.");
-            return;
-        }
-
-        if (!window.confirm(`Send this invoice to ${recipientEmail}?`)) {
-            return;
-        }
+        if (!recipientEmail) return alert("Client has no email address.");
+        if (!window.confirm(`Send this invoice to ${recipientEmail}?`)) return;
         
         setIsSubmitting(true);
         try {
@@ -102,21 +104,39 @@ export default function InvoiceDetailModal({ invoice, clients, appointments, use
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ invoice, client, user: userProfile })
             });
-
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(errorData.error || "Failed to send email.");
             }
-
             await updateInvoice(TEMP_USER_ID, invoice.id!, { status: 'sent' });
-
             alert("Invoice sent successfully!");
             onSave();
             onClose();
-
         } catch (error) {
             console.error("Error sending invoice:", error);
             alert(`Failed to send invoice: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleSendReceipt = async () => {
+        if (!invoice || !client || !userProfile) return alert("Missing data.");
+        const recipientEmail = client.billingEmail || client.email;
+        if (!recipientEmail) return alert("Client has no email address.");
+        if (!window.confirm(`Send a paid receipt to ${recipientEmail}?`)) return;
+
+        setIsSubmitting(true);
+        try {
+            const response = await fetch('/api/send-receipt', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ invoice, client, user: userProfile })
+            });
+            if (!response.ok) throw new Error("Failed to send receipt.");
+            alert("Receipt sent successfully!");
+        } catch (error) {
+            alert("Failed to send receipt.");
         } finally {
             setIsSubmitting(false);
         }
@@ -195,6 +215,12 @@ export default function InvoiceDetailModal({ invoice, clients, appointments, use
                         <div className="p-6 flex justify-between items-center bg-background/50 border-t">
                              <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X size={24} /></button>
                              <div className="flex gap-2 flex-wrap justify-end">
+                                {invoice.status === 'paid' && (
+                                    <button onClick={handleSendReceipt} disabled={isSubmitting} className="flex items-center gap-2 bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-purple-700 disabled:opacity-50">
+                                        {isSubmitting ? <Loader2 size={16} className="animate-spin"/> : <Send size={16}/>}
+                                        {isSubmitting ? 'Sending...' : 'Send Receipt'}
+                                    </button>
+                                )}
                                 {(invoice.status === 'draft' || invoice.status === 'sent') && (
                                     <button onClick={handleSendInvoice} disabled={isSubmitting} className="flex items-center gap-2 bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50">
                                         {isSubmitting ? <Loader2 size={16} className="animate-spin"/> : <Send size={16}/>}
@@ -205,7 +231,7 @@ export default function InvoiceDetailModal({ invoice, clients, appointments, use
                                     <button onClick={handleMarkAsPaid} className="flex items-center gap-2 bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700"><CheckCircle size={16}/>Mark as Paid</button>
                                 )}
                                 <button onClick={handleDelete} className="flex items-center gap-2 bg-destructive text-destructive-foreground font-semibold py-2 px-4 rounded-lg hover:bg-destructive/80"><Trash2 size={16}/>Delete</button>
-                                {invoice.status === 'draft' && (
+                                {(invoice.status === 'draft' || invoice.status === 'sent') && (
                                     <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90"><Edit size={16}/>Edit</button>
                                 )}
                              </div>

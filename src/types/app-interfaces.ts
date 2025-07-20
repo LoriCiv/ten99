@@ -117,6 +117,7 @@ export interface Invoice {
     userId?: string;
     invoiceNumber: string;
     clientId: string;
+    appointmentId?: string; // ✅ This line was added
     invoiceDate: string;
     dueDate: string;
     status: 'draft' | 'sent' | 'paid' | 'overdue' | 'void';
@@ -186,13 +187,11 @@ export interface UserProfile {
   languages?: string[];
   jobHistory?: JobHistoryEntry[];
   education?: EducationEntry[];
-  // ✅ ADDED THESE LINES
   defaultInvoiceNotes?: string;
   defaultPaymentDetails?: string;
+  estimatedFederalTaxRate?: number;
+  estimatedStateTaxRate?: number;
 }
-// src/types/app-interfaces.ts
-
-// ... (keep all other interfaces)
 
 export interface Expense {
   id?: string;
