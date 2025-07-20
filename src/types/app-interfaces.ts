@@ -190,3 +190,18 @@ export interface UserProfile {
   defaultInvoiceNotes?: string;
   defaultPaymentDetails?: string;
 }
+// src/types/app-interfaces.ts
+
+// ... (keep all other interfaces)
+
+export interface Expense {
+  id?: string;
+  userId?: string;
+  createdAt?: Timestamp;
+  date: string;
+  amount: number;
+  merchant: string; // The vendor or store
+  category: string;
+  notes?: string;
+  receiptUrl?: string; // Link to the uploaded receipt image
+}
