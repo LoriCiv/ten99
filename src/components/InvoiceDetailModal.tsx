@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Invoice, Client, Appointment, UserProfile } from '@/types/app-interfaces';
-import { updateInvoice, deleteInvoice } from '@/utils/firestoreService';
+import { updateInvoice, deleteInvoice, createInvoiceFromAppointment } from '@/utils/firestoreService';
 import { X, Edit, Trash2, Send, CheckCircle, Loader2 } from 'lucide-react';
 import InvoiceForm from './InvoiceForm';
 

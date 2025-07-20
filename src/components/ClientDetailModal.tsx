@@ -3,10 +3,9 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-// We don't need the router here anymore for this simple fix
 import type { Client, PersonalNetworkContact, JobFile } from '@/types/app-interfaces';
 import { updateClient, deleteClient, updatePersonalNetworkContact, deletePersonalNetworkContact, convertClientToContact, convertContactToClient } from '@/utils/firestoreService';
-import { X, Edit, Trash2, Save, FileText, Repeat, Mail } from 'lucide-react';
+import { X, Edit, Trash2, FileText, Repeat, Mail } from 'lucide-react';
 import ClientForm from './ClientForm';
 import ContactForm from './ContactForm';
 
@@ -20,12 +19,23 @@ interface ClientDetailModalProps {
 }
 
 export default function ClientDetailModal({ item, itemType, userId, clients, jobFiles, onClose }: ClientDetailModalProps) {
-    if (!item) { return null; }
-    
+    // ✅ THE FIX: All hooks are now at the top of the component, before any returns.
     const [isEditing, setIsEditing] = useState(false);
     const [isConverting, setIsConverting] = useState(false);
 
-    useEffect(() => { setIsEditing(false); }, [item]);
+    useEffect(() => {
+        setIsEditing(false);
+    }, [item]);
+    
+    const relevantJobFiles = useMemo(() => {
+        if (itemType !== 'Company' || !item?.id) return [];
+        return jobFiles.filter(jf => jf.clientId === item.id);
+    }, [jobFiles, item, itemType]);
+
+    // This check now happens AFTER all the hooks have been called.
+    if (!item) {
+        return null;
+    }
     
     const handleSave = async (formData: Partial<Client | PersonalNetworkContact>) => {
         if (!item.id) return;
@@ -50,7 +60,6 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
                 if (itemType === 'Company') await deleteClient(userId, item.id);
                 else await deletePersonalNetworkContact(userId, item.id);
                 alert('Item deleted.');
-                // ✅ THE FIX: A simple page reload guarantees the list updates.
                 window.location.reload();
             } catch (error) {
                 alert('Failed to delete item.');
@@ -67,7 +76,6 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
                 if (itemType === 'Company') await convertClientToContact(userId, item as Client);
                 else await convertContactToClient(userId, item as PersonalNetworkContact);
                 alert('Conversion successful!');
-                // ✅ THE FIX: A simple page reload guarantees the list updates.
                 window.location.reload();
             } catch (error) {
                 console.error("Conversion error:", error);
@@ -78,20 +86,19 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
         } else {
             setIsConverting(false);
         }
-     };
+    };
 
     const emailToUse = item.email || (itemType === 'Company' ? (item as Client).billingEmail : '');
-    const relevantJobFiles = useMemo(() => {
-        if (itemType !== 'Company' || !item.id) return [];
-        return jobFiles.filter(jf => jf.clientId === item.id);
-    }, [jobFiles, item, itemType]);
     const jobFileLink = relevantJobFiles.length === 1 && relevantJobFiles[0].id ? `/dashboard/job-files/${relevantJobFiles[0].id}` : `/dashboard/job-files?clientId=${item.id}`;
 
     return (
         <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4">
             <div className="bg-card rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border">
                 <div className="p-6">
-                    <div className="flex justify-between items-center mb-4 pb-4 border-b"><h2 className="text-2xl font-bold">{isEditing ? `Edit ${itemType}` : `${itemType} Details`}</h2><button onClick={onClose} className="p-1 hover:bg-secondary rounded-full"><X size={24}/></button></div>
+                    <div className="flex justify-between items-center mb-4 pb-4 border-b">
+                        <h2 className="text-2xl font-bold">{isEditing ? `Edit ${itemType}` : `${itemType} Details`}</h2>
+                        <button onClick={onClose} className="p-1 hover:bg-secondary rounded-full"><X size={24}/></button>
+                    </div>
                     {isEditing ? (
                         itemType === 'Company' ? ( <ClientForm initialData={item as Client} onSave={handleSave} onCancel={() => setIsEditing(false)} isSubmitting={false} /> ) : 
                         ( <ContactForm initialData={item as PersonalNetworkContact} onSave={handleSave} onCancel={() => setIsEditing(false)} isSubmitting={false} clients={clients} /> )
