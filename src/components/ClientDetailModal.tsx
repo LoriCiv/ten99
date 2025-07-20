@@ -4,10 +4,21 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import type { Client, PersonalNetworkContact, JobFile } from '@/types/app-interfaces';
-import { updateClient, deleteClient, updatePersonalNetworkContact, deletePersonalNetworkContact, convertClientToContact, convertContactToClient } from '@/utils/firestoreService';
-import { X, Edit, Trash2, FileText, Repeat, Mail } from 'lucide-react';
+import {
+    updateClient,
+    deleteClient,
+    updatePersonalNetworkContact,
+    deletePersonalNetworkContact,
+    convertClientToContact,
+    convertContactToClient
+} from '@/utils/firestoreService';
+import { X, Edit, Trash2, Mail, FileText, Repeat, ClipboardCopy, Check } from 'lucide-react';
 import ClientForm from './ClientForm';
 import ContactForm from './ContactForm';
+
+const DetailItem = ({ label, value }: { label: string, value?: string | null }) => (
+    <p><span className="font-semibold text-muted-foreground">{label}:</span> {value || 'N/A'}</p>
+);
 
 interface ClientDetailModalProps {
     item: Client | PersonalNetworkContact | null;
@@ -16,29 +27,32 @@ interface ClientDetailModalProps {
     clients: Client[];
     jobFiles: JobFile[];
     onClose: () => void;
+    onSave: () => void;
 }
 
-export default function ClientDetailModal({ item, itemType, userId, clients, jobFiles, onClose }: ClientDetailModalProps) {
-    // ✅ THE FIX: All hooks are now at the top of the component, before any returns.
+export default function ClientDetailModal({ item, itemType, userId, clients, jobFiles, onClose, onSave }: ClientDetailModalProps) {
     const [isEditing, setIsEditing] = useState(false);
     const [isConverting, setIsConverting] = useState(false);
+    const [isCopied, setIsCopied] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false); // Added isSubmitting state for the form
 
     useEffect(() => {
         setIsEditing(false);
+        setIsCopied(false);
     }, [item]);
-    
-    const relevantJobFiles = useMemo(() => {
-        if (itemType !== 'Company' || !item?.id) return [];
-        return jobFiles.filter(jf => jf.clientId === item.id);
-    }, [jobFiles, item, itemType]);
 
-    // This check now happens AFTER all the hooks have been called.
     if (!item) {
         return null;
     }
     
+    const relevantJobFiles = useMemo(() => {
+        if (itemType !== 'Company' || !item.id) return [];
+        return jobFiles.filter(jf => jf.clientId === item.id);
+    }, [jobFiles, item, itemType]);
+
     const handleSave = async (formData: Partial<Client | PersonalNetworkContact>) => {
         if (!item.id) return;
+        setIsSubmitting(true); // Set submitting to true
         try {
             if (itemType === 'Company') {
                 await updateClient(userId, item.id, formData as Partial<Client>);
@@ -46,9 +60,12 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
                 await updatePersonalNetworkContact(userId, item.id, formData as Partial<PersonalNetworkContact>);
             }
             alert(`${itemType} updated successfully!`);
-            window.location.reload(); // Reload the page to show changes
+            onSave();
+            setIsEditing(false);
         } catch (error) {
             console.error(`Error saving ${itemType}:`, error);
+        } finally {
+            setIsSubmitting(false); // Set submitting to false
         }
     };
 
@@ -60,7 +77,8 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
                 if (itemType === 'Company') await deleteClient(userId, item.id);
                 else await deletePersonalNetworkContact(userId, item.id);
                 alert('Item deleted.');
-                window.location.reload();
+                onSave();
+                onClose();
             } catch (error) {
                 alert('Failed to delete item.');
             }
@@ -73,10 +91,14 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
         const targetType = itemType === 'Company' ? 'Contact' : 'Company';
         if (window.confirm(`Are you sure you want to convert this ${itemType} to a ${targetType}?`)) {
             try {
-                if (itemType === 'Company') await convertClientToContact(userId, item as Client);
-                else await convertContactToClient(userId, item as PersonalNetworkContact);
+                if (itemType === 'Company') {
+                    await convertClientToContact(userId, item as Client);
+                } else {
+                    await convertContactToClient(userId, item as PersonalNetworkContact);
+                }
                 alert('Conversion successful!');
-                window.location.reload();
+                onSave();
+                onClose();
             } catch (error) {
                 console.error("Conversion error:", error);
                 alert("An error occurred during conversion.");
@@ -88,8 +110,23 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
         }
     };
 
+    const handleCopyInfo = () => {
+        const name = (item as Client).companyName || item.name;
+        const email = item.email || 'N/A';
+        const phone = item.phone || 'N/A';
+        const textToCopy = `Name: ${name}\nEmail: ${email}\nPhone: ${phone}`;
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            setIsCopied(true);
+            setTimeout(() => setIsCopied(false), 2000);
+        }).catch(() => {
+            alert("Failed to copy information.");
+        });
+    };
+
     const emailToUse = item.email || (itemType === 'Company' ? (item as Client).billingEmail : '');
-    const jobFileLink = relevantJobFiles.length === 1 && relevantJobFiles[0].id ? `/dashboard/job-files/${relevantJobFiles[0].id}` : `/dashboard/job-files?clientId=${item.id}`;
+    const jobFileLink = relevantJobFiles.length === 1 && relevantJobFiles[0].id
+        ? `/dashboard/job-files/${relevantJobFiles[0].id}`
+        : `/dashboard/job-files?clientId=${item.id}`;
 
     return (
         <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4">
@@ -99,16 +136,37 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
                         <h2 className="text-2xl font-bold">{isEditing ? `Edit ${itemType}` : `${itemType} Details`}</h2>
                         <button onClick={onClose} className="p-1 hover:bg-secondary rounded-full"><X size={24}/></button>
                     </div>
+
                     {isEditing ? (
-                        itemType === 'Company' ? ( <ClientForm initialData={item as Client} onSave={handleSave} onCancel={() => setIsEditing(false)} isSubmitting={false} /> ) : 
-                        ( <ContactForm initialData={item as PersonalNetworkContact} onSave={handleSave} onCancel={() => setIsEditing(false)} isSubmitting={false} clients={clients} /> )
+                        itemType === 'Company' ? (
+                            <ClientForm
+                                initialData={item as Client}
+                                onSave={handleSave}
+                                onCancel={() => setIsEditing(false)}
+                                isSubmitting={isSubmitting}
+                            />
+                        ) : (
+                            <ContactForm
+                                initialData={item as PersonalNetworkContact}
+                                onSave={handleSave}
+                                onCancel={() => setIsEditing(false)}
+                                // ✅ THE FIX IS HERE
+                                isSubmitting={isSubmitting}
+                                clients={clients}
+                            />
+                        )
                     ) : (
                         <div className="space-y-4">
                             <h3 className="font-bold text-xl">{(item as Client).companyName || item.name}</h3>
-                            <p><span className="font-semibold text-muted-foreground">Email:</span> {item.email || 'N/A'}</p>
-                            <p><span className="font-semibold text-muted-foreground">Phone:</span> {item.phone || 'N/A'}</p>
-                            {itemType === 'Company' && <p><span className="font-semibold text-muted-foreground">Primary Contact:</span> {(item as Client).name || 'N/A'}</p>}
+                            <DetailItem label="Email" value={item.email} />
+                            <DetailItem label="Phone" value={item.phone} />
+                            {itemType === 'Company' && <DetailItem label="Primary Contact" value={(item as Client).name} />}
+                            
                             <div className="flex justify-end gap-2 pt-4 border-t flex-wrap">
+                                <button onClick={handleCopyInfo} className="flex items-center gap-2 bg-gray-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-gray-600 w-32 justify-center">
+                                    {isCopied ? <Check size={16} /> : <ClipboardCopy size={16} />}
+                                    {isCopied ? 'Copied!' : 'Copy Info'}
+                                </button>
                                 {emailToUse && <Link href={`/dashboard/mailbox?to=${emailToUse}`} className="flex items-center gap-2 bg-teal-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-teal-700"><Mail size={16}/>Send Message</Link>}
                                 {relevantJobFiles.length > 0 && <Link href={jobFileLink} className="flex items-center gap-2 bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-secondary/80"><FileText size={16}/>View Files ({relevantJobFiles.length})</Link>}
                                 <button onClick={handleConvert} disabled={isConverting} className="flex items-center gap-2 bg-amber-500 text-white font-semibold py-2 px-4 rounded-lg disabled:opacity-50"><Repeat size={16}/>{isConverting ? 'Converting...' : 'Convert'}</button>

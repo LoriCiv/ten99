@@ -204,3 +204,16 @@ export interface Expense {
   notes?: string;
   receiptUrl?: string; // Link to the uploaded receipt image
 }
+
+export interface JobPosting {
+    id?: string;
+    userId: string; // The ID of the user who posted the job
+    title: string;
+    description: string;
+    location?: string;
+    rate?: string;
+    requiredSkills?: string[];
+    isFilled: boolean;
+    createdAt?: Timestamp;
+    }
+    
