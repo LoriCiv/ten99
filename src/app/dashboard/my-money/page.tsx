@@ -105,7 +105,7 @@ export default function MyMoneyPage() {
             totalTaxOwed: totalTaxOwed.toFixed(2),
             quarterlyPayment: (totalTaxOwed / 4).toFixed(2),
         };
-    }, [invoices, expenses, stateRate]);
+    }, [invoices, expenses, ytdExpenses, stateRate]);
 
     const handleSaveStateRate = async () => {
         setIsSubmitting(true);
@@ -142,8 +142,7 @@ export default function MyMoneyPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                     <StatCard title="YTD Income (Paid)" value={`$${stats.ytdIncome}`} icon={DollarSign} />
-                    <StatCard title="YTD Expenses" value={`$${stats.ytdExpenses}`} icon={FileText} />
-                    <StatCard title="Net Income" value={`$${stats.netIncome}`} icon={Landmark} />
+                    <StatCard title="Outstanding" value={`$${stats.outstanding}`} icon={Hourglass} />
                     <Link href="/dashboard/invoices?filter=overdue" className="block hover:opacity-80">
                         <StatCard 
                             title="Overdue" 
@@ -152,6 +151,7 @@ export default function MyMoneyPage() {
                             note={`${stats.overdueCount} invoices are past due`}
                         />
                     </Link>
+                    <StatCard title="All-Time Collected" value={`$${stats.totalCollected}`} icon={CheckCircle} />
                 </div>
                 
                 <div className="border-b border-border">
