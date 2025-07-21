@@ -85,18 +85,19 @@ export const addAppointment = async (userId: string, appointmentData: Partial<Ap
     if (appointmentData.recurrence && recurrenceEndDate && appointmentData.date) {
         const batch = writeBatch(db);
         const seriesId = uuidv4();
-        let movingDate = new Date(appointmentData.date + 'T00:00:00');
+        // eslint-disable-next-line prefer-const
+        let currentDate = new Date(appointmentData.date + 'T00:00:00');
         const endDate = new Date(recurrenceEndDate + 'T00:00:00');
-        while (movingDate <= endDate) {
+        while (currentDate <= endDate) {
             const newDocRef = doc(collection(db, `users/${userId}/appointments`));
-            const appointmentForDate = { ...dataToSave, date: movingDate.toISOString().split('T')[0], seriesId: seriesId };
+            const appointmentForDate = { ...dataToSave, date: currentDate.toISOString().split('T')[0], seriesId: seriesId };
             batch.set(newDocRef, appointmentForDate);
             switch (appointmentData.recurrence) {
-                case 'daily': movingDate.setDate(movingDate.getDate() + 1); break;
-                case 'weekly': movingDate.setDate(movingDate.getDate() + 7); break;
-                case 'biweekly': movingDate.setDate(movingDate.getDate() + 14); break;
-                case 'monthly': movingDate.setMonth(movingDate.getMonth() + 1); break;
-                default: movingDate.setDate(endDate.getDate() + 1); break;
+                case 'daily': currentDate.setDate(currentDate.getDate() + 1); break;
+                case 'weekly': currentDate.setDate(currentDate.getDate() + 7); break;
+                case 'biweekly': currentDate.setDate(currentDate.getDate() + 14); break;
+                case 'monthly': currentDate.setMonth(currentDate.getMonth() + 1); break;
+                default: currentDate.setDate(endDate.getDate() + 1); break;
             }
         }
         await batch.commit();
