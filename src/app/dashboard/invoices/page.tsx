@@ -3,8 +3,8 @@
 
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import type { Invoice, Client, Appointment, UserProfile } from '@/types/app-interfaces';
-import { getInvoices, getClients, getAppointments, getUserProfile } from '@/utils/firestoreService';
+import type { Invoice, Client, UserProfile } from '@/types/app-interfaces';
+import { getInvoices, getClients, getUserProfile } from '@/utils/firestoreService';
 import Link from 'next/link';
 import { PlusCircle } from 'lucide-react';
 import InvoiceDetailModal from '@/components/InvoiceDetailModal';
@@ -15,7 +15,6 @@ function InvoicesPageInternal() {
     const searchParams = useSearchParams();
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
-    const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
@@ -25,7 +24,6 @@ function InvoicesPageInternal() {
     useEffect(() => {
         const unsubInvoices = getInvoices(TEMP_USER_ID, setInvoices);
         const unsubClients = getClients(TEMP_USER_ID, setClients);
-        const unsubAppointments = getAppointments(TEMP_USER_ID, setAppointments);
         const unsubProfile = getUserProfile(TEMP_USER_ID, (profile) => {
             setUserProfile(profile);
             setIsLoading(false);
@@ -34,7 +32,6 @@ function InvoicesPageInternal() {
         return () => {
             unsubInvoices();
             unsubClients();
-            unsubAppointments();
             unsubProfile();
         };
     }, []);
