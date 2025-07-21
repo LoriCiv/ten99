@@ -5,8 +5,7 @@ import { useState, useEffect, useMemo } from 'react';
 import type { Invoice, Expense, Client, UserProfile } from '@/types/app-interfaces';
 import { getInvoices, getExpenses, getClients, getUserProfile, updateUserProfile } from '@/utils/firestoreService';
 import Link from 'next/link';
-// ✅ FIX 1: Removed unused 'FileText' icon from this import
-import { PlusCircle, Landmark, Hourglass, CheckCircle, AlertCircle, Save, Loader2, DollarSign } from 'lucide-react';
+import { PlusCircle, Landmark, Hourglass, CheckCircle, AlertCircle, Save, Loader2, DollarSign, FileText } from 'lucide-react';
 import InvoiceDetailModal from '@/components/InvoiceDetailModal';
 
 const TEMP_USER_ID = "dev-user-1";
@@ -49,13 +48,17 @@ export default function MyMoneyPage() {
             if (profile) {
                 setStateRate(profile.estimatedStateTaxRate || '');
             }
-            setIsLoading(false);
         });
+
+        // A simple way to handle initial load and prevent getting stuck
+        const timer = setTimeout(() => setIsLoading(false), 1500);
+
         return () => {
             unsubInvoices();
             unsubExpenses();
             unsubClients();
             unsubProfile();
+            clearTimeout(timer);
         };
     }, []);
 
@@ -79,8 +82,8 @@ export default function MyMoneyPage() {
             .reduce((sum, inv) => sum + (inv.total || 0), 0);
         
         const expensesValue = expenses
-             .filter(exp => new Date(exp.date).getFullYear() === currentYear)
-             .reduce((sum, exp) => sum + exp.amount, 0);
+            .filter(exp => new Date(exp.date).getFullYear() === today.getFullYear())
+            .reduce((sum, exp) => sum + exp.amount, 0);
         
         const selfEmploymentTaxRate = 0.153;
         const standardDeduction = 14600;
@@ -106,8 +109,7 @@ export default function MyMoneyPage() {
             totalTaxOwed: totalTaxOwed.toFixed(2),
             quarterlyPayment: (totalTaxOwed / 4).toFixed(2),
         };
-    // ✅ FIX 2: Removed 'ytdExpenses' from the dependency array to fix the warning.
-    }, [invoices, expenses, stateRate]);
+    }, [invoices, expenses, ytdExpenses, stateRate]);
 
     const handleSaveStateRate = async () => {
         setIsSubmitting(true);
@@ -144,7 +146,8 @@ export default function MyMoneyPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                     <StatCard title="YTD Income (Paid)" value={`$${stats.ytdIncome}`} icon={DollarSign} />
-                    <StatCard title="Outstanding" value={`$${stats.outstanding}`} icon={Hourglass} />
+                    <StatCard title="YTD Expenses" value={`$${stats.ytdExpenses}`} icon={FileText} />
+                    <StatCard title="Net Income" value={`$${stats.netIncome}`} icon={Landmark} />
                     <Link href="/dashboard/invoices?filter=overdue" className="block hover:opacity-80">
                         <StatCard 
                             title="Overdue" 
@@ -153,7 +156,6 @@ export default function MyMoneyPage() {
                             note={`${stats.overdueCount} invoices are past due`}
                         />
                     </Link>
-                    <StatCard title="All-Time Collected" value={`$${stats.totalCollected}`} icon={CheckCircle} />
                 </div>
                 
                 <div className="border-b border-border">
@@ -236,7 +238,6 @@ export default function MyMoneyPage() {
                         </div>
                     </div>
                 </div>
-
             </div>
 
             {selectedInvoice && (
