@@ -6,7 +6,7 @@ import JobFileDetailPageContent from '@/components/JobFileDetailPageContent';
 
 const TEMP_USER_ID = "dev-user-1";
 
-// ✅ THE FIX: Using the simpler function and disabling the 'any' rule for this block
+// ✅ THE FINAL FIX: Using the simple function and telling the linter to ignore the 'any' type for just this block.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const serializeTimestamps = (data: any): any => {
     if (!data) return data;
