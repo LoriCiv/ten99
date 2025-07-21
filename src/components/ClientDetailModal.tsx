@@ -31,7 +31,7 @@ interface ClientDetailModalProps {
 }
 
 export default function ClientDetailModal({ item, itemType, userId, clients, jobFiles, onClose, onSave }: ClientDetailModalProps) {
-    // ✅ MOVED ALL HOOKS to the top level of the component
+    // ✅ MOVED ALL HOOKS to the top level, before any returns.
     const [isEditing, setIsEditing] = useState(false);
     const [isConverting, setIsConverting] = useState(false);
     const [isCopied, setIsCopied] = useState(false);
@@ -47,7 +47,7 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
         return jobFiles.filter(jf => jf.clientId === item.id);
     }, [jobFiles, item, itemType]);
 
-    // This safety check now happens AFTER all hooks have been called.
+    // Safety check now happens AFTER hooks.
     if (!item) {
         return null;
     }
@@ -81,7 +81,8 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
                 alert('Item deleted.');
                 onSave();
                 onClose();
-            } catch (error) {
+            } catch (err) { // Use the error variable so it's not "unused"
+                console.error("Failed to delete item:", err);
                 alert('Failed to delete item.');
             }
         }

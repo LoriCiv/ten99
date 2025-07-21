@@ -11,20 +11,10 @@ import { ArrowLeft } from 'lucide-react';
 
 const TEMP_USER_ID = "dev-user-1";
 
-const calculateEndTime = (startTime: string, durationInMinutes: number): string => {
-    if (!startTime || !durationInMinutes) return '';
-    const [hours, minutes] = startTime.split(':').map(Number);
-    const startDate = new Date();
-    startDate.setHours(hours, minutes, 0, 0);
-    const endDate = new Date(startDate.getTime() + durationInMinutes * 60000);
-    const endHours = endDate.getHours().toString().padStart(2, '0');
-    const endMinutes = endDate.getMinutes().toString().padStart(2, '0');
-    return `${endHours}:${endMinutes}`;
-};
-
 function NewAppointmentPageInternal() {
     const router = useRouter();
     const searchParams = useSearchParams();
+
     const [clients, setClients] = useState<Client[]>([]);
     const [contacts, setContacts] = useState<PersonalNetworkContact[]>([]);
     const [jobFiles, setJobFiles] = useState<JobFile[]>([]);
@@ -56,10 +46,50 @@ function NewAppointmentPageInternal() {
     }, [fetchData]);
 
     const handleParseWithAI = async () => {
-        // ... (AI Parsing logic is all correct and unchanged)
+        if (!pastedText.trim()) return setAiMessage('Please paste some text to parse.');
+        const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+        if (!apiKey) return setAiMessage("Error: Gemini API key is not configured.");
+        setIsParsing(true);
+        setAiMessage('AI is parsing the text...');
+        setPrefilledData(undefined);
+        const clientListForAI = clients.map(c => ({ id: c.id, name: c.companyName || c.name }));
+        const prompt = `You are a scheduling assistant... CLIENTS: ${JSON.stringify(clientListForAI)} TEXT: ${pastedText}`;
+        const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
+        try {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!response.ok) throw new Error(`API request failed: ${response.status}`);
+            const result = await response.json();
+            const rawText = result.candidates[0].content.parts[0].text;
+            const cleanText = rawText.replace(/```json\n/g, '').replace(/\n```/g, '');
+            const jsonStart = cleanText.indexOf('{');
+            const jsonEnd = cleanText.lastIndexOf('}');
+            if (jsonStart === -1 || jsonEnd === -1) throw new Error("No valid JSON object found in AI response.");
+            const parsedJson = JSON.parse(cleanText.substring(jsonStart, jsonEnd + 1));
+            if (parsedJson.newClientName && !parsedJson.clientId) {
+                const newClientData: Partial<Client> = {
+                    companyName: parsedJson.newClientName,
+                    name: parsedJson.newClientName,
+                    status: 'Active',
+                    clientType: 'business_1099'
+                };
+                const newClientRef = await addClient(TEMP_USER_ID, newClientData);
+                parsedJson.clientId = newClientRef.id;
+                fetchData();
+            }
+            setPrefilledData(parsedJson);
+            setAiMessage('Success! Form has been pre-filled.');
+        } catch (error) {
+            console.error("AI Parsing Error:", error);
+            setAiMessage("Error parsing AI response. Check console for details.");
+        } finally {
+            setIsParsing(false);
+        }
     };
-
-    // ✅ THE FIX: This function now correctly handles recurrence
+    
     const handleSaveAppointment = async (appointmentData: Partial<Appointment>, recurrenceEndDate?: string) => {
         setIsSubmitting(true);
         if (!appointmentData.date || !appointmentData.time) {
@@ -69,6 +99,7 @@ function NewAppointmentPageInternal() {
         }
 
         try {
+            // ✅ THE FIX: Restored conflict checking logic
             const newStart = new Date(`${appointmentData.date}T${appointmentData.time}`);
             const newEnd = appointmentData.endTime
                 ? new Date(`${appointmentData.date}T${appointmentData.endTime}`)
@@ -110,7 +141,6 @@ function NewAppointmentPageInternal() {
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back to Calendar
             </Link>
-
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
                 <div className="space-y-8">
                     <div>

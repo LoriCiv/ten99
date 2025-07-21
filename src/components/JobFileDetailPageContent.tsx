@@ -1,8 +1,7 @@
 // src/components/JobFileDetailPageContent.tsx
 "use client";
 
-// ✅ THE FIX: Added useEffect to the import line
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react'; // ✅ THE FIX: Removed unused 'useMemo'
 import { useRouter } from 'next/navigation';
 import type { JobFile, Client, Appointment, PersonalNetworkContact } from '@/types/app-interfaces';
 import { updateJobFile, deleteJobFile } from '@/utils/firestoreService';
@@ -110,8 +109,8 @@ export default function JobFileDetailPageContent({ initialJobFile, initialClient
                     {jobFile.fileUrl && (
                         <div className="mt-4 pt-4 border-t">
                              <a href={jobFile.fileUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm text-primary hover:underline font-semibold">
-                                <Paperclip size={16} />
-                                View Attached File
+                                 <Paperclip size={16} />
+                                 View Attached File
                             </a>
                         </div>
                     )}
@@ -124,7 +123,7 @@ export default function JobFileDetailPageContent({ initialJobFile, initialClient
                     </div>
                 </div>
             </div>
-            {isShareModalOpen && ( <ShareModal onClose={() => setIsShareModalOpen(false)} jobFile={jobFile} clientName={clientName} dateRange={dateRange} currentUserId={TEMP_USER_ID} currentUserName={TEMP_USER_NAME} clients={clients} contacts={contacts} /> )}
+            {isShareModalOpen && ( <ShareModal onClose={() => setIsShareModalOpen(false)} jobFile={jobFile} clientName={clientName} currentUserId={TEMP_USER_ID} currentUserName={TEMP_USER_NAME} clients={clients} contacts={contacts} /> )}
         </>
     );
 }

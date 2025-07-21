@@ -7,17 +7,17 @@ import { createPublicJobFile, sendAppMessage } from '@/utils/firestoreService';
 import { X, Copy, Check, Send, Loader2, CheckCircle, ChevronsUpDown } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
 } from "@/components/ui/command";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
 } from "@/components/ui/popover";
 
 
@@ -25,7 +25,7 @@ interface ShareModalProps {
     onClose: () => void;
     jobFile: JobFile;
     clientName: string;
-    dateRange: string | null;
+    // ✅ THE FIX: Removed unused 'dateRange' prop
     currentUserId: string;
     currentUserName: string;
     clients: Client[];
@@ -36,7 +36,6 @@ export default function ShareModal({
     onClose,
     jobFile,
     clientName,
-    dateRange,
     currentUserId,
     currentUserName,
     clients,
@@ -66,7 +65,7 @@ export default function ShareModal({
             setIsLoadingLink(true);
             try {
                 const publicId = await createPublicJobFile(currentUserId, jobFile);
-                const link = `${window.location.origin}/share/${publicId}`;
+                const link = `${window.location.origin}/share/job/${publicId}`;
                 setPublicLink(link);
             } catch (error) {
                 console.error("Error creating share link:", error);
@@ -122,9 +121,13 @@ export default function ShareModal({
                                     {copied ? 'Copied to Clipboard!' : 'Copy Link'}
                                 </button>
                             </div>
-                            <div className="pt-4 border-t space-y-2">
-                                <p className="text-sm text-muted-foreground">Or, send directly to another Ten99 user:</p>
-                                <div className="flex gap-2">
+                            <div className="relative">
+                                <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+                                <div className="relative flex justify-center text-xs uppercase"><span className="bg-card px-2 text-muted-foreground">Or</span></div>
+                            </div>
+                            <div>
+                                <label className="text-sm font-medium text-muted-foreground">Send directly to a contact:</label>
+                                <div className="flex gap-2 mt-1">
                                     <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
                                         <PopoverTrigger asChild>
                                             <Button variant="outline" role="combobox" aria-expanded={popoverOpen} className="w-full justify-between">

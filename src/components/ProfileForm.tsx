@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image'; // ✅ 1. Import the Next.js Image component
 import type { UserProfile, JobHistoryEntry, EducationEntry } from '@/types/app-interfaces';
 import { uploadFile } from '@/utils/firestoreService';
 import { Save, Loader2, Plus, Trash2, User as UserIcon } from 'lucide-react';
@@ -26,10 +27,9 @@ export default function ProfileForm({ onSave, initialProfile, isSubmitting }: Pr
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, type } = e.target;
         const value = type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value;
-        setFormData(prev => ({ ...prev, [name]: type === 'number' ? (value === '' ? undefined : parseFloat(value as string)) : value }));
+        setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    // ... (other handlers like handleFileChange, handleJobHistoryChange, etc. remain the same)
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files && e.target.files[0]) { setSelectedFile(e.target.files[0]); } };
     const handleJobHistoryChange = (index: number, field: keyof JobHistoryEntry, value: string) => { const newHistory = [...(formData.jobHistory || [])]; newHistory[index][field] = value; setFormData(prev => ({ ...prev, jobHistory: newHistory })); };
     const addJobHistoryEntry = () => { setFormData(prev => ({ ...prev, jobHistory: [...(prev.jobHistory || []), { title: '', company: '', years: '' }] })); };
@@ -42,17 +42,38 @@ export default function ProfileForm({ onSave, initialProfile, isSubmitting }: Pr
     
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        await onSave(formData);
+        // ✅ 2. Changed 'let' to 'const'
+        const finalProfileData = { ...formData };
+
+        if (selectedFile) {
+            setIsUploading(true);
+            try {
+                const photoUrl = await uploadFile(TEMP_USER_ID, selectedFile);
+                finalProfileData.photoUrl = photoUrl;
+            } catch (error) {
+                console.error("Photo upload failed:", error);
+                alert("Photo upload failed. Please try again.");
+                setIsUploading(false);
+                return;
+            }
+            setIsUploading(false);
+        }
+
+        await onSave(finalProfileData);
     };
 
     const isLoading = isSubmitting || isUploading;
 
     return (
         <form onSubmit={handleSubmit} className="space-y-8">
-            {/* All profile fields from Photo down to Education */}
             <div className="flex items-start gap-6">
-                <div className="relative w-24 h-24 rounded-full bg-muted flex items-center justify-center border shrink-0">
-                    {formData.photoUrl ? ( <img src={formData.photoUrl} alt="Profile" className="w-full h-full rounded-full object-cover" /> ) : ( <UserIcon className="w-12 h-12 text-muted-foreground" /> )}
+                <div className="relative w-24 h-24 rounded-full bg-muted flex items-center justify-center border shrink-0 overflow-hidden">
+                    {formData.photoUrl ? ( 
+                        // ✅ 3. Replaced <img> with next/image <Image>
+                        <Image src={formData.photoUrl} alt="Profile" layout="fill" className="object-cover" /> 
+                    ) : ( 
+                        <UserIcon className="w-12 h-12 text-muted-foreground" /> 
+                    )}
                 </div>
                 <div className="flex-1 space-y-2"><label className="block text-sm font-medium text-muted-foreground">Profile Photo</label><input type="file" onChange={handleFileChange} accept="image/*" className="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"/></div>
             </div>

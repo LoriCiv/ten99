@@ -4,7 +4,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Certification, CEU } from '@/types/app-interfaces';
-// ✅ THE FIX: Removed 'X' and 'Loader2' as they are no longer used in this file.
+// ✅ THE FIX: Removed 'X' and 'Loader2' from this import line.
 import { PlusCircle, Edit, Trash2, Award, BookOpen, Library, Users } from 'lucide-react';
 import { addCertification, updateCertification, deleteCertification, addCEU, updateCEU, deleteCEU } from '@/utils/firestoreService';
 import CertificationForm from './CertificationForm';

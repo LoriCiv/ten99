@@ -12,7 +12,7 @@ import { ArrowLeft } from 'lucide-react';
 const TEMP_USER_ID = "dev-user-1";
 
 const calculateDurationInHours = (startTime?: string, endTime?: string): number => {
-    if (!startTime || !endTime) return 1; 
+    if (!startTime || !endTime) return 1;
     const start = new Date(`1970-01-01T${startTime}`);
     const end = new Date(`1970-01-01T${endTime}`);
     const diffMs = end.getTime() - start.getTime();
@@ -45,7 +45,6 @@ function NewInvoicePageInternal() {
         if (clients.length > 0 && appointments.length > 0 && userProfile) {
             const appointmentId = searchParams.get('appointmentId');
             
-            // ✅ 1. Start with the defaults from the user's profile
             const prefilledData: Partial<Invoice> = {
                 notes: userProfile.defaultInvoiceNotes || '',
                 paymentDetails: userProfile.defaultPaymentDetails || '',
@@ -59,7 +58,8 @@ function NewInvoicePageInternal() {
                 if (linkedAppointment && linkedClient) {
                     const rate = linkedClient.rate || 0;
                     const duration = calculateDurationInHours(linkedAppointment.time, linkedAppointment.endTime);
-                    let detailedDescription = `${linkedAppointment.subject || 'Services Rendered'}\nDate: ${linkedAppointment.date} from ${linkedAppointment.time} to ${linkedAppointment.endTime}\nJob #: ${linkedAppointment.jobNumber || 'N/A'}`;
+                    // ✅ THE FIX: Changed 'let' to 'const'
+                    const detailedDescription = `${linkedAppointment.subject || 'Services Rendered'}\nDate: ${linkedAppointment.date} from ${linkedAppointment.time} to ${linkedAppointment.endTime}\nJob #: ${linkedAppointment.jobNumber || 'N/A'}`;
                     
                     prefilledData.clientId = linkedAppointment.clientId;
                     prefilledData.lineItems = [{ description: detailedDescription, quantity: duration, unitPrice: rate, total: duration * rate }];

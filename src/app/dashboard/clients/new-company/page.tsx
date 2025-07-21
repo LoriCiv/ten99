@@ -5,9 +5,9 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Client } from '@/types/app-interfaces';
 import { addClient } from '@/utils/firestoreService';
-import Link from 'next/link';
-import { ArrowLeft, Save } from 'lucide-react';
 import ClientForm from '@/components/ClientForm';
+import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react'; // ✅ THE FIX: Removed unused 'Save' icon
 
 const TEMP_USER_ID = "dev-user-1";
 
@@ -15,15 +15,15 @@ export default function NewCompanyPage() {
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const handleSaveClient = async (formData: Partial<Client>) => {
+    const handleSave = async (data: Partial<Client>) => {
         setIsSubmitting(true);
         try {
-            await addClient(TEMP_USER_ID, formData);
-            alert("Company created successfully!");
+            await addClient(TEMP_USER_ID, data);
+            alert('Company added successfully!');
             router.push('/dashboard/clients');
         } catch (error) {
-            console.error("Error creating company:", error);
-            alert("Failed to create company.");
+            console.error("Error adding company:", error);
+            alert('Failed to add company.');
         } finally {
             setIsSubmitting(false);
         }
@@ -36,7 +36,7 @@ export default function NewCompanyPage() {
                 Back to Clients & Connections
             </Link>
             <ClientForm
-                onSave={handleSaveClient}
+                onSave={handleSave}
                 onCancel={() => router.push('/dashboard/clients')}
                 isSubmitting={isSubmitting}
             />

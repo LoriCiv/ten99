@@ -28,7 +28,7 @@ function StatCard({ title, value, icon: Icon, note }: { title: string; value: st
 
 export default function MyMoneyPage() {
     const [invoices, setInvoices] = useState<Invoice[]>([]);
-    const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+    // ✅ THE FIX: Removed the unused userProfile state variable.
     const [isLoading, setIsLoading] = useState(true);
     const [ytdExpenses, setYtdExpenses] = useState<number | ''>('');
     const [stateRate, setStateRate] = useState<number | ''>('');
@@ -37,7 +37,7 @@ export default function MyMoneyPage() {
     useEffect(() => {
         const unsubInvoices = getInvoices(TEMP_USER_ID, setInvoices);
         const unsubProfile = getUserProfile(TEMP_USER_ID, (profile) => {
-            setUserProfile(profile);
+            // We can still get the data we need from the profile here
             if (profile) {
                 setStateRate(profile.estimatedStateTaxRate || '');
             }
@@ -117,7 +117,6 @@ export default function MyMoneyPage() {
                 <p className="text-muted-foreground">A high-level overview of your freelance business.</p>
             </header>
 
-            {/* ✅ RESTORED: The four summary cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard title="YTD Income" value={`$${stats.ytdIncome}`} icon={DollarSign} />
                 <StatCard title="Outstanding" value={`$${stats.outstanding}`} icon={Hourglass} />
@@ -132,7 +131,6 @@ export default function MyMoneyPage() {
                 <StatCard title="All-Time Collected" value={`$${stats.totalCollected}`} icon={CheckCircle} />
             </div>
 
-            {/* ✅ RESTORED: The tax estimation card */}
             <div className="mt-8 bg-card p-6 rounded-lg border">
                 <div className="flex justify-between items-center">
                     <h2 className="text-lg font-semibold">Estimated Tax Liability ({new Date().getFullYear()})</h2>
@@ -163,8 +161,8 @@ export default function MyMoneyPage() {
                             <Landmark className="h-6 w-6" />
                         </div>
                         <div>
-                             <p className="text-sm font-medium text-muted-foreground">Suggested Quarterly Payment</p>
-                             <p className="text-2xl font-bold">${stats.quarterlyPayment}</p>
+                            <p className="text-sm font-medium text-muted-foreground">Suggested Quarterly Payment</p>
+                            <p className="text-2xl font-bold">${stats.quarterlyPayment}</p>
                         </div>
                     </div>
                 </div>
