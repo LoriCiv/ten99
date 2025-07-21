@@ -1,8 +1,8 @@
-// src/app/api/send-invoice/route.tsx
+// src/app/api/send-receipt/route.tsx
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
-// ✅ FIX: Corrected the import path to match your folder structure
-import InvoiceEmail from '@/emails/InvoiceEmail';
+// ✅ THE FIX: Changed to a default import (no curly braces)
+import ReceiptEmail from '@/emails/ReceiptEmail';
 import type { Invoice, Client, UserProfile } from '@/types/app-interfaces';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -12,7 +12,7 @@ export async function POST(request: Request) {
         const { invoice, client, user } = await request.json() as { invoice: Invoice, client: Client, user: UserProfile };
 
         if (!invoice || !client || !user) {
-            return NextResponse.json({ error: 'Missing invoice, client, or user data' }, { status: 400 });
+            return NextResponse.json({ error: 'Missing required data' }, { status: 400 });
         }
 
         const recipientEmail = client.billingEmail || client.email;
@@ -20,13 +20,13 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Recipient email is missing' }, { status: 400 });
         }
 
-        const subject = `Invoice #${invoice.invoiceNumber} from ${user.professionalTitle || 'Your Business'}`;
+        const subject = `Receipt for Invoice #${invoice.invoiceNumber}`;
 
         const { data, error } = await resend.emails.send({
-            from: 'invoices@ten99.app',
+            from: 'receipts@ten99.app', // Make sure this is a verified Resend domain
             to: [recipientEmail],
             subject: subject,
-            react: <InvoiceEmail invoice={invoice} client={client} user={user} />,
+            react: <ReceiptEmail invoice={invoice} client={client} user={user} />,
         });
 
         if (error) {
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: error.message }, { status: 500 });
         }
 
-        return NextResponse.json({ message: 'Email sent successfully!', data });
+        return NextResponse.json({ message: 'Receipt sent successfully!', data });
 
     } catch (err) {
         const error = err as Error;
