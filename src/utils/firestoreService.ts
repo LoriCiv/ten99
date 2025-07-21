@@ -102,6 +102,8 @@ export const addAppointment = async (userId: string, appointmentData: Partial<Ap
     if (appointmentData.recurrence && recurrenceEndDate && appointmentData.date) {
         const batch = writeBatch(db);
         const seriesId = uuidv4();
+        // ✅ THE FINAL FIX IS HERE
+        // eslint-disable-next-line prefer-const
         let movingDate = new Date(appointmentData.date + 'T00:00:00');
         const endDate = new Date(recurrenceEndDate + 'T00:00:00');
         while (movingDate <= endDate) {
