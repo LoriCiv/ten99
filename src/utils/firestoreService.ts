@@ -39,27 +39,33 @@ export const getClients = (userId: string, callback: (data: Client[]) => void) =
     const q = query(collection(db, `users/${userId}/clients`), orderBy('createdAt', 'desc'));
     return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as Client))); });
 };
+
 export const getPersonalNetwork = (userId: string, callback: (data: PersonalNetworkContact[]) => void) => {
     const q = query(collection(db, `users/${userId}/personalNetwork`), orderBy('createdAt', 'desc'));
     return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as PersonalNetworkContact))); });
 };
+
 export const getJobFiles = (userId: string, callback: (data: JobFile[]) => void) => {
     const q = query(collection(db, `users/${userId}/jobFiles`), orderBy('createdAt', 'desc'));
     return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as JobFile))); });
 };
+
 export const getAppointments = (userId: string, callback: (data: Appointment[]) => void) => {
     const q = query(collection(db, `users/${userId}/appointments`), orderBy('date', 'desc'));
     return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as Appointment))); });
 };
+
 export const getJobFile = (userId: string, jobFileId: string, callback: (data: JobFile | null) => void) => {
     const jobFileRef = doc(db, 'users', userId, 'jobFiles', jobFileId);
     return onSnapshot(jobFileRef, (docSnap) => { if (docSnap.exists()) { callback({ id: docSnap.id, ...docSnap.data() } as JobFile); } else { callback(null); } });
 };
+
 export const getMessagesForUser = (userId: string, callback: (data: Message[]) => void) => {
     const messagesRef = collection(db, 'users', userId, 'messages');
     const q = query(messagesRef, where('recipientId', '==', userId), orderBy('createdAt', 'desc'));
     return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as Message))); });
 };
+
 export const getSentMessagesForUser = (userId: string, callback: (data: Message[]) => void) => {
     const messagesRef = collection(db, 'users', userId, 'messages');
     const q = query(messagesRef, where('senderId', '==', userId), orderBy('createdAt', 'desc'));
