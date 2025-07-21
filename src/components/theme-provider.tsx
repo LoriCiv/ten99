@@ -1,9 +1,10 @@
+// src/components/theme-provider.tsx
 "use client"
-import { ThemeProvider as NextThemesProvider } from "next-themes"
-import * as React from "react"
 
-// Using `any` to bypass the broken type-checking from the next-themes package
-export function ThemeProvider({ children, ...props }: { children: React.ReactNode; [key: string]: any }) {
+import * as React from "react"
+// ✅ THE FIX: Imported ThemeProviderProps directly from 'next-themes'
+import { ThemeProvider as NextThemesProvider, type ThemeProviderProps } from "next-themes"
+
+export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
   return <NextThemesProvider {...props}>{children}</NextThemesProvider>
 }
- 

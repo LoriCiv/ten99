@@ -8,8 +8,7 @@ import CertificationsPageContent from '@/components/CertificationsPageContent';
 
 const TEMP_USER_ID = "dev-user-1";
 
-// ✅ THE FIX: Added specific types for the page props
-export default function CertificationsPage({ params }: { params: { userId: string } }) {
+export default function CertificationsPage() { // ✅ FIX: Removed unused 'params'
     const [certifications, setCertifications] = useState<Certification[]>([]);
     const [allCeus, setAllCeus] = useState<CEU[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -17,24 +16,22 @@ export default function CertificationsPage({ params }: { params: { userId: strin
     useEffect(() => {
         const unsubCertifications = getCertifications(TEMP_USER_ID, (certs) => {
             setCertifications(certs);
-            
-            // Fetch CEUs for all certifications
+            if (certs.length === 0) {
+                setIsLoading(false);
+                return;
+            }
             const ceuPromises = certs.map(cert => 
                 new Promise<CEU[]>((resolve) => {
                     getCEUsForCertification(TEMP_USER_ID, cert.id!, resolve);
                 })
             );
-
             Promise.all(ceuPromises).then(results => {
                 const flattenedCeus = results.flat();
                 setAllCeus(flattenedCeus);
                 setIsLoading(false);
             });
         });
-
-        return () => {
-            unsubCertifications();
-        };
+        return () => { unsubCertifications(); };
     }, []);
 
     if (isLoading) {
