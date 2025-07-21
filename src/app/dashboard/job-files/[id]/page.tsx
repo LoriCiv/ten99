@@ -6,7 +6,6 @@ import JobFileDetailPageContent from '@/components/JobFileDetailPageContent';
 
 const TEMP_USER_ID = "dev-user-1";
 
-// ✅ THE FINAL FIX: Using the simple function and telling the linter to ignore the 'any' type for just this block.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const serializeTimestamps = (data: any): any => {
     if (!data) return data;
@@ -38,6 +37,7 @@ async function getCollection<T>(path: string): Promise<T[]> {
     return snapshot.docs.map(doc => serializeTimestamps({ id: doc.id, ...doc.data() }) as T);
 }
 
+// ✅ THE FIX: Added the 'async' keyword here
 export default async function JobFileDetailPage({ params }: { params: { id: string } }) {
     const jobFile = await getDocument<JobFile>(`users/${TEMP_USER_ID}/jobFiles/${params.id}`);
     const clients = await getCollection<Client>(`users/${TEMP_USER_ID}/clients`);
