@@ -1,69 +1,112 @@
 // src/app/share/job/[id]/page.tsx
+"use client";
+
+import { useState, useEffect } from 'react';
+import { useParams, notFound } from 'next/navigation';
 import { getPublicJobFile, getClientForJobFile } from '@/utils/firestoreService';
-import { FileText, Building, Download } from 'lucide-react';
+import type { JobFile, Client } from '@/types/app-interfaces';
+import { Paperclip, CalendarDays, Building, FileText } from 'lucide-react';
 
-// ✅ 1. Define the correct props type for this page
-interface SharedJobPageProps {
-  params: {
-    id: string; // Use 'id' to match the folder name [id]
-  };
-}
+export default function SharedJobPage() {
+    const params = useParams();
+    const id = Array.isArray(params.id) ? params.id[0] : params.id;
 
-// ✅ 2. Use the correct type in the function signature
-export default async function SharedJobPage({ params }: SharedJobPageProps) {
-    const { id } = params; // Use 'id' here as well
-    const jobFile = await getPublicJobFile(id);
+    const [jobFile, setJobFile] = useState<JobFile | null>(null);
+    const [client, setClient] = useState<Client | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    
+    useEffect(() => {
+        if (!id) {
+            setIsLoading(false);
+            setError("Invalid share link.");
+            return;
+        }
 
-    if (!jobFile) {
-        return (
-            <div className="flex items-center justify-center min-h-screen bg-gray-100">
-                <div className="text-center p-8 bg-white rounded-lg shadow-md">
-                    <h1 className="text-2xl font-bold text-red-600">Job File Not Found</h1>
-                    <p className="text-gray-600 mt-2">The link may be expired or incorrect.</p>
-                </div>
-            </div>
-        );
+        const fetchSharedData = async () => {
+            try {
+                const fetchedJobFile = await getPublicJobFile(id);
+                if (!fetchedJobFile || !fetchedJobFile.originalUserId) {
+                    // This will trigger Next.js's 404 page
+                    return notFound();
+                }
+                
+                const fetchedClient = await getClientForJobFile(fetchedJobFile.originalUserId, fetchedJobFile.clientId || '');
+
+                setJobFile(fetchedJobFile);
+                setClient(fetchedClient);
+            } catch (err) {
+                console.error("Failed to fetch shared data:", err);
+                setError("Could not load the shared file.");
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchSharedData();
+    }, [id]);
+
+    const formatDate = (dateString?: string) => {
+        if (!dateString) return 'N/A';
+        return new Date(dateString + 'T00:00:00').toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+        });
+    };
+    
+    if (isLoading) {
+        return <div className="p-8 text-center text-slate-500">Loading...</div>;
     }
 
-    const client = jobFile.clientId ? await getClientForJobFile(jobFile.originalUserId!, jobFile.clientId) : null;
+    if (error || !jobFile) {
+        return <div className="p-8 text-center text-red-500">{error || "Shared file not found."}</div>;
+    }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
-            <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-lg overflow-hidden">
-                <div className="p-6 sm:p-8">
-                    <div className="flex justify-between items-start">
-                        <div>
-                            <h1 className="text-3xl font-bold text-gray-900">{jobFile.jobTitle}</h1>
-                            <p className="text-md text-gray-500 mt-1">Shared via Ten99 App</p>
-                        </div>
-                        {jobFile.fileUrl && (
-                            <a 
-                                href={jobFile.fileUrl} 
-                                target="_blank" 
-                                rel="noopener noreferrer" 
-                                className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90 transition-colors"
-                            >
-                                <Download size={18} />
-                                Download File
-                            </a>
+        <div className="bg-slate-50 min-h-screen p-4 sm:p-8">
+            <div className="max-w-4xl mx-auto bg-white p-6 sm:p-8 rounded-lg shadow-md border">
+                <header className="pb-6 border-b mb-6">
+                    <h1 className="text-4xl font-bold text-slate-800">{jobFile.jobTitle}</h1>
+                    <div className="flex items-center gap-4 text-slate-500 mt-2">
+                        {client && (
+                            <div className="flex items-center gap-2">
+                                <Building size={16} />
+                                <span>{client.companyName || client.name}</span>
+                            </div>
                         )}
-                    </div>
-                    
-                    {client && (
-                         <div className="mt-6 pt-6 border-t">
-                            <h2 className="text-lg font-semibold text-gray-700 flex items-center gap-2"><Building size={20}/> Client Information</h2>
-                            <p className="text-gray-600 mt-2">{client.companyName || client.name}</p>
+                        <div className="flex items-center gap-2">
+                            <CalendarDays size={16} />
+                            <span>{formatDate(jobFile.startDate)}</span>
                         </div>
-                    )}
+                    </div>
+                </header>
+                
+                <section>
+                    <h2 className="text-xl font-semibold text-slate-700 mb-3 flex items-center gap-2"><FileText size={20}/> Shared Notes</h2>
+                    <div className="prose prose-slate max-w-none bg-slate-50 p-4 rounded-md border whitespace-pre-wrap">
+                        <p>{jobFile.sharedNotes || "No shared notes available."}</p>
+                    </div>
+                </section>
 
-                    <div className="mt-6 pt-6 border-t">
-                        <h2 className="text-lg font-semibold text-gray-700 flex items-center gap-2"><FileText size={20}/> Shared Notes</h2>
-                        <div className="mt-2 p-4 bg-gray-50 rounded-md">
-                            <p className="text-gray-800 whitespace-pre-wrap">{jobFile.sharedNotes || "No shared notes for this file."}</p>
-                        </div>
-                    </div>
-                </div>
+                {jobFile.fileUrl && (
+                    <section className="mt-6">
+                        <h2 className="text-xl font-semibold text-slate-700 mb-3">Attachment</h2>
+                        <a 
+                            href={jobFile.fileUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 text-sm text-blue-600 hover:underline font-semibold bg-blue-50 p-3 rounded-md border border-blue-200"
+                        >
+                            <Paperclip size={16} />
+                            View Attached File
+                        </a>
+                    </section>
+                )}
             </div>
+            <footer className="text-center mt-8 text-sm text-slate-400">
+                <p>Shared via Ten99</p>
+            </footer>
         </div>
     );
 }
