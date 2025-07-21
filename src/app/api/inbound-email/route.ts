@@ -15,7 +15,7 @@ const parseFromHeader = (from: string): { name: string; email: string } => {
 };
 
 const findRecipientUserId = async (toEmail: string): Promise<string | null> => {
-    if (toEmail.startsWith("inbound@")) {
+    if (toEmail.startsWith("inbound@")) { // Catch-all for our inbound domain
         return "dev-user-1";
     }
     return null;
