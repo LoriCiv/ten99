@@ -5,7 +5,8 @@ import { useState, useEffect, useMemo } from 'react';
 import type { Invoice, Expense, Client, UserProfile } from '@/types/app-interfaces';
 import { getInvoices, getExpenses, getClients, getUserProfile, updateUserProfile } from '@/utils/firestoreService';
 import Link from 'next/link';
-import { PlusCircle, Landmark, Hourglass, CheckCircle, AlertCircle, Save, Loader2, DollarSign, FileText } from 'lucide-react';
+// ✅ FIX 1: Removed unused 'FileText' icon from this import
+import { PlusCircle, Landmark, Hourglass, CheckCircle, AlertCircle, Save, Loader2, DollarSign } from 'lucide-react';
 import InvoiceDetailModal from '@/components/InvoiceDetailModal';
 
 const TEMP_USER_ID = "dev-user-1";
@@ -78,8 +79,8 @@ export default function MyMoneyPage() {
             .reduce((sum, inv) => sum + (inv.total || 0), 0);
         
         const expensesValue = expenses
-            .filter(exp => new Date(exp.date).getFullYear() === today.getFullYear())
-            .reduce((sum, exp) => sum + exp.amount, 0);
+             .filter(exp => new Date(exp.date).getFullYear() === currentYear)
+             .reduce((sum, exp) => sum + exp.amount, 0);
         
         const selfEmploymentTaxRate = 0.153;
         const standardDeduction = 14600;
@@ -105,7 +106,8 @@ export default function MyMoneyPage() {
             totalTaxOwed: totalTaxOwed.toFixed(2),
             quarterlyPayment: (totalTaxOwed / 4).toFixed(2),
         };
-    }, [invoices, expenses, ytdExpenses, stateRate]);
+    // ✅ FIX 2: Removed 'ytdExpenses' from the dependency array to fix the warning.
+    }, [invoices, expenses, stateRate]);
 
     const handleSaveStateRate = async () => {
         setIsSubmitting(true);
@@ -142,7 +144,6 @@ export default function MyMoneyPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                     <StatCard title="YTD Income (Paid)" value={`$${stats.ytdIncome}`} icon={DollarSign} />
-                    {/* ✅ FIX: Restored the missing Stat Cards that use the icons */}
                     <StatCard title="Outstanding" value={`$${stats.outstanding}`} icon={Hourglass} />
                     <Link href="/dashboard/invoices?filter=overdue" className="block hover:opacity-80">
                         <StatCard 
@@ -199,7 +200,7 @@ export default function MyMoneyPage() {
                     )}
                 </div>
 
-                 <div className="mt-8 bg-card p-6 rounded-lg border">
+                <div className="mt-8 bg-card p-6 rounded-lg border">
                     <div className="flex justify-between items-center">
                         <h2 className="text-lg font-semibold">Estimated Tax Liability ({new Date().getFullYear()})</h2>
                         <div className="text-right">
