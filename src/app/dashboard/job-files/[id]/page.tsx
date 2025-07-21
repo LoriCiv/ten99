@@ -1,49 +1,39 @@
 // src/app/dashboard/job-files/[id]/page.tsx
-import { db } from '@/lib/firebase';
-import { collection, doc, getDoc, getDocs, query, Timestamp } from 'firebase/firestore';
-import type { JobFile, Client, PersonalNetworkContact, Appointment } from '@/types/app-interfaces';
+import { getJobFile, getClients, getPersonalNetwork, getAppointments } from '@/utils/firestoreService';
 import JobFileDetailPageContent from '@/components/JobFileDetailPageContent';
+import { notFound } from 'next/navigation';
 
 const TEMP_USER_ID = "dev-user-1";
 
-// ✅ NEW: This helper function converts Firebase Timestamps to strings
-const sanitizeData = (docData: any) => {
-    if (!docData) return null;
-    const sanitized: { [key: string]: any } = {};
-    for (const key in docData) {
-        const value = docData[key];
-        if (value instanceof Timestamp) {
-            sanitized[key] = value.toDate().toISOString();
-        } else {
-            sanitized[key] = value;
-        }
-    }
-    return sanitized;
-};
-
-async function getDocument<T>(path: string): Promise<T | null> {
-    const docRef = doc(db, path);
-    const docSnap = await getDoc(docRef);
-    if (!docSnap.exists()) return null;
-    const data = sanitizeData({ id: docSnap.id, ...docSnap.data() });
-    return data as T;
+// ✅ THE FIX: Added a specific type for the page's props
+interface PageProps {
+    params: { id: string };
 }
 
-async function getCollection<T>(path: string): Promise<T[]> {
-    const collRef = collection(db, path);
-    const q = query(collRef);
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => sanitizeData({ id: doc.id, ...doc.data() }) as T);
-}
+export default async function JobFileDetailPage({ params }: PageProps) {
+    const jobFileId = params.id;
 
-export default async function JobFileDetailPage({ params }: { params: { id: string } }) {
-    const jobFile = await getDocument<JobFile>(`users/${TEMP_USER_ID}/jobFiles/${params.id}`);
-    const clients = await getCollection<Client>(`users/${TEMP_USER_ID}/clients`);
-    const contacts = await getCollection<PersonalNetworkContact>(`users/${TEMP_USER_ID}/personalNetwork`);
-    const appointments = await getCollection<Appointment>(`users/${TEMP_USER_ID}/appointments`);
+    // A helper function to fetch data without a real-time listener for server components
+    const getServerSideProps = async () => {
+        const jobFilePromise = new Promise<any>((resolve) => getJobFile(TEMP_USER_ID, jobFileId, resolve));
+        const clientsPromise = new Promise<any>((resolve) => getClients(TEMP_USER_ID, resolve));
+        const contactsPromise = new Promise<any>((resolve) => getPersonalNetwork(TEMP_USER_ID, resolve));
+        const appointmentsPromise = new Promise<any>((resolve) => getAppointments(TEMP_USER_ID, resolve));
+        
+        const [jobFile, clients, contacts, appointments] = await Promise.all([
+            jobFilePromise,
+            clientsPromise,
+            contactsPromise,
+            appointmentsPromise,
+        ]);
+        
+        return { jobFile, clients, contacts, appointments };
+    };
+    
+    const { jobFile, clients, contacts, appointments } = await getServerSideProps();
 
     if (!jobFile) {
-        return <div className="p-8 text-center text-red-500">Job File not found.</div>;
+        notFound();
     }
 
     return (

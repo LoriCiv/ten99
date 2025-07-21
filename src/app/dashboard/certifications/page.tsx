@@ -1,50 +1,48 @@
 // src/app/dashboard/certifications/page.tsx
-import { db } from '@/lib/firebase';
-import { collection, query, getDocs, orderBy } from 'firebase/firestore';
+"use client";
+
+import { useState, useEffect } from 'react';
 import type { Certification, CEU } from '@/types/app-interfaces';
+import { getCertifications, getCEUsForCertification } from '@/utils/firestoreService';
 import CertificationsPageContent from '@/components/CertificationsPageContent';
 
 const TEMP_USER_ID = "dev-user-1";
 
-// Helper to serialize Firestore Timestamps
-const serializeData = (doc: any) => {
-    const data = doc.data();
-    for (const key in data) {
-        if (data[key] instanceof Date || (data[key] && typeof data[key].toDate === 'function')) {
-            data[key] = data[key].toDate().toISOString();
-        }
-    }
-    return { id: doc.id, ...data };
-};
+// ✅ THE FIX: Added specific types for the page props
+export default function CertificationsPage({ params }: { params: { userId: string } }) {
+    const [certifications, setCertifications] = useState<Certification[]>([]);
+    const [allCeus, setAllCeus] = useState<CEU[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
+    useEffect(() => {
+        const unsubCertifications = getCertifications(TEMP_USER_ID, (certs) => {
+            setCertifications(certs);
+            
+            // Fetch CEUs for all certifications
+            const ceuPromises = certs.map(cert => 
+                new Promise<CEU[]>((resolve) => {
+                    getCEUsForCertification(TEMP_USER_ID, cert.id!, resolve);
+                })
+            );
 
-async function getCertificationsAndCEUs(userId: string) {
-    const certsRef = collection(db, `users/${userId}/certifications`);
-    const certsQuery = query(certsRef, orderBy('createdAt', 'desc'));
-    const certsSnapshot = await getDocs(certsQuery);
-    const certifications = certsSnapshot.docs.map(serializeData);
+            Promise.all(ceuPromises).then(results => {
+                const flattenedCeus = results.flat();
+                setAllCeus(flattenedCeus);
+                setIsLoading(false);
+            });
+        });
 
-    const allCeus: CEU[] = [];
-    for (const cert of certifications) {
-        const ceusRef = collection(db, `users/${userId}/certifications/${cert.id}/ceus`);
-        const ceusQuery = query(ceusRef, orderBy('createdAt', 'desc'));
-        const ceusSnapshot = await getDocs(ceusQuery);
-        const ceus = ceusSnapshot.docs.map(doc => serializeData(doc) as CEU);
-        allCeus.push(...ceus);
-    }
-    return { certifications: certifications as Certification[], allCeus };
-}
+        return () => {
+            unsubCertifications();
+        };
+    }, []);
 
-
-export default async function CertificationsPage() {
-    const { certifications, allCeus } = await getCertificationsAndCEUs(TEMP_USER_ID);
-
-    if (!certifications) {
-        return <div className="p-8 text-center text-red-500">Could not load certifications.</div>;
+    if (isLoading) {
+        return <div className="p-8 text-center text-muted-foreground">Loading Credentials...</div>;
     }
 
     return (
-        <CertificationsPageContent
+        <CertificationsPageContent 
             initialCertifications={certifications}
             initialCeus={allCeus}
             userId={TEMP_USER_ID}
