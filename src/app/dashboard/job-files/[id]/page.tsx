@@ -37,6 +37,7 @@ async function getCollection<T>(path: string): Promise<T[]> {
     return snapshot.docs.map(doc => serializeTimestamps({ id: doc.id, ...doc.data() }) as T);
 }
 
+// ✅ THE FIX: Added the 'async' keyword here
 export default async function JobFileDetailPage({ params }: { params: { id: string } }) {
     const jobFile = await getDocument<JobFile>(`users/${TEMP_USER_ID}/jobFiles/${params.id}`);
     const clients = await getCollection<Client>(`users/${TEMP_USER_ID}/clients`);
