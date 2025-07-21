@@ -6,12 +6,11 @@ import JobFileDetailPageContent from '@/components/JobFileDetailPageContent';
 
 const TEMP_USER_ID = "dev-user-1";
 
-// ✅ DEFINE THE PROPS TYPE AS SUGGESTED
-interface Props {
-  params: {
-    id: string;
-  };
-}
+// ✅ DEFINE A MORE SPECIFIC TYPE FOR THE PAGE PROPS
+type JobFileDetailPageProps = {
+  params: { id: string };
+  searchParams: { [key: string]: string | string[] | undefined };
+};
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const serializeTimestamps = (data: any): any => {
@@ -44,8 +43,8 @@ async function getCollection<T>(path: string): Promise<T[]> {
     return snapshot.docs.map(doc => serializeTimestamps({ id: doc.id, ...doc.data() }) as T);
 }
 
-// ✅ USE THE PROPS TYPE AND KEEP THE FUNCTION ASYNC
-export default async function JobFileDetailPage({ params }: Props) {
+// ✅ USE THE NEW, MORE SPECIFIC PROPS TYPE
+export default async function JobFileDetailPage({ params }: JobFileDetailPageProps) {
     const jobFile = await getDocument<JobFile>(`users/${TEMP_USER_ID}/jobFiles/${params.id}`);
     const clients = await getCollection<Client>(`users/${TEMP_USER_ID}/clients`);
     const contacts = await getCollection<PersonalNetworkContact>(`users/${TEMP_USER_ID}/personalNetwork`);
