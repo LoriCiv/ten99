@@ -24,7 +24,7 @@ import {
 import type { Client, PersonalNetworkContact, JobFile, Appointment, Message, Template, Certification, CEU, UserProfile, Invoice, Expense, JobPosting } from '@/types/app-interfaces';
 import { v4 as uuidv4 } from 'uuid';
 
-const cleanupObject = (data: Record<string, any>) => {
+const cleanupObject = (data: Record<string, any>): Record<string, any> => {
     const cleaned: Record<string, any> = {};
     for (const key in data) {
         if (data[key] !== undefined && data[key] !== null && data[key] !== '') {
@@ -39,33 +39,27 @@ export const getClients = (userId: string, callback: (data: Client[]) => void) =
     const q = query(collection(db, `users/${userId}/clients`), orderBy('createdAt', 'desc'));
     return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as Client))); });
 };
-
 export const getPersonalNetwork = (userId: string, callback: (data: PersonalNetworkContact[]) => void) => {
     const q = query(collection(db, `users/${userId}/personalNetwork`), orderBy('createdAt', 'desc'));
     return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as PersonalNetworkContact))); });
 };
-
 export const getJobFiles = (userId: string, callback: (data: JobFile[]) => void) => {
     const q = query(collection(db, `users/${userId}/jobFiles`), orderBy('createdAt', 'desc'));
     return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as JobFile))); });
 };
-
 export const getAppointments = (userId: string, callback: (data: Appointment[]) => void) => {
     const q = query(collection(db, `users/${userId}/appointments`), orderBy('date', 'desc'));
     return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as Appointment))); });
 };
-
 export const getJobFile = (userId: string, jobFileId: string, callback: (data: JobFile | null) => void) => {
     const jobFileRef = doc(db, 'users', userId, 'jobFiles', jobFileId);
     return onSnapshot(jobFileRef, (docSnap) => { if (docSnap.exists()) { callback({ id: docSnap.id, ...docSnap.data() } as JobFile); } else { callback(null); } });
 };
-
 export const getMessagesForUser = (userId: string, callback: (data: Message[]) => void) => {
     const messagesRef = collection(db, 'users', userId, 'messages');
     const q = query(messagesRef, where('recipientId', '==', userId), orderBy('createdAt', 'desc'));
     return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as Message))); });
 };
-
 export const getSentMessagesForUser = (userId: string, callback: (data: Message[]) => void) => {
     const messagesRef = collection(db, 'users', userId, 'messages');
     const q = query(messagesRef, where('senderId', '==', userId), orderBy('createdAt', 'desc'));
@@ -85,7 +79,8 @@ export const addJobFile = (userId: string, jobFileData: Partial<JobFile>): Promi
 export const updateJobFile = (userId: string, jobFileId: string, jobFileData: Partial<JobFile>): Promise<void> => { const dataToSave = { ...cleanupObject(jobFileData), updatedAt: serverTimestamp() }; return updateDoc(doc(db, `users/${userId}/jobFiles`, jobFileId), dataToSave); };
 export const deleteJobFile = (userId: string, jobFileId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/jobFiles`, jobFileId)); };
 export const uploadFile = async (userId: string, file: File): Promise<string> => { if (!file) throw new Error("No file provided for upload."); const formData = new FormData(); formData.append('file', file); const response = await fetch('/api/upload', { method: 'POST', body: formData }); if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.error || 'File upload failed.'); } const { fileUrl } = await response.json(); return fileUrl; };
-export const addAppointment = async (userId: string, appointmentData: Partial<Appointment>, recurrenceEndDate?: string): Promise<void> => { const dataToSave = { ...cleanupObject(appointmentData), createdAt: serverTimestamp() }; if (appointmentData.recurrence && recurrenceEndDate && appointmentData.date) { const batch = writeBatch(db); const seriesId = uuidv4(); let movingDate = new Date(appointmentData.date + 'T00:00:00'); const endDate = new Date(recurrenceEndDate + 'T00:00:00'); while (movingDate <= endDate) { const newDocRef = doc(collection(db, `users/${userId}/appointments`)); const appointmentForDate = { ...dataToSave, date: movingDate.toISOString().split('T')[0], seriesId: seriesId }; batch.set(newDocRef, appointmentForDate); switch (appointmentData.recurrence) { case 'daily': movingDate.setDate(movingDate.getDate() + 1); break; case 'weekly': movingDate.setDate(movingDate.getDate() + 7); break; case 'biweekly': movingDate.setDate(movingDate.getDate() + 14); break; case 'monthly': movingDate.setMonth(movingDate.getMonth() + 1); break; default: movingDate.setDate(endDate.getDate() + 1); break; } } await batch.commit(); } else { await addDoc(collection(db, `users/${userId}/appointments`), dataToSave); } };
+export const addAppointment = async (userId: string, appointmentData: Partial<Appointment>, recurrenceEndDate?: string): Promise<void> => { const dataToSave = { ...cleanupObject(appointmentData), createdAt: serverTimestamp() }; if (appointmentData.recurrence && recurrenceEndDate && appointmentData.date) { const batch = writeBatch(db); const seriesId = uuidv4(); // eslint-disable-next-line prefer-const
+let movingDate = new Date(appointmentData.date + 'T00:00:00'); const endDate = new Date(recurrenceEndDate + 'T00:00:00'); while (movingDate <= endDate) { const newDocRef = doc(collection(db, `users/${userId}/appointments`)); const appointmentForDate = { ...dataToSave, date: movingDate.toISOString().split('T')[0], seriesId: seriesId }; batch.set(newDocRef, appointmentForDate); switch (appointmentData.recurrence) { case 'daily': movingDate.setDate(movingDate.getDate() + 1); break; case 'weekly': movingDate.setDate(movingDate.getDate() + 7); break; case 'biweekly': movingDate.setDate(movingDate.getDate() + 14); break; case 'monthly': movingDate.setMonth(movingDate.getMonth() + 1); break; default: movingDate.setDate(endDate.getDate() + 1); break; } } await batch.commit(); } else { await addDoc(collection(db, `users/${userId}/appointments`), dataToSave); } };
 export const updateAppointment = (userId: string, appointmentId: string, appointmentData: Partial<Appointment>): Promise<void> => { const appointmentRef = doc(db, `users/${userId}/appointments`, appointmentId); return updateDoc(appointmentRef, cleanupObject(appointmentData)); };
 export const deleteAppointment = (userId: string, appointmentId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/appointments`, appointmentId)); };
 export const updateMessage = (userId: string, messageId: string, messageData: Partial<Message>): Promise<void> => { const messageRef = doc(db, 'users', userId, 'messages', messageId); return updateDoc(messageRef, cleanupObject(messageData)); };

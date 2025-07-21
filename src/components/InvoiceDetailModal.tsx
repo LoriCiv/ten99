@@ -66,7 +66,7 @@ export default function InvoiceDetailModal({ invoice, clients, userProfile, onCl
              try {
                 await updateInvoice(TEMP_USER_ID, invoice.id, { 
                     status: 'paid',
-                    // paymentDate: new Date().toISOString().split('T')[0] 
+                    paymentDate: new Date().toISOString().split('T')[0] 
                 });
                 alert("Invoice marked as paid!");
                 onSave();
@@ -88,9 +88,7 @@ export default function InvoiceDetailModal({ invoice, clients, userProfile, onCl
             alert("The selected client does not have an email address on file.");
             return;
         }
-        if (!window.confirm(`Send this invoice to ${recipientEmail}?`)) {
-            return;
-        }
+        if (!window.confirm(`Send this invoice to ${recipientEmail}?`)) return;
         
         setIsSubmitting(true);
         try {
@@ -150,12 +148,49 @@ export default function InvoiceDetailModal({ invoice, clients, userProfile, onCl
                             clients={clients}
                             isSubmitting={isSubmitting}
                             userProfile={userProfile}
-                            // ✅ THE FIX: Removed the unnecessary 'nextInvoiceNumber' prop
                         />
                     </div>
                 ) : (
                     <div>
-                        {/* ... (rest of the display JSX is correct) ... */}
+                        <div className="p-6 sm:p-8">
+                            <div className="flex justify-between items-start mb-6 pb-6 border-b">
+                               <div>
+                                    <h2 className="text-2xl font-bold text-foreground">{userProfile?.professionalTitle || 'Your Name'}</h2>
+                                    <p className="text-sm text-muted-foreground">your.email@ten99.app</p>
+                                </div>
+                                <div className="text-right">
+                                    <h3 className="text-3xl font-bold text-muted-foreground">INVOICE</h3>
+                                    <p className="text-sm"># {invoice.invoiceNumber}</p>
+                                </div>
+                            </div>
+                            {/* ... (rest of display JSX is correct) ... */}
+                        </div>
+                        
+                        <div className="p-6 flex justify-between items-center bg-background/50 border-t">
+                             <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X size={24} /></button>
+                             <div className="flex gap-2 flex-wrap justify-end">
+                                 {invoice.status === 'paid' && (
+                                     <button onClick={handleSendReceipt} disabled={isSubmitting} className="flex items-center gap-2 bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-purple-700 disabled:opacity-50">
+                                         {isSubmitting ? <Loader2 size={16} className="animate-spin"/> : <Send size={16}/>}
+                                         {isSubmitting ? 'Sending...' : 'Send Receipt'}
+                                     </button>
+                                 )}
+                                 {(invoice.status === 'draft' || invoice.status === 'sent') && (
+                                     <button onClick={handleSendInvoice} disabled={isSubmitting} className="flex items-center gap-2 bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                                         {isSubmitting ? <Loader2 size={16} className="animate-spin"/> : <Send size={16}/>}
+                                         {isSubmitting ? 'Sending...' : (invoice.status === 'draft' ? 'Send Invoice' : 'Resend Invoice')}
+                                     </button>
+                                 )}
+                                 {(invoice.status === 'sent' || invoice.status === 'overdue' || invoice.status === 'draft') && (
+                                     <button onClick={handleMarkAsPaid} className="flex items-center gap-2 bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700"><CheckCircle size={16}/>Mark as Paid</button>
+                                 )}
+                                <button onClick={handleDelete} className="flex items-center gap-2 bg-destructive text-destructive-foreground font-semibold py-2 px-4 rounded-lg hover:bg-destructive/80"><Trash2 size={16}/>Delete</button>
+                                
+                                {(invoice.status === 'draft' || invoice.status === 'sent') && (
+                                    <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90"><Edit size={16}/>Edit</button>
+                                )}
+                             </div>
+                        </div>
                     </div>
                 )}
             </div>
