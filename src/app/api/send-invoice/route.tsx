@@ -1,7 +1,8 @@
-// src/app/api/send-invoice/route.ts
+// src/app/api/send-invoice/route.tsx
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
-import { InvoiceEmail } from '@/components/emails/InvoiceEmail';
+// ✅ THE FIX: Changed the import to a default import (no curly braces)
+import InvoiceEmail from '@/components/emails/InvoiceEmail';
 import type { Invoice, Client, UserProfile } from '@/types/app-interfaces';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
