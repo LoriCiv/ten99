@@ -1,24 +1,50 @@
 // src/app/share/[id]/page.tsx
+"use client";
+
+import { useState, useEffect } from 'react';
+import { useParams, notFound } from 'next/navigation';
 import { getPublicJobFile, getClientForJobFile } from '@/utils/firestoreService';
-import { notFound } from 'next/navigation';
-// ✅ THE FIX: Removed the unused 'User' icon from this import
+import type { JobFile, Client } from '@/types/app-interfaces';
 import { Paperclip, CalendarDays, Building, FileText } from 'lucide-react';
 
-interface SharePageProps {
-    params: {
-        id: string;
-    };
-}
+export default function SharePage() {
+    const params = useParams();
+    const id = Array.isArray(params.id) ? params.id[0] : params.id;
 
-export default async function SharePage({ params }: SharePageProps) {
-    const publicId = params.id;
-    const jobFile = await getPublicJobFile(publicId);
+    const [jobFile, setJobFile] = useState<JobFile | null>(null);
+    const [client, setClient] = useState<Client | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    
+    useEffect(() => {
+        if (!id) {
+            setIsLoading(false);
+            setError("Invalid share link.");
+            return;
+        }
 
-    if (!jobFile || !jobFile.originalUserId) {
-        notFound();
-    }
+        const fetchSharedData = async () => {
+            try {
+                const fetchedJobFile = await getPublicJobFile(id);
+                if (!fetchedJobFile || !fetchedJobFile.originalUserId) {
+                    // This will trigger Next.js's 404 page
+                    return notFound();
+                }
+                
+                const fetchedClient = await getClientForJobFile(fetchedJobFile.originalUserId, fetchedJobFile.clientId || '');
 
-    const client = await getClientForJobFile(jobFile.originalUserId, jobFile.clientId || '');
+                setJobFile(fetchedJobFile);
+                setClient(fetchedClient);
+            } catch (err) {
+                console.error("Failed to fetch shared data:", err);
+                setError("Could not load the shared file.");
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchSharedData();
+    }, [id]);
 
     const formatDate = (dateString?: string) => {
         if (!dateString) return 'N/A';
@@ -28,6 +54,14 @@ export default async function SharePage({ params }: SharePageProps) {
             day: 'numeric',
         });
     };
+    
+    if (isLoading) {
+        return <div className="p-8 text-center text-slate-500">Loading...</div>;
+    }
+
+    if (error || !jobFile) {
+        return <div className="p-8 text-center text-red-500">{error || "Shared file not found."}</div>;
+    }
 
     return (
         <div className="bg-slate-50 min-h-screen p-4 sm:p-8">
