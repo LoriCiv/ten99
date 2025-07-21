@@ -1,7 +1,8 @@
 // src/app/share/[id]/page.tsx
 import { getPublicJobFile, getClientForJobFile } from '@/utils/firestoreService';
 import { notFound } from 'next/navigation';
-import { Paperclip, CalendarDays, User, Building, FileText } from 'lucide-react';
+// ✅ THE FIX: Removed the unused 'User' icon from this import
+import { Paperclip, CalendarDays, Building, FileText } from 'lucide-react';
 
 interface SharePageProps {
     params: {
@@ -9,7 +10,6 @@ interface SharePageProps {
     };
 }
 
-// ✅ THE FIX: Added the 'async' keyword here
 export default async function SharePage({ params }: SharePageProps) {
     const publicId = params.id;
     const jobFile = await getPublicJobFile(publicId);
@@ -50,7 +50,7 @@ export default async function SharePage({ params }: SharePageProps) {
                 
                 <section>
                     <h2 className="text-xl font-semibold text-slate-700 mb-3 flex items-center gap-2"><FileText size={20}/> Shared Notes</h2>
-                    <div className="prose prose-slate max-w-none bg-slate-50 p-4 rounded-md border">
+                    <div className="prose prose-slate max-w-none bg-slate-50 p-4 rounded-md border whitespace-pre-wrap">
                         <p>{jobFile.sharedNotes || "No shared notes available."}</p>
                     </div>
                 </section>
