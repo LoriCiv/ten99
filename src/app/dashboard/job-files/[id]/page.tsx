@@ -6,6 +6,13 @@ import JobFileDetailPageContent from '@/components/JobFileDetailPageContent';
 
 const TEMP_USER_ID = "dev-user-1";
 
+// ✅ This defines the exact shape of props for our page, as suggested.
+interface PageProps {
+  params: {
+    id: string;
+  };
+}
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const serializeTimestamps = (data: any): any => {
     if (!data) return data;
@@ -37,8 +44,8 @@ async function getCollection<T>(path: string): Promise<T[]> {
     return snapshot.docs.map(doc => serializeTimestamps({ id: doc.id, ...doc.data() }) as T);
 }
 
-// ✅ THE FIX: Added the 'async' keyword here
-export default async function JobFileDetailPage({ params }: { params: { id: string } }) {
+// ✅ We now use PageProps here
+export default async function JobFileDetailPage({ params }: PageProps) {
     const jobFile = await getDocument<JobFile>(`users/${TEMP_USER_ID}/jobFiles/${params.id}`);
     const clients = await getCollection<Client>(`users/${TEMP_USER_ID}/clients`);
     const contacts = await getCollection<PersonalNetworkContact>(`users/${TEMP_USER_ID}/personalNetwork`);
