@@ -105,7 +105,7 @@ export default function MyMoneyPage() {
             totalTaxOwed: totalTaxOwed.toFixed(2),
             quarterlyPayment: (totalTaxOwed / 4).toFixed(2),
         };
-    }, [invoices, expenses, ytdExpenses, stateRate]);
+    }, [invoices, expenses, stateRate]);
 
     const handleSaveStateRate = async () => {
         setIsSubmitting(true);
@@ -197,6 +197,44 @@ export default function MyMoneyPage() {
                         </div>
                     )}
                 </div>
+
+                <div className="mt-8 bg-card p-6 rounded-lg border">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-lg font-semibold">Estimated Tax Liability ({new Date().getFullYear()})</h2>
+                        <div className="text-right">
+                            <p className="text-sm text-muted-foreground">Total Owed (YTD)</p>
+                            <p className="text-3xl font-bold text-primary">${stats.totalTaxOwed}</p>
+                        </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1 mb-4">This is a rough estimate for a single filer and is not tax advice.</p>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end pt-4 border-t">
+                        <div>
+                            <label className="block text-sm font-medium">Total Business Expenses (YTD)</label>
+                            <input type="number" value={ytdExpenses} onChange={(e) => setYtdExpenses(e.target.value === '' ? '' : Number(e.target.value))} className="w-full mt-1 p-2 bg-background border rounded-md" placeholder="$0.00" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium">Your State Tax Rate (%)</label>
+                            <input type="number" value={stateRate} onChange={(e) => setStateRate(e.target.value === '' ? '' : Number(e.target.value))} className="w-full mt-1 p-2 bg-background border rounded-md" placeholder="e.g., 5" />
+                        </div>
+                        <button onClick={handleSaveStateRate} disabled={isSubmitting} className="bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 hover:bg-secondary/80 disabled:opacity-50">
+                            {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                            {isSubmitting ? 'Saving...' : 'Save Rate'}
+                        </button>
+                    </div>
+                    <div className="mt-4 pt-4 border-t">
+                        <div className="flex items-center gap-4 bg-primary/5 p-4 rounded-lg">
+                            <div className="p-3 rounded-full bg-primary/10 text-primary">
+                                <Landmark className="h-6 w-6" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium text-muted-foreground">Suggested Quarterly Payment</p>
+                                <p className="text-2xl font-bold">${stats.quarterlyPayment}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
 
             {selectedInvoice && (
