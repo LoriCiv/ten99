@@ -6,18 +6,20 @@ import JobFileDetailPageContent from '@/components/JobFileDetailPageContent';
 
 const TEMP_USER_ID = "dev-user-1";
 
-// Using a simpler helper function to avoid the crash
-const serializeData = (data: any): any => {
+// ✅ THE FIX: Using the simpler function and disabling the 'any' rule for this block
+/* eslint-disable @typescript-eslint/no-explicit-any */
+const serializeTimestamps = (data: any): any => {
     if (!data) return data;
     for (const key in data) {
         if (data[key] instanceof Timestamp) {
             data[key] = data[key].toDate().toISOString();
         } else if (typeof data[key] === 'object' && data[key] !== null) {
-            data[key] = serializeData(data[key]);
+            data[key] = serializeTimestamps(data[key]);
         }
     }
     return data;
 };
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 async function getDocument<T>(path: string): Promise<T | null> {
     const docRef = doc(db, path);
@@ -26,14 +28,14 @@ async function getDocument<T>(path: string): Promise<T | null> {
         return null;
     }
     const data = { id: docSnap.id, ...docSnap.data() };
-    return serializeData(data) as T;
+    return serializeTimestamps(data) as T;
 }
 
 async function getCollection<T>(path: string): Promise<T[]> {
     const collRef = collection(db, path);
     const q = query(collRef);
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => serializeData({ id: doc.id, ...doc.data() }) as T);
+    return snapshot.docs.map(doc => serializeTimestamps({ id: doc.id, ...doc.data() }) as T);
 }
 
 export default async function JobFileDetailPage({ params }: { params: { id: string } }) {
