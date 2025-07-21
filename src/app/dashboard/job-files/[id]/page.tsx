@@ -1,50 +1,51 @@
 // src/app/dashboard/job-files/[id]/page.tsx
-"use client"; // This needs to be a client component to use hooks
-
-import { useState, useEffect } from 'react';
-import { getJobFile, getClients, getPersonalNetwork, getAppointments } from '@/utils/firestoreService';
-import JobFileDetailPageContent from '@/components/JobFileDetailPageContent';
-import { notFound } from 'next/navigation';
+import { db } from '@/lib/firebase';
+import { collection, doc, getDoc, getDocs, query, Timestamp } from 'firebase/firestore';
 import type { JobFile, Client, PersonalNetworkContact, Appointment } from '@/types/app-interfaces';
+import JobFileDetailPageContent from '@/components/JobFileDetailPageContent';
 
 const TEMP_USER_ID = "dev-user-1";
 
-// ✅ FIX: Added a specific type for the page's props
-interface PageProps {
-    params: { id: string };
+// Helper function to convert Firestore Timestamps to strings
+const serializeFirestoreData = (data: any): any => {
+    if (!data) return data;
+    for (const key in data) {
+        if (data[key] instanceof Timestamp) {
+            data[key] = data[key].toDate().toISOString();
+        } else if (typeof data[key] === 'object' && data[key] !== null) {
+            data[key] = serializeFirestoreData(data[key]);
+        }
+    }
+    return data;
+};
+
+
+async function getDocument<T>(path: string): Promise<T | null> {
+    const docRef = doc(db, path);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) {
+        return null;
+    }
+    const data = { id: docSnap.id, ...docSnap.data() };
+    return serializeFirestoreData(data) as T;
 }
 
-export default function JobFileDetailPage({ params }: PageProps) {
-    const [jobFile, setJobFile] = useState<JobFile | null>(null);
-    const [clients, setClients] = useState<Client[]>([]);
-    const [contacts, setContacts] = useState<PersonalNetworkContact[]>([]);
-    const [appointments, setAppointments] = useState<Appointment[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+async function getCollection<T>(path: string): Promise<T[]> {
+    const collRef = collection(db, path);
+    const q = query(collRef);
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => serializeFirestoreData({ id: doc.id, ...doc.data() }) as T);
+}
 
-    useEffect(() => {
-        const jobFileId = params.id;
-        const unsubJobFile = getJobFile(TEMP_USER_ID, jobFileId, setJobFile);
-        const unsubClients = getClients(TEMP_USER_ID, setClients);
-        const unsubContacts = getPersonalNetwork(TEMP_USER_ID, setContacts);
-        const unsubAppointments = getAppointments(TEMP_USER_ID, (data) => {
-            setAppointments(data);
-            setIsLoading(false); // Stop loading after the last fetch
-        });
-
-        return () => {
-            unsubJobFile();
-            unsubClients();
-            unsubContacts();
-            unsubAppointments();
-        };
-    }, [params.id]);
-
-    if (isLoading) {
-        return <div className="p-8 text-center">Loading Job File...</div>;
-    }
+// ✅ THE FIX: Added the 'async' keyword here
+export default async function JobFileDetailPage({ params }: { params: { id: string } }) {
+    const jobFile = await getDocument<JobFile>(`users/${TEMP_USER_ID}/jobFiles/${params.id}`);
+    const clients = await getCollection<Client>(`users/${TEMP_USER_ID}/clients`);
+    const contacts = await getCollection<PersonalNetworkContact>(`users/${TEMP_USER_ID}/personalNetwork`);
+    const appointments = await getCollection<Appointment>(`users/${TEMP_USER_ID}/appointments`);
 
     if (!jobFile) {
-        notFound();
+        return <div className="p-8 text-center text-red-500">Job File not found.</div>;
     }
 
     return (
