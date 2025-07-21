@@ -2,7 +2,8 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import type { Invoice, UserProfile } from '@/types/app-interfaces';
+// ✅ THE FIX: Removed unused 'UserProfile' type from the import
+import type { Invoice } from '@/types/app-interfaces';
 import { getInvoices, getUserProfile, updateUserProfile } from '@/utils/firestoreService';
 import { DollarSign, Hourglass, CheckCircle, Save, Loader2, Landmark, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
@@ -28,7 +29,6 @@ function StatCard({ title, value, icon: Icon, note }: { title: string; value: st
 
 export default function MyMoneyPage() {
     const [invoices, setInvoices] = useState<Invoice[]>([]);
-    // ✅ THE FIX: Removed the unused userProfile state variable.
     const [isLoading, setIsLoading] = useState(true);
     const [ytdExpenses, setYtdExpenses] = useState<number | ''>('');
     const [stateRate, setStateRate] = useState<number | ''>('');
@@ -37,7 +37,6 @@ export default function MyMoneyPage() {
     useEffect(() => {
         const unsubInvoices = getInvoices(TEMP_USER_ID, setInvoices);
         const unsubProfile = getUserProfile(TEMP_USER_ID, (profile) => {
-            // We can still get the data we need from the profile here
             if (profile) {
                 setStateRate(profile.estimatedStateTaxRate || '');
             }
@@ -70,7 +69,7 @@ export default function MyMoneyPage() {
         
         const expenses = Number(ytdExpenses) || 0;
         const selfEmploymentTaxRate = 0.153;
-        const standardDeduction = 14600;
+        const standardDeduction = 14600; // Note: This is an example value
         const netEarningsFromSE = ytdIncome * 0.9235;
         const selfEmploymentTax = netEarningsFromSE * selfEmploymentTaxRate;
         const adjustedGrossIncome = ytdIncome - expenses;

@@ -4,7 +4,8 @@
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { Invoice, Client, Appointment, UserProfile } from '@/types/app-interfaces';
-import { getClients, getAppointments, addInvoice, getUserProfile, getNextInvoiceNumber } from '@/utils/firestoreService';
+// ✅ THE FIX: Removed getNextInvoiceNumber from the import
+import { getClients, getAppointments, addInvoice, getUserProfile } from '@/utils/firestoreService';
 import InvoiceForm from '@/components/InvoiceForm';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
@@ -30,13 +31,11 @@ function NewInvoicePageInternal() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [initialData, setInitialData] = useState<Partial<Invoice> | undefined>();
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-    const [nextInvoiceNumber, setNextInvoiceNumber] = useState('');
 
     const fetchData = useCallback(() => {
         getClients(TEMP_USER_ID, setClients);
         getAppointments(TEMP_USER_ID, setAppointments);
         getUserProfile(TEMP_USER_ID, setUserProfile);
-        getNextInvoiceNumber(TEMP_USER_ID).then(setNextInvoiceNumber);
     }, []);
 
     useEffect(() => { fetchData(); }, [fetchData]);
@@ -44,30 +43,20 @@ function NewInvoicePageInternal() {
     useEffect(() => {
         if (clients.length > 0 && appointments.length > 0 && userProfile) {
             const appointmentId = searchParams.get('appointmentId');
-            
             const prefilledData: Partial<Invoice> = {
                 notes: userProfile.defaultInvoiceNotes || '',
                 paymentDetails: userProfile.defaultPaymentDetails || '',
                 lineItems: [{ description: '', quantity: 1, unitPrice: 0, total: 0 }],
             };
-
             if (appointmentId) {
                 const linkedAppointment = appointments.find(a => a.id === appointmentId);
                 const linkedClient = clients.find(c => c.id === linkedAppointment?.clientId);
-
                 if (linkedAppointment && linkedClient) {
                     const rate = linkedClient.rate || 0;
                     const duration = calculateDurationInHours(linkedAppointment.time, linkedAppointment.endTime);
-                    // ✅ THE FIX: Changed 'let' to 'const'
-                    const detailedDescription = `${linkedAppointment.subject || 'Services Rendered'}\nDate: ${linkedAppointment.date} from ${linkedAppointment.time} to ${linkedAppointment.endTime}\nJob #: ${linkedAppointment.jobNumber || 'N/A'}`;
-                    
+                    const detailedDescription = `${linkedAppointment.subject || 'Services Rendered'}\nDate: ${linkedAppointment.date}`;
                     prefilledData.clientId = linkedAppointment.clientId;
                     prefilledData.lineItems = [{ description: detailedDescription, quantity: duration, unitPrice: rate, total: duration * rate }];
-                    
-                    if (linkedAppointment.locationType === 'physical') {
-                        prefilledData.lineItems.push({ description: 'Travel Time (hours)', quantity: 0, unitPrice: rate, total: 0 });
-                        prefilledData.lineItems.push({ description: 'Mileage (miles)', quantity: 0, unitPrice: 0.67, total: 0 });
-                    }
                 }
             }
             setInitialData(prefilledData);
@@ -75,12 +64,10 @@ function NewInvoicePageInternal() {
         }
     }, [clients, appointments, userProfile, searchParams]);
 
-
     const handleSaveInvoice = async (invoiceData: Partial<Invoice>) => {
         setIsSubmitting(true);
         try {
-            const finalInvoiceData = { ...invoiceData, lineItems: invoiceData.lineItems?.filter(item => item.description.trim() !== '') };
-            await addInvoice(TEMP_USER_ID, { ...finalInvoiceData, invoiceNumber: nextInvoiceNumber });
+            await addInvoice(TEMP_USER_ID, invoiceData);
             alert("Invoice saved as draft!");
             router.push('/dashboard/invoices');
         } catch (error) {
@@ -91,7 +78,7 @@ function NewInvoicePageInternal() {
         }
     };
 
-    if (isLoading) {
+    if (isLoading || !userProfile) {
         return <div className="p-8 text-center text-muted-foreground">Loading...</div>;
     }
 
@@ -105,11 +92,9 @@ function NewInvoicePageInternal() {
                 onSave={handleSaveInvoice}
                 onCancel={() => router.push('/dashboard/invoices')}
                 clients={clients}
-                appointments={appointments}
                 isSubmitting={isSubmitting}
                 initialData={initialData}
                 userProfile={userProfile}
-                nextInvoiceNumber={nextInvoiceNumber}
             />
         </div>
     );

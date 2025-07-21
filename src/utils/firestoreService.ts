@@ -18,7 +18,8 @@ import {
     limit,
     Timestamp,
     runTransaction,
-    DocumentReference
+    DocumentReference,
+    QueryDocumentSnapshot
 } from 'firebase/firestore';
 import type { Client, PersonalNetworkContact, JobFile, Appointment, Message, Template, Certification, CEU, UserProfile, Invoice, Expense, JobPosting } from '@/types/app-interfaces';
 import { v4 as uuidv4 } from 'uuid';
@@ -36,33 +37,39 @@ const cleanupObject = (data: Record<string, any>) => {
 // --- REAL-TIME LISTENERS ---
 export const getClients = (userId: string, callback: (data: Client[]) => void) => {
     const q = query(collection(db, `users/${userId}/clients`), orderBy('createdAt', 'desc'));
-    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client))); });
+    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as Client))); });
 };
+
 export const getPersonalNetwork = (userId: string, callback: (data: PersonalNetworkContact[]) => void) => {
     const q = query(collection(db, `users/${userId}/personalNetwork`), orderBy('createdAt', 'desc'));
-    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PersonalNetworkContact))); });
+    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as PersonalNetworkContact))); });
 };
+
 export const getJobFiles = (userId: string, callback: (data: JobFile[]) => void) => {
     const q = query(collection(db, `users/${userId}/jobFiles`), orderBy('createdAt', 'desc'));
-    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as JobFile))); });
+    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as JobFile))); });
 };
+
 export const getAppointments = (userId: string, callback: (data: Appointment[]) => void) => {
     const q = query(collection(db, `users/${userId}/appointments`), orderBy('date', 'desc'));
-    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Appointment))); });
+    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as Appointment))); });
 };
+
 export const getJobFile = (userId: string, jobFileId: string, callback: (data: JobFile | null) => void) => {
     const jobFileRef = doc(db, 'users', userId, 'jobFiles', jobFileId);
     return onSnapshot(jobFileRef, (docSnap) => { if (docSnap.exists()) { callback({ id: docSnap.id, ...docSnap.data() } as JobFile); } else { callback(null); } });
 };
+
 export const getMessagesForUser = (userId: string, callback: (data: Message[]) => void) => {
     const messagesRef = collection(db, 'users', userId, 'messages');
     const q = query(messagesRef, where('recipientId', '==', userId), orderBy('createdAt', 'desc'));
-    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message))); });
+    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as Message))); });
 };
+
 export const getSentMessagesForUser = (userId: string, callback: (data: Message[]) => void) => {
     const messagesRef = collection(db, 'users', userId, 'messages');
     const q = query(messagesRef, where('senderId', '==', userId), orderBy('createdAt', 'desc'));
-    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message))); });
+    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as Message))); });
 };
 
 // --- WRITE/UPDATE/DELETE FUNCTIONS ---
@@ -78,31 +85,7 @@ export const addJobFile = (userId: string, jobFileData: Partial<JobFile>): Promi
 export const updateJobFile = (userId: string, jobFileId: string, jobFileData: Partial<JobFile>): Promise<void> => { const dataToSave = { ...cleanupObject(jobFileData), updatedAt: serverTimestamp() }; return updateDoc(doc(db, `users/${userId}/jobFiles`, jobFileId), dataToSave); };
 export const deleteJobFile = (userId: string, jobFileId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/jobFiles`, jobFileId)); };
 export const uploadFile = async (userId: string, file: File): Promise<string> => { if (!file) throw new Error("No file provided for upload."); const formData = new FormData(); formData.append('file', file); const response = await fetch('/api/upload', { method: 'POST', body: formData }); if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.error || 'File upload failed.'); } const { fileUrl } = await response.json(); return fileUrl; };
-
-export const addAppointment = async (userId: string, appointmentData: Partial<Appointment>, recurrenceEndDate?: string): Promise<void> => {
-    const dataToSave = { ...cleanupObject(appointmentData), createdAt: serverTimestamp() };
-    if (appointmentData.recurrence && recurrenceEndDate && appointmentData.date) {
-        const batch = writeBatch(db);
-        const seriesId = uuidv4();
-        let currentDate = new Date(appointmentData.date + 'T00:00:00');
-        const endDate = new Date(recurrenceEndDate + 'T00:00:00');
-        while (currentDate <= endDate) {
-            const newDocRef = doc(collection(db, `users/${userId}/appointments`));
-            const appointmentForDate = { ...dataToSave, date: currentDate.toISOString().split('T')[0], seriesId: seriesId };
-            batch.set(newDocRef, appointmentForDate);
-            switch (appointmentData.recurrence) {
-                case 'daily': currentDate.setDate(currentDate.getDate() + 1); break;
-                case 'weekly': currentDate.setDate(currentDate.getDate() + 7); break;
-                case 'biweekly': currentDate.setDate(currentDate.getDate() + 14); break;
-                case 'monthly': currentDate.setMonth(currentDate.getMonth() + 1); break;
-                default: currentDate.setDate(endDate.getDate() + 1); break;
-            }
-        }
-        await batch.commit();
-    } else {
-        await addDoc(collection(db, `users/${userId}/appointments`), dataToSave);
-    }
-};
+export const addAppointment = async (userId: string, appointmentData: Partial<Appointment>, recurrenceEndDate?: string): Promise<void> => { const dataToSave = { ...cleanupObject(appointmentData), createdAt: serverTimestamp() }; if (appointmentData.recurrence && recurrenceEndDate && appointmentData.date) { const batch = writeBatch(db); const seriesId = uuidv4(); let movingDate = new Date(appointmentData.date + 'T00:00:00'); const endDate = new Date(recurrenceEndDate + 'T00:00:00'); while (movingDate <= endDate) { const newDocRef = doc(collection(db, `users/${userId}/appointments`)); const appointmentForDate = { ...dataToSave, date: movingDate.toISOString().split('T')[0], seriesId: seriesId }; batch.set(newDocRef, appointmentForDate); switch (appointmentData.recurrence) { case 'daily': movingDate.setDate(movingDate.getDate() + 1); break; case 'weekly': movingDate.setDate(movingDate.getDate() + 7); break; case 'biweekly': movingDate.setDate(movingDate.getDate() + 14); break; case 'monthly': movingDate.setMonth(movingDate.getMonth() + 1); break; default: movingDate.setDate(endDate.getDate() + 1); break; } } await batch.commit(); } else { await addDoc(collection(db, `users/${userId}/appointments`), dataToSave); } };
 export const updateAppointment = (userId: string, appointmentId: string, appointmentData: Partial<Appointment>): Promise<void> => { const appointmentRef = doc(db, `users/${userId}/appointments`, appointmentId); return updateDoc(appointmentRef, cleanupObject(appointmentData)); };
 export const deleteAppointment = (userId: string, appointmentId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/appointments`, appointmentId)); };
 export const updateMessage = (userId: string, messageId: string, messageData: Partial<Message>): Promise<void> => { const messageRef = doc(db, 'users', userId, 'messages', messageId); return updateDoc(messageRef, cleanupObject(messageData)); };
@@ -120,33 +103,23 @@ export const approveMessageAndCreateAppointment = async (userId: string, message
 export const getCertifications = (userId: string, callback: (data: Certification[]) => void) => { const q = query(collection(db, `users/${userId}/certifications`), orderBy('createdAt', 'desc')); return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Certification))); }); };
 export const addCertification = (userId: string, certData: Partial<Certification>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/certifications`), { ...cleanupObject(certData), createdAt: serverTimestamp() }); };
 export const updateCertification = (userId: string, certId: string, certData: Partial<Certification>): Promise<void> => { const docRef = doc(db, `users/${userId}/certifications`, certId); return setDoc(docRef, cleanupObject(certData), { merge: true }); };
-export const deleteCertification = async (userId: string, certId: string): Promise<void> => { const batch = writeBatch(db); const certRef = doc(db, `users/${userId}/certifications`, certId); const ceusRef = collection(db, `users/${userId}/certifications/${certId}/ceus`); const ceusSnapshot = await getDocs(ceusRef); ceusSnapshot.forEach(doc => batch.delete(doc.ref)); await batch.commit(); };
+export const deleteCertification = async (userId: string, certId: string): Promise<void> => { const batch = writeBatch(db); const certRef = doc(db, `users/${userId}/certifications`, certId); const ceusRef = collection(db, `users/${userId}/certifications/${certId}/ceus`); const ceusSnapshot = await getDocs(ceusRef); ceusSnapshot.forEach(doc => batch.delete(doc.ref)); batch.delete(certRef); await batch.commit(); };
 export const getCEUsForCertification = (userId: string, certId: string, callback: (data: CEU[]) => void) => { const q = query(collection(db, `users/${userId}/certifications/${certId}/ceus`), orderBy('createdAt', 'desc')); return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CEU))); }); };
 export const addCEU = (userId: string, certId: string, ceuData: Partial<CEU>): Promise<DocumentReference> => { const dataToSave = { ...cleanupObject(ceuData), certificationId: certId, createdAt: serverTimestamp() }; return addDoc(collection(db, `users/${userId}/certifications/${certId}/ceus`), dataToSave); };
 export const deleteCEU = (userId: string, certId: string, ceuId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/certifications/${certId}/ceus`, ceuId)); };
 export const updateCEU = (userId: string, certId: string, ceuId: string, ceuData: Partial<CEU>): Promise<void> => { const docRef = doc(db, `users/${userId}/certifications/${certId}/ceus`, ceuId); return setDoc(docRef, cleanupObject(ceuData), { merge: true }); };
-export const getUserProfile = (userId: string, callback: (data: UserProfile | null) => void) => { const docRef = doc(db, `users/${userId}/profile`, 'mainProfile'); return onSnapshot(docRef, (docSnap) => { if (docSnap.exists()) { callback({ id: docSnap.id, ...docSnap.data() } as UserProfile); } else { callback({ isVirtual: false }); } }); };
+export const getUserProfile = (userId: string, callback: (data: UserProfile | null) => void) => { const docRef = doc(db, `users/${userId}/profile`, 'mainProfile'); return onSnapshot(docRef, (docSnap) => { if (docSnap.exists()) { callback({ id: docSnap.id, ...docSnap.data() } as UserProfile); } else { callback({ isVirtual: false, skills: [], languages: [], jobHistory: [], education: [] }); } }); };
 export const updateUserProfile = (userId: string, profileData: Partial<UserProfile>): Promise<void> => { const docRef = doc(db, `users/${userId}/profile`, 'mainProfile'); return setDoc(docRef, cleanupObject(profileData), { merge: true }); };
 export const getInvoices = (userId: string, callback: (data: Invoice[]) => void) => { const q = query(collection(db, `users/${userId}/invoices`), orderBy('invoiceDate', 'desc')); return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Invoice))); }); };
-export const getNextInvoiceNumber = async (userId: string): Promise<string> => { const metaRef = doc(db, `users/${userId}/_metadata`, 'invoiceCounter'); const year = new Date().getFullYear(); const metaDoc = await getDoc(metaRef); if (!metaDoc.exists()) { return `${year}-001`; } const data = metaDoc.data(); const lastNumber = data.year === year ? data.lastNumber : 0; const nextNumber = lastNumber + 1; return `${year}-${String(nextNumber).padStart(3, '0')}`; };
 const generateNextInvoiceNumber = async (userId: string): Promise<string> => { const metaRef = doc(db, `users/${userId}/_metadata`, 'invoiceCounter'); const year = new Date().getFullYear(); try { const newInvoiceNumber = await runTransaction(db, async (transaction) => { const metaDoc = await transaction.get(metaRef); if (!metaDoc.exists()) { transaction.set(metaRef, { lastNumber: 1, year: year }); return `${year}-001`; } const data = metaDoc.data(); const lastNumber = data.year === year ? data.lastNumber : 0; const nextNumber = lastNumber + 1; transaction.update(metaRef, { lastNumber: nextNumber, year: year }); return `${year}-${String(nextNumber).padStart(3, '0')}`; }); return newInvoiceNumber; } catch (error) { console.error("Transaction failed: ", error); return `${year}-${Date.now().toString().slice(-5)}`; } };
 export const addInvoice = async (userId: string, invoiceData: Partial<Invoice>): Promise<void> => { if (!invoiceData.invoiceNumber) { invoiceData.invoiceNumber = await generateNextInvoiceNumber(userId); } const dataToSave = { ...cleanupObject(invoiceData), createdAt: serverTimestamp(), }; await addDoc(collection(db, `users/${userId}/invoices`), dataToSave); };
 export const updateInvoice = (userId: string, invoiceId: string, invoiceData: Partial<Invoice>): Promise<void> => { const docRef = doc(db, `users/${userId}/invoices`, invoiceId); return setDoc(docRef, cleanupObject(invoiceData), { merge: true }); };
 export const deleteInvoice = (userId: string, invoiceId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/invoices`, invoiceId)); };
 const calculateDurationInHours = (startTime?: string, endTime?: string): number => { if (!startTime || !endTime) return 1; const start = new Date(`1970-01-01T${startTime}`); const end = new Date(`1970-01-01T${endTime}`); const diffMs = end.getTime() - start.getTime(); if (diffMs <= 0) return 1; return parseFloat((diffMs / (1000 * 60 * 60)).toFixed(2)); };
-export const createInvoiceFromAppointment = async (userId: string, appointment: Appointment): Promise<void> => { if (!appointment.clientId || !appointment.id) throw new Error("Appointment must have an ID and be linked to a client."); const clientRef = doc(db, `users/${userId}/clients`, appointment.clientId); const clientSnap = await getDoc(clientRef); if (!clientSnap.exists()) throw new Error("Client not found for this appointment."); const client = clientSnap.data() as Client; const rate = client.rate || 0; const duration = calculateDurationInHours(appointment.time, appointment.endTime); const description = `${appointment.subject || 'Services Rendered'}\nDate: ${appointment.date}`; const invoiceData: Partial<Invoice> = { clientId: appointment.clientId, appointmentId: appointment.id, invoiceDate: new Date().toISOString().split('T')[0], dueDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], status: 'draft', lineItems: [{ description, quantity: duration, unitPrice: rate, total: duration * rate }], }; await addInvoice(userId, invoiceData); };
+export const createInvoiceFromAppointment = async (userId: string, appointment: Appointment): Promise<void> => { if (!appointment.clientId || !appointment.id) throw new Error("Appointment must have an ID and be linked to a client."); const clientRef = doc(db, `users/${userId}/clients`, appointment.clientId); const clientSnap = await getDoc(clientRef); if (!clientSnap.exists()) throw new Error("Client not found for this appointment."); const client = clientSnap.data() as Client; const rate = client.rate || 0; const duration = calculateDurationInHours(appointment.time, appointment.endTime); const description = `${appointment.subject || 'Services Rendered'}\nDate: ${appointment.date}`; const invoiceData: Partial<Invoice> = { clientId: appointment.clientId, appointmentId: appointment.id, invoiceDate: new Date().toISOString().split('T')[0], dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], status: 'draft', lineItems: [{ description, quantity: duration, unitPrice: rate, total: duration * rate }], subtotal: duration * rate, total: duration * rate, }; await addInvoice(userId, invoiceData); };
 export const getExpenses = (userId: string, callback: (data: Expense[]) => void) => { const q = query(collection(db, `users/${userId}/expenses`), orderBy('date', 'desc')); return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Expense))); }); };
 export const addExpense = (userId: string, expenseData: Partial<Expense>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/expenses`), { ...cleanupObject(expenseData), createdAt: serverTimestamp() }); };
 export const updateExpense = (userId: string, expenseId: string, expenseData: Partial<Expense>): Promise<void> => { return setDoc(doc(db, `users/${userId}/expenses`, expenseId), cleanupObject(expenseData), { merge: true }); };
 export const deleteExpense = (userId: string, expenseId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/expenses`, expenseId)); };
-
-// --- JOB BOARD FUNCTIONS ---
-export const getJobPostings = (callback: (data: JobPosting[]) => void) => {
-    const q = query(collection(db, 'jobPostings'), where('isFilled', '==', false), orderBy('createdAt', 'desc'));
-    return onSnapshot(q, (snapshot) => {
-        callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as JobPosting)));
-    });
-};
-export const addJobPosting = (userId: string, jobData: Partial<JobPosting>): Promise<DocumentReference> => {
-    return addDoc(collection(db, 'jobPostings'), { ...cleanupObject(jobData), userId, isFilled: false, createdAt: serverTimestamp() });
-};
+export const getJobPostings = (callback: (data: JobPosting[]) => void) => { const q = query(collection(db, 'jobPostings'), where('isFilled', '==', false), orderBy('createdAt', 'desc')); return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as JobPosting))); }); };
+export const addJobPosting = (userId: string, jobData: Partial<JobPosting>): Promise<DocumentReference> => { return addDoc(collection(db, 'jobPostings'), { ...cleanupObject(jobData), userId, isFilled: false, createdAt: serverTimestamp() }); };

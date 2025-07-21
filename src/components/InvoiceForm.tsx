@@ -2,7 +2,6 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-// ✅ FIX: Removed unused 'Appointment' type
 import type { Invoice, Client, UserProfile } from '@/types/app-interfaces';
 import { PlusCircle, Trash2, Save, Loader2 } from 'lucide-react';
 
@@ -17,14 +16,13 @@ interface InvoiceFormProps {
     onSave: (data: Partial<Invoice>) => Promise<void>;
     onCancel: () => void;
     clients: Client[];
-    // ✅ FIX: Removed unused 'appointments' prop
     initialData?: Partial<Invoice>;
     isSubmitting: boolean;
     userProfile: UserProfile | null;
-    nextInvoiceNumber: string;
+    // ✅ THE FIX: The 'nextInvoiceNumber' prop is no longer required.
 }
 
-export default function InvoiceForm({ onSave, onCancel, clients, initialData, isSubmitting, userProfile, nextInvoiceNumber }: InvoiceFormProps) {
+export default function InvoiceForm({ onSave, onCancel, clients, initialData, isSubmitting, userProfile }: InvoiceFormProps) {
     const isEditMode = !!initialData?.id;
     const [formData, setFormData] = useState<Partial<Invoice>>({
         status: 'draft',
@@ -54,12 +52,10 @@ export default function InvoiceForm({ onSave, onCancel, clients, initialData, is
         setFormData(prev => ({ ...prev, [name]: finalValue }));
     };
     
-    // ✅ FIX: Replaced 'any' with a type-safe implementation
     const handleLineItemChange = (index: number, field: keyof LineItem, value: string | number) => {
         const updatedItems = [...lineItems];
         const item = { ...updatedItems[index] };
 
-        // This ensures we assign the correct type to each field
         if (field === 'description') {
             item[field] = String(value);
         } else if (field === 'quantity' || field === 'unitPrice' || field === 'total') {
@@ -75,7 +71,7 @@ export default function InvoiceForm({ onSave, onCancel, clients, initialData, is
     };
 
     const addLineItem = () => { setLineItems([...lineItems, { description: '', quantity: 1, unitPrice: 0, total: 0 }]); };
-    const removeLineItem = (index: number) => { if (lineItems.length > 0) { const updatedItems = [...lineItems]; updatedItems.splice(index, 1); setLineItems(updatedItems); } };
+    const removeLineItem = (index: number) => { if (lineItems.length > 1) { const updatedItems = [...lineItems]; updatedItems.splice(index, 1); setLineItems(updatedItems); } };
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.clientId || !formData.dueDate) { alert("Client and Due Date are required."); return; }
@@ -95,7 +91,7 @@ export default function InvoiceForm({ onSave, onCancel, clients, initialData, is
                 </div>
                 <div className="text-right">
                     <h3 className="text-3xl font-bold text-muted-foreground">INVOICE</h3>
-                    <p className="text-sm"># {isEditMode ? formData.invoiceNumber : nextInvoiceNumber}</p>
+                    <p className="text-sm"># {isEditMode ? formData.invoiceNumber : 'Will be generated on save'}</p>
                 </div>
             </div>
 
@@ -175,7 +171,8 @@ export default function InvoiceForm({ onSave, onCancel, clients, initialData, is
                     <div className="flex space-x-3">
                         <button type="button" onClick={onCancel} className="bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-secondary/80">Cancel</button>
                         <button type="submit" disabled={isSubmitting} className="bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg flex items-center gap-2 hover:bg-primary/90 disabled:opacity-50">
-                            <Save size={16} /> {isSubmitting ? 'Saving...' : 'Save Invoice'}
+                            {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                            {isSubmitting ? 'Saving...' : 'Save Invoice'}
                         </button>
                     </div>
                 </div>
