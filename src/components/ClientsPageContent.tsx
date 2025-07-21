@@ -5,7 +5,8 @@ import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Client, PersonalNetworkContact, JobFile } from '@/types/app-interfaces';
 import Link from 'next/link';
-import { PlusCircle, Search, Building2, User } from 'lucide-react';
+// ✅ THE FIX: Removed unused 'PlusCircle' icon
+import { Search, Building2, User } from 'lucide-react';
 import ClientDetailModal from './ClientDetailModal';
 
 interface ClientsPageContentProps {
@@ -57,7 +58,6 @@ export default function ClientsPageContent({
         setSelectedItem(null);
     };
 
-    // ✅ THE FIX: Added this handler to refresh data after a save/delete/convert action
     const handleDataChanged = () => {
         router.refresh();
     };
@@ -80,12 +80,20 @@ export default function ClientsPageContent({
                     </div>
                 </header>
 
-                {/* Search and Filter */}
                 <div className="mb-6 p-4 bg-card border rounded-lg">
-                     {/* ... (filtering UI is correct) ... */}
+                    <div className="flex flex-col sm:flex-row gap-4">
+                        <div className="relative flex-grow">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                            <input type="text" placeholder="Search by name, company, or tag..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 p-2 border rounded-md bg-background"/>
+                        </div>
+                        <div className="flex items-center gap-2 bg-background p-1 rounded-lg border">
+                            <button onClick={() => setFilter('all')} className={`px-4 py-1.5 text-sm font-semibold rounded-md ${filter === 'all' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>All</button>
+                            <button onClick={() => setFilter('companies')} className={`px-4 py-1.5 text-sm font-semibold rounded-md ${filter === 'companies' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>Companies</button>
+                            <button onClick={() => setFilter('contacts')} className={`px-4 py-1.5 text-sm font-semibold rounded-md ${filter === 'contacts' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>Contacts</button>
+                        </div>
+                    </div>
                 </div>
                 
-                {/* Items Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredItems.map(item => (
                         <div key={`${item.type}-${item.id}`} onClick={() => handleItemClick(item, item.type)} className="bg-card p-6 rounded-lg border hover:border-primary hover:shadow-lg transition-all cursor-pointer">
@@ -104,7 +112,6 @@ export default function ClientsPageContent({
                     clients={clients}
                     jobFiles={jobFiles}
                     onClose={handleCloseModal}
-                    // ✅ THE FIX: Passed the new handler to the modal
                     onSave={handleDataChanged}
                 />
             )}
