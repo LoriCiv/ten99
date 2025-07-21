@@ -24,15 +24,16 @@ function InvoicesPageInternal() {
     useEffect(() => {
         const unsubInvoices = getInvoices(TEMP_USER_ID, setInvoices);
         const unsubClients = getClients(TEMP_USER_ID, setClients);
-        const unsubProfile = getUserProfile(TEMP_USER_ID, (profile) => {
-            setUserProfile(profile);
-            setIsLoading(false);
-        });
+        const unsubProfile = getUserProfile(TEMP_USER_ID, setUserProfile);
+
+        // A simple way to handle initial load
+        const timer = setTimeout(() => setIsLoading(false), 1500);
 
         return () => {
             unsubInvoices();
             unsubClients();
             unsubProfile();
+            clearTimeout(timer);
         };
     }, []);
 
