@@ -16,13 +16,13 @@ interface InvoiceFormProps {
     onSave: (data: Partial<Invoice>) => Promise<void>;
     onCancel: () => void;
     clients: Client[];
-    initialData?: Partial<Invoice>;
     isSubmitting: boolean;
+    initialData?: Partial<Invoice>;
     userProfile: UserProfile | null;
-    // ✅ THE FIX: The 'nextInvoiceNumber' prop is no longer required.
+    nextInvoiceNumber: string; // ✅ THE FIX IS HERE
 }
 
-export default function InvoiceForm({ onSave, onCancel, clients, initialData, isSubmitting, userProfile }: InvoiceFormProps) {
+export default function InvoiceForm({ onSave, onCancel, clients, initialData, isSubmitting, userProfile, nextInvoiceNumber }: InvoiceFormProps) {
     const isEditMode = !!initialData?.id;
     const [formData, setFormData] = useState<Partial<Invoice>>({
         status: 'draft',
@@ -71,7 +71,7 @@ export default function InvoiceForm({ onSave, onCancel, clients, initialData, is
     };
 
     const addLineItem = () => { setLineItems([...lineItems, { description: '', quantity: 1, unitPrice: 0, total: 0 }]); };
-    const removeLineItem = (index: number) => { if (lineItems.length > 1) { const updatedItems = [...lineItems]; updatedItems.splice(index, 1); setLineItems(updatedItems); } };
+    const removeLineItem = (index: number) => { if (lineItems.length > 0) { const updatedItems = [...lineItems]; updatedItems.splice(index, 1); setLineItems(updatedItems); } };
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.clientId || !formData.dueDate) { alert("Client and Due Date are required."); return; }
@@ -91,7 +91,7 @@ export default function InvoiceForm({ onSave, onCancel, clients, initialData, is
                 </div>
                 <div className="text-right">
                     <h3 className="text-3xl font-bold text-muted-foreground">INVOICE</h3>
-                    <p className="text-sm"># {isEditMode ? formData.invoiceNumber : 'Will be generated on save'}</p>
+                    <p className="text-sm"># {isEditMode ? formData.invoiceNumber : nextInvoiceNumber}</p>
                 </div>
             </div>
 
