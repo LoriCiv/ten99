@@ -53,10 +53,12 @@ export const getPersonalNetwork = (userId: string, callback: (data: PersonalNetw
     const q = query(collection(db, `users/${userId}/personalNetwork`), orderBy('createdAt', 'desc'));
     return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as PersonalNetworkContact))); });
 };
+// ✅ THE FIX IS HERE
 export const getJobFiles = (userId: string, callback: (data: JobFile[]) => void) => {
     const q = query(collection(db, `users/${userId}/jobFiles`), orderBy('createdAt', 'desc'));
     return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as JobFile))); });
 };
+// ✅ AND THE FIX IS HERE
 export const getAppointments = (userId: string, callback: (data: Appointment[]) => void) => {
     const q = query(collection(db, `users/${userId}/appointments`), orderBy('date', 'desc'));
     return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as Appointment))); });
@@ -94,7 +96,6 @@ export const addAppointment = async (userId: string, appointmentData: Partial<Ap
     if (appointmentData.recurrence && recurrenceEndDate && appointmentData.date) {
         const batch = writeBatch(db);
         const seriesId = uuidv4();
-        // eslint-disable-next-line prefer-const
         let movingDate = new Date(appointmentData.date + 'T00:00:00');
         const endDate = new Date(recurrenceEndDate + 'T00:00:00');
         while (movingDate <= endDate) {
