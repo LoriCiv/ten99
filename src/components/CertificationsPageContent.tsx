@@ -4,7 +4,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Certification, CEU } from '@/types/app-interfaces';
-// ✅ THE FIX: Removed 'X' and 'Loader2' from this import line.
+// ✅ THE ONLY FIX: Removed unused 'X' and 'Loader2' from this import line.
 import { PlusCircle, Edit, Trash2, Award, BookOpen, Library, Users } from 'lucide-react';
 import { addCertification, updateCertification, deleteCertification, addCEU, updateCEU, deleteCEU } from '@/utils/firestoreService';
 import CertificationForm from './CertificationForm';
@@ -50,7 +50,16 @@ export default function CertificationsPageContent({ initialCertifications, initi
             const specialty1Progress = cert.specialtyCeusRequired ? (specialty1Completed / cert.specialtyCeusRequired) * 100 : 0;
             const specialty2Completed = cert.specialtyCeusCategory2 ? relevantCeus.filter(c => c.category === cert.specialtyCeusCategory2).reduce((sum, ceu) => sum + (ceu.ceuHours || 0), 0) : 0;
             const specialty2Progress = cert.specialtyCeusRequired2 ? (specialty2Completed / cert.specialtyCeusRequired2) * 100 : 0;
-            return { ...cert, type, ceusCompleted: totalHoursCompleted, progress, specialty1Completed, specialty1Progress, specialty2Completed, specialty2Progress };
+            return { 
+                ...cert, 
+                type, 
+                ceusCompleted: totalHoursCompleted, 
+                progress,
+                specialty1Completed,
+                specialty1Progress,
+                specialty2Completed,
+                specialty2Progress
+            };
         });
     }, [certifications, ceus]);
 
@@ -64,7 +73,7 @@ export default function CertificationsPageContent({ initialCertifications, initi
     const handleSaveCertification = async (data: Partial<Certification>) => {
         setIsSubmitting(true);
         try {
-            if (editingCert?.id) { await updateCertification(userId, editingCert.id, data); alert("Credential updated!"); }
+            if (editingCert?.id) { await updateCertification(userId, editingCert.id, data); alert("Credential updated!"); } 
             else { await addCertification(userId, data); alert("Credential added!"); }
             handleCloseCertModal();
             router.refresh();
@@ -85,13 +94,13 @@ export default function CertificationsPageContent({ initialCertifications, initi
             }
         }
     };
-    const handleOpenCeuModal = (certId: string, ceu: Partial<CEU> | null) => {
+    const handleOpenCeuModal = (certId: string, ceu: Partial<CEU> | null) => { 
         setSelectedCertForCeu(certId);
         setEditingCeu(ceu);
         setIsCeuModalOpen(true);
     };
-    const handleCloseCeuModal = () => {
-        setIsCeuModalOpen(false);
+    const handleCloseCeuModal = () => { 
+        setIsCeuModalOpen(false); 
         setSelectedCertForCeu(null);
         setEditingCeu(null);
     };
@@ -125,7 +134,7 @@ export default function CertificationsPageContent({ initialCertifications, initi
             }
         }
     };
-
+    
     const certForCeu = certifications.find(c => c.id === selectedCertForCeu);
     const availableCategories = ['General Studies'];
     if (certForCeu?.specialtyCeusCategory) { availableCategories.push(certForCeu.specialtyCeusCategory); }
@@ -141,6 +150,7 @@ export default function CertificationsPageContent({ initialCertifications, initi
                     </button>
                 </header>
                 <div className="border-b border-border"><nav className="-mb-px flex space-x-6"><button onClick={() => setActiveTab('certs')} className={`${activeTab === 'certs' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'} whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm`}>My Credentials</button><button onClick={() => setActiveTab('ceus')} className={`${activeTab === 'ceus' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'} whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm`}>CEU Log</button></nav></div>
+                
                 <div className="mt-6">
                     {activeTab === 'certs' && (
                         <div className="space-y-4">

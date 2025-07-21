@@ -1,36 +1,47 @@
 // src/app/dashboard/job-files/[id]/page.tsx
+"use client"; // This needs to be a client component to use hooks
+
+import { useState, useEffect } from 'react';
 import { getJobFile, getClients, getPersonalNetwork, getAppointments } from '@/utils/firestoreService';
 import JobFileDetailPageContent from '@/components/JobFileDetailPageContent';
 import { notFound } from 'next/navigation';
+import type { JobFile, Client, PersonalNetworkContact, Appointment } from '@/types/app-interfaces';
 
 const TEMP_USER_ID = "dev-user-1";
 
-// ✅ THE FIX: Added a specific type for the page's props
+// ✅ FIX: Added a specific type for the page's props
 interface PageProps {
     params: { id: string };
 }
 
-export default async function JobFileDetailPage({ params }: PageProps) {
-    const jobFileId = params.id;
+export default function JobFileDetailPage({ params }: PageProps) {
+    const [jobFile, setJobFile] = useState<JobFile | null>(null);
+    const [clients, setClients] = useState<Client[]>([]);
+    const [contacts, setContacts] = useState<PersonalNetworkContact[]>([]);
+    const [appointments, setAppointments] = useState<Appointment[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
-    // A helper function to fetch data without a real-time listener for server components
-    const getServerSideProps = async () => {
-        const jobFilePromise = new Promise<any>((resolve) => getJobFile(TEMP_USER_ID, jobFileId, resolve));
-        const clientsPromise = new Promise<any>((resolve) => getClients(TEMP_USER_ID, resolve));
-        const contactsPromise = new Promise<any>((resolve) => getPersonalNetwork(TEMP_USER_ID, resolve));
-        const appointmentsPromise = new Promise<any>((resolve) => getAppointments(TEMP_USER_ID, resolve));
-        
-        const [jobFile, clients, contacts, appointments] = await Promise.all([
-            jobFilePromise,
-            clientsPromise,
-            contactsPromise,
-            appointmentsPromise,
-        ]);
-        
-        return { jobFile, clients, contacts, appointments };
-    };
-    
-    const { jobFile, clients, contacts, appointments } = await getServerSideProps();
+    useEffect(() => {
+        const jobFileId = params.id;
+        const unsubJobFile = getJobFile(TEMP_USER_ID, jobFileId, setJobFile);
+        const unsubClients = getClients(TEMP_USER_ID, setClients);
+        const unsubContacts = getPersonalNetwork(TEMP_USER_ID, setContacts);
+        const unsubAppointments = getAppointments(TEMP_USER_ID, (data) => {
+            setAppointments(data);
+            setIsLoading(false); // Stop loading after the last fetch
+        });
+
+        return () => {
+            unsubJobFile();
+            unsubClients();
+            unsubContacts();
+            unsubAppointments();
+        };
+    }, [params.id]);
+
+    if (isLoading) {
+        return <div className="p-8 text-center">Loading Job File...</div>;
+    }
 
     if (!jobFile) {
         notFound();
