@@ -31,28 +31,30 @@ interface ClientDetailModalProps {
 }
 
 export default function ClientDetailModal({ item, itemType, userId, clients, jobFiles, onClose, onSave }: ClientDetailModalProps) {
+    // ✅ MOVED ALL HOOKS to the top level of the component
     const [isEditing, setIsEditing] = useState(false);
     const [isConverting, setIsConverting] = useState(false);
     const [isCopied, setIsCopied] = useState(false);
-    const [isSubmitting, setIsSubmitting] = useState(false); // Added isSubmitting state for the form
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
         setIsEditing(false);
         setIsCopied(false);
     }, [item]);
-
-    if (!item) {
-        return null;
-    }
     
     const relevantJobFiles = useMemo(() => {
-        if (itemType !== 'Company' || !item.id) return [];
+        if (!item || itemType !== 'Company' || !item.id) return [];
         return jobFiles.filter(jf => jf.clientId === item.id);
     }, [jobFiles, item, itemType]);
 
+    // This safety check now happens AFTER all hooks have been called.
+    if (!item) {
+        return null;
+    }
+
     const handleSave = async (formData: Partial<Client | PersonalNetworkContact>) => {
         if (!item.id) return;
-        setIsSubmitting(true); // Set submitting to true
+        setIsSubmitting(true);
         try {
             if (itemType === 'Company') {
                 await updateClient(userId, item.id, formData as Partial<Client>);
@@ -65,7 +67,7 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
         } catch (error) {
             console.error(`Error saving ${itemType}:`, error);
         } finally {
-            setIsSubmitting(false); // Set submitting to false
+            setIsSubmitting(false);
         }
     };
 
@@ -150,7 +152,6 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
                                 initialData={item as PersonalNetworkContact}
                                 onSave={handleSave}
                                 onCancel={() => setIsEditing(false)}
-                                // ✅ THE FIX IS HERE
                                 isSubmitting={isSubmitting}
                                 clients={clients}
                             />

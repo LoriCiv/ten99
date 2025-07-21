@@ -4,7 +4,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Certification, CEU } from '@/types/app-interfaces';
-import { PlusCircle, Edit, Trash2, Award, BookOpen, X, Loader2, Library, Users } from 'lucide-react';
+// ✅ THE FIX: Removed 'X' and 'Loader2' as they are no longer used in this file.
+import { PlusCircle, Edit, Trash2, Award, BookOpen, Library, Users } from 'lucide-react';
 import { addCertification, updateCertification, deleteCertification, addCEU, updateCEU, deleteCEU } from '@/utils/firestoreService';
 import CertificationForm from './CertificationForm';
 import CEUForm from './CEUForm';
@@ -45,23 +46,11 @@ export default function CertificationsPageContent({ initialCertifications, initi
             const totalHoursCompleted = relevantCeus.reduce((sum, ceu) => sum + (ceu.ceuHours || 0), 0);
             const progress = cert.totalCeusRequired && cert.totalCeusRequired > 0 ? Math.min((totalHoursCompleted / cert.totalCeusRequired) * 100, 100) : 0;
             const type = cert.type || 'certification';
-
-            // ✅ 1. Calculate progress for specialty categories
             const specialty1Completed = cert.specialtyCeusCategory ? relevantCeus.filter(c => c.category === cert.specialtyCeusCategory).reduce((sum, ceu) => sum + (ceu.ceuHours || 0), 0) : 0;
             const specialty1Progress = cert.specialtyCeusRequired ? (specialty1Completed / cert.specialtyCeusRequired) * 100 : 0;
             const specialty2Completed = cert.specialtyCeusCategory2 ? relevantCeus.filter(c => c.category === cert.specialtyCeusCategory2).reduce((sum, ceu) => sum + (ceu.ceuHours || 0), 0) : 0;
             const specialty2Progress = cert.specialtyCeusRequired2 ? (specialty2Completed / cert.specialtyCeusRequired2) * 100 : 0;
-
-            return { 
-                ...cert, 
-                type, 
-                ceusCompleted: totalHoursCompleted, 
-                progress,
-                specialty1Completed,
-                specialty1Progress,
-                specialty2Completed,
-                specialty2Progress
-            };
+            return { ...cert, type, ceusCompleted: totalHoursCompleted, progress, specialty1Completed, specialty1Progress, specialty2Completed, specialty2Progress };
         });
     }, [certifications, ceus]);
 
@@ -70,13 +59,12 @@ export default function CertificationsPageContent({ initialCertifications, initi
         return ceus.filter(ceu => ceu.certificationId === ceuFilter);
     }, [ceus, ceuFilter]);
 
-    // --- (All handler functions remain the same) ---
     const handleOpenCertModal = (cert: Partial<Certification> | null) => { setEditingCert(cert); setIsCertModalOpen(true); };
     const handleCloseCertModal = () => { setIsCertModalOpen(false); setEditingCert(null); };
     const handleSaveCertification = async (data: Partial<Certification>) => {
         setIsSubmitting(true);
         try {
-            if (editingCert?.id) { await updateCertification(userId, editingCert.id, data); alert("Credential updated!"); } 
+            if (editingCert?.id) { await updateCertification(userId, editingCert.id, data); alert("Credential updated!"); }
             else { await addCertification(userId, data); alert("Credential added!"); }
             handleCloseCertModal();
             router.refresh();
@@ -97,13 +85,13 @@ export default function CertificationsPageContent({ initialCertifications, initi
             }
         }
     };
-    const handleOpenCeuModal = (certId: string, ceu: Partial<CEU> | null) => { 
+    const handleOpenCeuModal = (certId: string, ceu: Partial<CEU> | null) => {
         setSelectedCertForCeu(certId);
         setEditingCeu(ceu);
         setIsCeuModalOpen(true);
     };
-    const handleCloseCeuModal = () => { 
-        setIsCeuModalOpen(false); 
+    const handleCloseCeuModal = () => {
+        setIsCeuModalOpen(false);
         setSelectedCertForCeu(null);
         setEditingCeu(null);
     };
@@ -137,10 +125,9 @@ export default function CertificationsPageContent({ initialCertifications, initi
             }
         }
     };
-    
-    // ✅ 2. Build the list of available categories for the form
+
     const certForCeu = certifications.find(c => c.id === selectedCertForCeu);
-    const availableCategories = ['General Studies', 'Professional Studies'];
+    const availableCategories = ['General Studies'];
     if (certForCeu?.specialtyCeusCategory) { availableCategories.push(certForCeu.specialtyCeusCategory); }
     if (certForCeu?.specialtyCeusCategory2) { availableCategories.push(certForCeu.specialtyCeusCategory2); }
 
@@ -154,7 +141,6 @@ export default function CertificationsPageContent({ initialCertifications, initi
                     </button>
                 </header>
                 <div className="border-b border-border"><nav className="-mb-px flex space-x-6"><button onClick={() => setActiveTab('certs')} className={`${activeTab === 'certs' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'} whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm`}>My Credentials</button><button onClick={() => setActiveTab('ceus')} className={`${activeTab === 'ceus' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'} whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm`}>CEU Log</button></nav></div>
-                
                 <div className="mt-6">
                     {activeTab === 'certs' && (
                         <div className="space-y-4">
@@ -174,7 +160,6 @@ export default function CertificationsPageContent({ initialCertifications, initi
                                                 <div className="flex justify-between items-baseline mb-1"><span className="text-sm font-medium">Total CEUs</span><span className="text-sm text-muted-foreground">{cert.ceusCompleted.toFixed(1)} / {cert.totalCeusRequired.toFixed(1)} hours</span></div>
                                                 <div className="w-full bg-background rounded-full h-2.5 border"><div className="bg-primary h-2.5 rounded-full" style={{ width: `${cert.progress}%` }}></div></div>
                                             </div>
-                                            {/* ✅ 3. Display the new progress bars */}
                                             {cert.specialtyCeusCategory && cert.specialtyCeusRequired && (
                                                 <div>
                                                     <div className="flex justify-between items-baseline mb-1"><span className="text-xs font-medium">{cert.specialtyCeusCategory}</span><span className="text-xs text-muted-foreground">{cert.specialty1Completed.toFixed(1)} / {cert.specialtyCeusRequired.toFixed(1)} hours</span></div>
@@ -199,7 +184,6 @@ export default function CertificationsPageContent({ initialCertifications, initi
 
             {isCertModalOpen && (<div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4"><div className="bg-card rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border p-6"><CertificationForm onSave={handleSaveCertification} onCancel={handleCloseCertModal} initialData={editingCert || {}} isSubmitting={isSubmitting}/></div></div>)}
             {isCeuModalOpen && (<div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4"><div className="bg-card rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto border p-6">
-                {/* ✅ 4. Pass the availableCategories to the CEUForm */}
                 <CEUForm onSave={handleSaveCeu} onCancel={handleCloseCeuModal} initialData={editingCeu || {}} isSubmitting={isSubmitting} availableCategories={availableCategories} />
             </div></div>)}
         </>
