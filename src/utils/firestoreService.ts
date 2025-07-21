@@ -79,25 +79,24 @@ export const addJobFile = (userId: string, jobFileData: Partial<JobFile>): Promi
 export const updateJobFile = (userId: string, jobFileId: string, jobFileData: Partial<JobFile>): Promise<void> => { const dataToSave = { ...cleanupObject(jobFileData), updatedAt: serverTimestamp() }; return updateDoc(doc(db, `users/${userId}/jobFiles`, jobFileId), dataToSave); };
 export const deleteJobFile = (userId: string, jobFileId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/jobFiles`, jobFileId)); };
 export const uploadFile = async (userId: string, file: File): Promise<string> => { if (!file) throw new Error("No file provided for upload."); const formData = new FormData(); formData.append('file', file); const response = await fetch('/api/upload', { method: 'POST', body: formData }); if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.error || 'File upload failed.'); } const { fileUrl } = await response.json(); return fileUrl; };
-
 export const addAppointment = async (userId: string, appointmentData: Partial<Appointment>, recurrenceEndDate?: string): Promise<void> => {
     const dataToSave = { ...cleanupObject(appointmentData), createdAt: serverTimestamp() };
     if (appointmentData.recurrence && recurrenceEndDate && appointmentData.date) {
         const batch = writeBatch(db);
         const seriesId = uuidv4();
         // eslint-disable-next-line prefer-const
-        let currentDate = new Date(appointmentData.date + 'T00:00:00');
+        let movingDate = new Date(appointmentData.date + 'T00:00:00');
         const endDate = new Date(recurrenceEndDate + 'T00:00:00');
-        while (currentDate <= endDate) {
+        while (movingDate <= endDate) {
             const newDocRef = doc(collection(db, `users/${userId}/appointments`));
-            const appointmentForDate = { ...dataToSave, date: currentDate.toISOString().split('T')[0], seriesId: seriesId };
+            const appointmentForDate = { ...dataToSave, date: movingDate.toISOString().split('T')[0], seriesId: seriesId };
             batch.set(newDocRef, appointmentForDate);
             switch (appointmentData.recurrence) {
-                case 'daily': currentDate.setDate(currentDate.getDate() + 1); break;
-                case 'weekly': currentDate.setDate(currentDate.getDate() + 7); break;
-                case 'biweekly': currentDate.setDate(currentDate.getDate() + 14); break;
-                case 'monthly': currentDate.setMonth(currentDate.getMonth() + 1); break;
-                default: currentDate.setDate(endDate.getDate() + 1); break;
+                case 'daily': movingDate.setDate(movingDate.getDate() + 1); break;
+                case 'weekly': movingDate.setDate(movingDate.getDate() + 7); break;
+                case 'biweekly': movingDate.setDate(movingDate.getDate() + 14); break;
+                case 'monthly': movingDate.setMonth(movingDate.getMonth() + 1); break;
+                default: movingDate.setDate(endDate.getDate() + 1); break;
             }
         }
         await batch.commit();
