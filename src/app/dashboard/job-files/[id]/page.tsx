@@ -6,17 +6,26 @@ import JobFileDetailPageContent from '@/components/JobFileDetailPageContent';
 
 const TEMP_USER_ID = "dev-user-1";
 
-// Helper function to convert Firestore Timestamps to strings
-const serializeFirestoreData = (data: any): any => {
-    if (!data) return data;
-    for (const key in data) {
-        if (data[key] instanceof Timestamp) {
-            data[key] = data[key].toDate().toISOString();
-        } else if (typeof data[key] === 'object' && data[key] !== null) {
-            data[key] = serializeFirestoreData(data[key]);
-        }
+// ✅ THE FIX: Replaced the old helper with a more type-safe version.
+const serializeTimestamps = <T>(data: T): T => {
+    if (data === null || data === undefined || typeof data !== 'object') {
+        return data;
     }
-    return data;
+
+    if (data instanceof Timestamp) {
+        return data.toDate().toISOString() as T;
+    }
+
+    if (Array.isArray(data)) {
+        return data.map(item => serializeTimestamps(item)) as T;
+    }
+    
+    const res: { [key: string]: any } = {};
+    for (const key of Object.keys(data as Record<string, unknown>)) {
+        res[key] = serializeTimestamps((data as Record<string, unknown>)[key]);
+    }
+    
+    return res as T;
 };
 
 
@@ -27,17 +36,16 @@ async function getDocument<T>(path: string): Promise<T | null> {
         return null;
     }
     const data = { id: docSnap.id, ...docSnap.data() };
-    return serializeFirestoreData(data) as T;
+    return serializeTimestamps(data) as T;
 }
 
 async function getCollection<T>(path: string): Promise<T[]> {
     const collRef = collection(db, path);
     const q = query(collRef);
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => serializeFirestoreData({ id: doc.id, ...doc.data() }) as T);
+    return snapshot.docs.map(doc => serializeTimestamps({ id: doc.id, ...doc.data() }) as T);
 }
 
-// ✅ THE FIX: Added the 'async' keyword here
 export default async function JobFileDetailPage({ params }: { params: { id: string } }) {
     const jobFile = await getDocument<JobFile>(`users/${TEMP_USER_ID}/jobFiles/${params.id}`);
     const clients = await getCollection<Client>(`users/${TEMP_USER_ID}/clients`);
