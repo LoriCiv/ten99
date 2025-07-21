@@ -9,7 +9,6 @@ import TemplateFormModal from './TemplateFormModal';
 import ProfileForm from './ProfileForm';
 import { PlusCircle, Edit, Trash2, Save, Loader2 } from 'lucide-react';
 
-// ✅ 1. Define our helpful default text
 const defaultTermsText = `This contract incorporates pre-negotiated terms and conditions governing the provision of interpretation services. Receipt of this invoice means these services have been completed, and you acknowledge your agreement to these terms and conditions without further negotiation. These terms are non-negotiable and supersede all prior or contemporaneous communications, representations, or agreements, whether oral or written.`;
 const defaultPaymentText = `Payment can be made via:\n- Venmo: @YourUsername\n- Zelle: your@email.com\n\nThank you for your business!`;
 
@@ -36,15 +35,46 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
     useEffect(() => {
         setTemplates(initialTemplates);
         setProfile(initialProfile);
-        // ✅ 2. Use the defaults if the user hasn't saved their own text yet
         setInvoiceNotes(initialProfile.defaultInvoiceNotes || defaultTermsText);
         setPaymentDetails(initialProfile.defaultPaymentDetails || defaultPaymentText);
     }, [initialTemplates, initialProfile]);
 
     const handleOpenTemplateModal = (template: Partial<Template> | null) => { setEditingTemplate(template); setIsTemplateModalOpen(true); };
     const handleCloseTemplateModal = () => { setIsTemplateModalOpen(false); setEditingTemplate(null); };
-    const handleSaveTemplate = async (data: Partial<Template>) => { /* ... (no change) ... */ };
-    const handleDeleteTemplate = async (id: string) => { /* ... (no change) ... */ };
+
+    // ✅ THE FIX: Restored the logic inside these two functions
+    const handleSaveTemplate = async (data: Partial<Template>) => {
+        setIsSubmitting(true);
+        try {
+            if (editingTemplate?.id) {
+                await updateTemplate(userId, editingTemplate.id, data);
+                alert("Template updated!");
+            } else {
+                await addTemplate(userId, data);
+                alert("Template added!");
+            }
+            handleCloseTemplateModal();
+            router.refresh();
+        } catch (error) {
+            console.error("Error saving template:", error);
+            alert("Failed to save template.");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleDeleteTemplate = async (id: string) => {
+        if (window.confirm("Are you sure you want to delete this template?")) {
+            try {
+                await deleteTemplate(userId, id);
+                alert("Template deleted.");
+                router.refresh();
+            } catch (error) {
+                console.error("Error deleting template:", error);
+                alert("Failed to delete template.");
+            }
+        }
+    };
     
     const handleSaveProfile = async (data: Partial<UserProfile>) => {
         setIsSubmitting(true);
@@ -96,9 +126,9 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
                     {activeTab === 'templates' && (
                         <div>
                              <div className="flex justify-end mb-4">
-                                <button onClick={() => handleOpenTemplateModal(null)} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90">
-                                    <PlusCircle size={20} /> Add Template
-                                </button>
+                                 <button onClick={() => handleOpenTemplateModal(null)} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90">
+                                     <PlusCircle size={20} /> Add Template
+                                 </button>
                             </div>
                             <div className="space-y-3">
                                 {templates.map(template => (

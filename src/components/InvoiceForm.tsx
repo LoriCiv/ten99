@@ -2,8 +2,9 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import type { Invoice, Client, Appointment, UserProfile } from '@/types/app-interfaces';
-import { PlusCircle, Trash2, Save } from 'lucide-react';
+// ✅ FIX: Removed unused 'Appointment' type
+import type { Invoice, Client, UserProfile } from '@/types/app-interfaces';
+import { PlusCircle, Trash2, Save, Loader2 } from 'lucide-react';
 
 interface LineItem {
     description: string;
@@ -16,19 +17,18 @@ interface InvoiceFormProps {
     onSave: (data: Partial<Invoice>) => Promise<void>;
     onCancel: () => void;
     clients: Client[];
-    appointments: Appointment[];
+    // ✅ FIX: Removed unused 'appointments' prop
     initialData?: Partial<Invoice>;
     isSubmitting: boolean;
     userProfile: UserProfile | null;
     nextInvoiceNumber: string;
 }
 
-export default function InvoiceForm({ onSave, onCancel, clients, appointments, initialData, isSubmitting, userProfile, nextInvoiceNumber }: InvoiceFormProps) {
+export default function InvoiceForm({ onSave, onCancel, clients, initialData, isSubmitting, userProfile, nextInvoiceNumber }: InvoiceFormProps) {
     const isEditMode = !!initialData?.id;
     const [formData, setFormData] = useState<Partial<Invoice>>({
         status: 'draft',
         invoiceDate: new Date().toISOString().split('T')[0],
-        // ✅ THE FIX: Changed 30 to 90 for the default due date
         dueDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         ...initialData,
     });
@@ -54,11 +54,22 @@ export default function InvoiceForm({ onSave, onCancel, clients, appointments, i
         setFormData(prev => ({ ...prev, [name]: finalValue }));
     };
     
+    // ✅ FIX: Replaced 'any' with a type-safe implementation
     const handleLineItemChange = (index: number, field: keyof LineItem, value: string | number) => {
         const updatedItems = [...lineItems];
         const item = { ...updatedItems[index] };
-        (item[field] as any) = value;
-        if (field === 'quantity' || field === 'unitPrice') { item.total = (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0); }
+
+        // This ensures we assign the correct type to each field
+        if (field === 'description') {
+            item[field] = String(value);
+        } else if (field === 'quantity' || field === 'unitPrice' || field === 'total') {
+            item[field] = Number(value) || 0;
+        }
+
+        if (field === 'quantity' || field === 'unitPrice') {
+            item.total = (item.quantity || 0) * (item.unitPrice || 0);
+        }
+        
         updatedItems[index] = item;
         setLineItems(updatedItems);
     };
@@ -123,10 +134,10 @@ export default function InvoiceForm({ onSave, onCancel, clients, appointments, i
 
                 <div className="space-y-2 pt-6 border-t">
                      <div className="grid grid-cols-12 gap-2 text-sm font-semibold text-muted-foreground px-2 mb-2">
-                        <div className="col-span-6">DESCRIPTION</div>
-                        <div className="col-span-2 text-center">HOURS/QTY</div>
-                        <div className="col-span-2 text-right">RATE/PRICE</div>
-                        <div className="col-span-2 text-right">AMOUNT</div>
+                         <div className="col-span-6">DESCRIPTION</div>
+                         <div className="col-span-2 text-center">HOURS/QTY</div>
+                         <div className="col-span-2 text-right">RATE/PRICE</div>
+                         <div className="col-span-2 text-right">AMOUNT</div>
                     </div>
                     {lineItems.map((item, index) => (
                         <div key={index} className="grid grid-cols-12 gap-2 items-start">
@@ -141,23 +152,23 @@ export default function InvoiceForm({ onSave, onCancel, clients, appointments, i
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6 border-t">
-                     <div>
-                        <label className="block text-sm font-medium text-muted-foreground">Additional Notes</label>
-                        <textarea name="notes" value={formData.notes || ''} onChange={handleInputChange} rows={3} className="w-full mt-1 p-2 border rounded-md bg-background" placeholder="Add a personal thank you or note..."></textarea>
-                        <div className="mt-4">
-                            <h4 className="font-semibold text-sm text-muted-foreground">Default Terms & Conditions</h4>
-                            <p className="text-xs text-muted-foreground whitespace-pre-line mt-1 p-2 bg-background/50 rounded-md">{userProfile?.defaultInvoiceNotes || 'Set your default terms in Settings > My Profile'}</p>
-                        </div>
-                         <div className="mt-4">
-                            <h4 className="font-semibold text-sm text-muted-foreground">Default Payment Details</h4>
-                            <p className="text-xs text-muted-foreground whitespace-pre-line mt-1 p-2 bg-background/50 rounded-md">{userProfile?.defaultPaymentDetails || 'Set your payment details in Settings > My Profile'}</p>
-                        </div>
-                    </div>
-                    <div className="space-y-4">
-                        <div className="flex justify-between items-center"><span className="text-muted-foreground">Subtotal</span> <span>${(formData.subtotal || 0).toFixed(2)}</span></div>
-                        <div className="flex justify-between items-center"><span className="text-muted-foreground">Tax</span> <input type="number" step="0.01" name="tax" value={formData.tax ?? ''} onChange={handleInputChange} className="w-24 p-1 border rounded-md bg-background text-right" placeholder="$0.00" /></div>
-                        <div className="flex justify-between items-center font-bold text-lg pt-2 border-t"><span className="text-foreground">Amount Due</span> <span className="text-foreground">${(formData.total || 0).toFixed(2)}</span></div>
-                    </div>
+                      <div>
+                          <label className="block text-sm font-medium text-muted-foreground">Additional Notes</label>
+                          <textarea name="notes" value={formData.notes || ''} onChange={handleInputChange} rows={3} className="w-full mt-1 p-2 border rounded-md bg-background" placeholder="Add a personal thank you or note..."></textarea>
+                          <div className="mt-4">
+                              <h4 className="font-semibold text-sm text-muted-foreground">Default Terms & Conditions</h4>
+                              <p className="text-xs text-muted-foreground whitespace-pre-line mt-1 p-2 bg-background/50 rounded-md">{userProfile?.defaultInvoiceNotes || 'Set your default terms in Settings > My Profile'}</p>
+                          </div>
+                           <div className="mt-4">
+                              <h4 className="font-semibold text-sm text-muted-foreground">Default Payment Details</h4>
+                              <p className="text-xs text-muted-foreground whitespace-pre-line mt-1 p-2 bg-background/50 rounded-md">{userProfile?.defaultPaymentDetails || 'Set your payment details in Settings > My Profile'}</p>
+                          </div>
+                      </div>
+                      <div className="space-y-4">
+                          <div className="flex justify-between items-center"><span className="text-muted-foreground">Subtotal</span> <span>${(formData.subtotal || 0).toFixed(2)}</span></div>
+                          <div className="flex justify-between items-center"><span className="text-muted-foreground">Tax</span> <input type="number" step="0.01" name="tax" value={formData.tax ?? ''} onChange={handleInputChange} className="w-24 p-1 border rounded-md bg-background text-right" placeholder="$0.00" /></div>
+                          <div className="flex justify-between items-center font-bold text-lg pt-2 border-t"><span className="text-foreground">Amount Due</span> <span className="text-foreground">${(formData.total || 0).toFixed(2)}</span></div>
+                      </div>
                 </div>
 
                 <div className="flex justify-end items-center mt-8 pt-6 border-t border-border">
