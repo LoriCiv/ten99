@@ -24,8 +24,9 @@ import {
 import type { Client, PersonalNetworkContact, JobFile, Appointment, Message, Template, Certification, CEU, UserProfile, Invoice, Expense, JobPosting } from '@/types/app-interfaces';
 import { v4 as uuidv4 } from 'uuid';
 
-const cleanupObject = (data: Record<string, any>) => {
-    const cleaned: Record<string, any> = {};
+// ✅ FIX 1: Replaced 'any' with a safer generic type as you suggested.
+const cleanupObject = <T extends Record<string, unknown>>(data: T): Partial<T> => {
+    const cleaned: Partial<T> = {};
     for (const key in data) {
         if (data[key] !== undefined && data[key] !== null && data[key] !== '') {
             cleaned[key] = data[key];
@@ -33,6 +34,7 @@ const cleanupObject = (data: Record<string, any>) => {
     }
     return cleaned;
 };
+
 
 // --- REAL-TIME LISTENERS ---
 export const getClients = (userId: string, callback: (data: Client[]) => void) => {
@@ -84,7 +86,6 @@ export const addAppointment = async (userId: string, appointmentData: Partial<Ap
     if (appointmentData.recurrence && recurrenceEndDate && appointmentData.date) {
         const batch = writeBatch(db);
         const seriesId = uuidv4();
-        // eslint-disable-next-line prefer-const
         let movingDate = new Date(appointmentData.date + 'T00:00:00');
         const endDate = new Date(recurrenceEndDate + 'T00:00:00');
         while (movingDate <= endDate) {
@@ -107,7 +108,8 @@ export const addAppointment = async (userId: string, appointmentData: Partial<Ap
 export const updateAppointment = (userId: string, appointmentId: string, appointmentData: Partial<Appointment>): Promise<void> => { const appointmentRef = doc(db, `users/${userId}/appointments`, appointmentId); return updateDoc(appointmentRef, cleanupObject(appointmentData)); };
 export const deleteAppointment = (userId: string, appointmentId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/appointments`, appointmentId)); };
 export const updateMessage = (userId: string, messageId: string, messageData: Partial<Message>): Promise<void> => { const messageRef = doc(db, 'users', userId, 'messages', messageId); return updateDoc(messageRef, cleanupObject(messageData)); };
-const findUserByEmail = async (email: string): Promise<{id: string, data: Record<string, any>} | null> => { const usersRef = collection(db, 'users'); const q = query(usersRef, where("email", "==", email)); const querySnapshot = await getDocs(q); if (!querySnapshot.empty) { return { id: querySnapshot.docs[0].id, data: querySnapshot.docs[0].data() }; } return null; };
+// ✅ FIX 2: Replaced 'any' with the safer 'unknown' as you suggested.
+const findUserByEmail = async (email: string): Promise<{id: string, data: Record<string, unknown>} | null> => { const usersRef = collection(db, 'users'); const q = query(usersRef, where("email", "==", email)); const querySnapshot = await getDocs(q); if (!querySnapshot.empty) { return { id: querySnapshot.docs[0].id, data: querySnapshot.docs[0].data() }; } return null; };
 export const sendAppMessage = async (senderId: string, senderName: string, recipientEmail: string, subject: string, body: string): Promise<void> => { const recipient = await findUserByEmail(recipientEmail); const sentMessageData: Partial<Message> = { senderId, senderName, recipientId: recipient ? recipient.id : recipientEmail, subject, body, isRead: true, status: 'new', createdAt: serverTimestamp() as Timestamp, }; await addDoc(collection(db, `users/${senderId}/messages`), sentMessageData); if (recipient) { const receivedMessageData: Partial<Message> = { ...sentMessageData, isRead: false, }; await addDoc(collection(db, `users/${recipient.id}/messages`), receivedMessageData); } else { await fetch('/api/send-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fromName: senderName, to: recipientEmail, subject, html: `<p>${body.replace(/\n/g, '<br>')}</p><p>Sent by ${senderName} via the Ten99 App.</p>` }), }); } };
 export const createPublicJobFile = async (userId: string, jobFile: JobFile): Promise<string> => { if (!jobFile.id) throw new Error("Cannot share an unsaved job file."); const publicData = { originalUserId: userId, originalJobFileId: jobFile.id, jobTitle: jobFile.jobTitle, clientId: jobFile.clientId || '', sharedNotes: jobFile.sharedNotes || '', fileUrl: jobFile.fileUrl || '', createdAt: serverTimestamp(), }; const publicDocRef = await addDoc(collection(db, "publicJobFiles"), publicData); return publicDocRef.id; };
 export const getPublicJobFile = async (publicId: string): Promise<JobFile | null> => { const docRef = doc(db, "publicJobFiles", publicId); const docSnap = await getDoc(docRef); return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as JobFile : null; };
