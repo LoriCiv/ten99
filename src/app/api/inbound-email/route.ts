@@ -14,9 +14,8 @@ const parseFromHeader = (from: string): { name: string; email: string } => {
     return { name: from, email: from };
 };
 
-// Simple function to find our dev user for now
 const findRecipientUserId = async (toEmail: string): Promise<string | null> => {
-    if (toEmail.startsWith("inbound@")) { // Catch-all for our inbound domain
+    if (toEmail.startsWith("inbound@")) {
         return "dev-user-1";
     }
     return null;
@@ -24,7 +23,6 @@ const findRecipientUserId = async (toEmail: string): Promise<string | null> => {
 
 // --- START OF NEW AI LOGIC ---
 
-// Function to get existing clients for the AI to recognize them
 async function getClientsForAI(userId: string): Promise<{ id: string, name: string }[]> {
     const clientsSnapshot = await db.collection(`users/${userId}/clients`).get();
     if (clientsSnapshot.empty) {
@@ -36,7 +34,6 @@ async function getClientsForAI(userId: string): Promise<{ id: string, name: stri
     });
 }
 
-// The core AI parsing function, adapted for the backend
 async function parseEmailWithAI(userId: string, emailBody: string, emailSubject: string): Promise<Partial<Appointment> | null> {
     const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
     if (!apiKey) {
@@ -101,7 +98,6 @@ async function parseEmailWithAI(userId: string, emailBody: string, emailSubject:
 
         const parsedData = JSON.parse(rawJson);
         
-        // If the AI found a new client, create it in Firestore
         if (parsedData.newClientName && !parsedData.clientId) {
             const newClientData: Partial<Client> = {
                 companyName: parsedData.newClientName,
@@ -119,7 +115,8 @@ async function parseEmailWithAI(userId: string, emailBody: string, emailSubject:
         return parsedData;
 
     } catch (error) {
-        console.error("Error during AI parsing in webhook:", error);
+        const errorMessage = error instanceof Error ? error.message : "Unknown AI parsing error";
+        console.error("Error during AI parsing in webhook:", errorMessage);
         return null;
     }
 }
@@ -149,7 +146,6 @@ export async function POST(request: Request) {
 
         const senderInfo = parseFromHeader(from);
         
-        // --- Let the AI try to parse the email for appointment details ---
         const appointmentDetails = await parseEmailWithAI(recipientId, body, subject);
 
         const newMessage: Omit<Message, 'id'> = {
@@ -161,8 +157,8 @@ export async function POST(request: Request) {
             body: body,
             isRead: false,
             status: 'new',
-            createdAt: FieldValue.serverTimestamp() as any, // Cast to any to satisfy type
-            // Add the parsed details to the message document itself
+            // ✅ THE FIX: Removed the unnecessary 'as any' cast
+            createdAt: FieldValue.serverTimestamp(),
             proposedDate: appointmentDetails?.date || undefined,
             proposedTime: appointmentDetails?.time || undefined,
         };
