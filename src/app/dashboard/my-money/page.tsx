@@ -3,9 +3,9 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import type { Invoice, Expense, Client, UserProfile } from '@/types/app-interfaces';
-import { getInvoices, getExpenses, getClients, getUserProfile } from '@/utils/firestoreService';
+import { getInvoices, getExpenses, getClients, getUserProfile, updateUserProfile } from '@/utils/firestoreService';
 import Link from 'next/link';
-import { PlusCircle, Landmark, Hourglass, CheckCircle, AlertCircle, DollarSign, FileText } from 'lucide-react';
+import { PlusCircle, Landmark, Hourglass, CheckCircle, AlertCircle, Save, Loader2, DollarSign, FileText } from 'lucide-react';
 import InvoiceDetailModal from '@/components/InvoiceDetailModal';
 
 const TEMP_USER_ID = "dev-user-1";
@@ -35,6 +35,9 @@ export default function MyMoneyPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'invoices' | 'expenses'>('invoices');
     const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [ytdExpenses, setYtdExpenses] = useState<number | ''>('');
+    const [stateRate, setStateRate] = useState<number | ''>('');
 
     useEffect(() => {
         const unsubInvoices = getInvoices(TEMP_USER_ID, setInvoices);
@@ -42,6 +45,9 @@ export default function MyMoneyPage() {
         const unsubClients = getClients(TEMP_USER_ID, setClients);
         const unsubProfile = getUserProfile(TEMP_USER_ID, (profile) => {
             setUserProfile(profile);
+            if (profile) {
+                setStateRate(profile.estimatedStateTaxRate || '');
+            }
             setIsLoading(false);
         });
         return () => {
@@ -53,30 +59,66 @@ export default function MyMoneyPage() {
     }, []);
 
     const stats = useMemo(() => {
+        const currentYear = new Date().getFullYear();
         const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
         const ytdIncome = invoices
-            .filter(inv => inv.status === 'paid' && new Date(inv.invoiceDate).getFullYear() === today.getFullYear())
+            .filter(inv => inv.status === 'paid' && new Date(inv.invoiceDate).getFullYear() === currentYear)
             .reduce((sum, inv) => sum + (inv.total || 0), 0);
-        
+
         const outstandingInvoices = invoices.filter(inv => inv.status === 'sent' || inv.status === 'overdue');
         const outstandingAmount = outstandingInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
         
         const overdueInvoices = outstandingInvoices.filter(inv => new Date(inv.dueDate) < today);
         const overdueAmount = overdueInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
         
-        const ytdExpensesValue = expenses
+        const totalCollected = invoices
+            .filter(inv => inv.status === 'paid')
+            .reduce((sum, inv) => sum + (inv.total || 0), 0);
+        
+        const expensesValue = expenses
             .filter(exp => new Date(exp.date).getFullYear() === today.getFullYear())
             .reduce((sum, exp) => sum + exp.amount, 0);
+        
+        const selfEmploymentTaxRate = 0.153;
+        const standardDeduction = 14600;
+        const netEarningsFromSE = ytdIncome * 0.9235;
+        const selfEmploymentTax = netEarningsFromSE * selfEmploymentTaxRate;
+        const adjustedGrossIncome = ytdIncome - expensesValue;
+        const taxableIncome = Math.max(0, adjustedGrossIncome - standardDeduction);
+        let federalTax = 0;
+        if (taxableIncome > 47150) { federalTax = (taxableIncome - 47150) * 0.22 + 5184; } 
+        else if (taxableIncome > 11600) { federalTax = (taxableIncome - 11600) * 0.12 + 1160; } 
+        else { federalTax = taxableIncome * 0.10; }
+        const stateTax = taxableIncome * ((Number(stateRate) || 0) / 100);
+        const totalTaxOwed = selfEmploymentTax + federalTax + stateTax;
 
         return {
             ytdIncome: ytdIncome.toFixed(2),
-            ytdExpenses: ytdExpensesValue.toFixed(2),
-            netIncome: (ytdIncome - ytdExpensesValue).toFixed(2),
+            ytdExpenses: expensesValue.toFixed(2),
+            netIncome: (ytdIncome - expensesValue).toFixed(2),
             outstanding: outstandingAmount.toFixed(2),
             overdueAmount: overdueAmount.toFixed(2),
             overdueCount: overdueInvoices.length,
+            totalCollected: totalCollected.toFixed(2),
+            totalTaxOwed: totalTaxOwed.toFixed(2),
+            quarterlyPayment: (totalTaxOwed / 4).toFixed(2),
         };
-    }, [invoices, expenses]);
+    }, [invoices, expenses, ytdExpenses, stateRate]);
+
+    const handleSaveStateRate = async () => {
+        setIsSubmitting(true);
+        try {
+            await updateUserProfile(TEMP_USER_ID, { estimatedStateTaxRate: Number(stateRate) });
+            alert("State tax rate saved!");
+        } catch (error) {
+            console.error("Failed to save tax rate:", error);
+            alert("Error saving tax rate.");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
     const handleOpenInvoiceModal = (invoice: Invoice) => {
         setSelectedInvoice(invoice);
