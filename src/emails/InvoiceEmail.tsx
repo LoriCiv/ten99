@@ -6,7 +6,6 @@ export interface InvoiceEmailProps {
   [key: string]: any;
 }
 
-// We are using a default export here
 export default function InvoiceEmail(props: InvoiceEmailProps) {
   return (
     <div>
