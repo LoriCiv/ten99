@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase-admin';
 import type { QueryDocumentSnapshot } from 'firebase-admin/firestore';
 
-export async function GET(request: Request) {
+export async function GET() { // Remove unused 'request' parameter
     const today = new Date().toISOString().split('T')[0];
     const invoicesRef = db.collectionGroup('invoices');
     const q = invoicesRef.where('status', '==', 'sent').where('dueDate', '<', today);

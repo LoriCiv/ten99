@@ -27,7 +27,8 @@ export default function ExpensesPageContent({
     userId 
 }: ExpensesPageContentProps) {
     const router = useRouter();
-    const [expenses, setExpenses] = useState(initialExpenses);
+    // Use the data passed from the server component as the initial state
+    const [expenses] = useState(initialExpenses);
     const [clients] = useState(initialClients);
     const [userProfile] = useState(initialProfile);
     const [certifications] = useState(initialCerts);
@@ -39,10 +40,6 @@ export default function ExpensesPageContent({
     const [categoryFilter, setCategoryFilter] = useState('all');
     const [clientFilter, setClientFilter] = useState('all');
     const [sortOrder, setSortOrder] = useState('date-desc');
-
-    useEffect(() => {
-        setExpenses(initialExpenses);
-    }, [initialExpenses]);
 
     const filteredAndSortedExpenses = useMemo(() => {
         const certExpenses: Expense[] = (certifications || [])
@@ -87,7 +84,6 @@ export default function ExpensesPageContent({
                 }
             });
     }, [expenses, certifications, allCeus, categoryFilter, clientFilter, sortOrder]);
-
 
     const handleOpenFormModal = (expense?: Expense) => {
         if (expense?.isReadOnly) return;
