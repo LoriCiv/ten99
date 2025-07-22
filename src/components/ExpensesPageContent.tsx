@@ -31,10 +31,8 @@ export default function ExpensesPageContent({
     const [userProfile] = useState(initialProfile);
     const [certifications] = useState(initialCerts);
     const [allCeus] = useState(initialCeus);
-
     const [isFormModalOpen, setIsFormModalOpen] = useState(false);
     const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
-
     const [categoryFilter, setCategoryFilter] = useState('all');
     const [clientFilter, setClientFilter] = useState('all');
     const [sortOrder, setSortOrder] = useState('date-desc');
@@ -75,7 +73,6 @@ export default function ExpensesPageContent({
             .sort((a, b) => {
                 switch (sortOrder) {
                     case 'amount-desc':
-                        // Ensure sorting works even if amount is a string
                         return (Number(b.amount) || 0) - (Number(a.amount) || 0);
                     case 'amount-asc':
                         return (Number(a.amount) || 0) - (Number(b.amount) || 0);
@@ -87,7 +84,6 @@ export default function ExpensesPageContent({
                 }
             });
     }, [expenses, certifications, allCeus, categoryFilter, clientFilter, sortOrder]);
-
 
     const handleOpenFormModal = (expense?: Expense) => {
         if (expense?.isReadOnly) return;
@@ -173,26 +169,53 @@ export default function ExpensesPageContent({
                 </div>
 
                 <div className="bg-card p-4 rounded-lg border">
-                    <div className="space-y-2">
-                        {filteredAndSortedExpenses.map(expense => (
-                            <div key={expense.id} onClick={() => !expense.isReadOnly && setSelectedExpense(expense)} className={`grid grid-cols-4 gap-4 items-center p-3 rounded-md ${expense.isReadOnly ? 'bg-muted/50' : 'hover:bg-muted cursor-pointer'}`}>
-                                <div>
-                                    <p className="font-semibold flex items-center gap-2">
-                                        {expense.isReadOnly && (
-                                            <span title="Auto-generated from Credentials">
-                                                <Award size={14} className="text-amber-500" />
-                                            </span>
+                    <div className="hidden md:grid md:grid-cols-4 gap-4 px-3 pb-2 text-sm font-semibold text-muted-foreground border-b">
+                        <div className="col-span-2">Description</div>
+                        <div>Category</div>
+                        <div className="text-right">Amount</div>
+                    </div>
+                    <div className="space-y-2 mt-2 md:mt-0">
+                        {filteredAndSortedExpenses.map(expense => {
+                            const clientName = clients.find(c => c.id === expense.clientId)?.name;
+                            return (
+                                <div key={expense.id} onClick={() => !expense.isReadOnly && setSelectedExpense(expense)} className={`p-3 rounded-md border md:border-0 ${expense.isReadOnly ? 'bg-muted/50' : 'hover:bg-muted cursor-pointer'}`}>
+                                    <div className="md:hidden">
+                                        <div className="flex justify-between items-start">
+                                            <div className="font-semibold text-foreground flex items-center gap-2 pr-2">
+                                                {expense.isReadOnly && <Award size={14} className="text-amber-500 flex-shrink-0" />}
+                                                <span>{expense.description}</span>
+                                            </div>
+                                            <div className="font-medium text-rose-600 text-right whitespace-nowrap">
+                                                -${(Number(expense.amount) || 0).toFixed(2)}
+                                            </div>
+                                        </div>
+                                        <div className="text-sm text-muted-foreground mt-1">
+                                            <span>{expense.date.split('T')[0]}</span>
+                                            <span className="mx-2">•</span>
+                                            <span className="capitalize">{expense.category.replace(/_/g, ' ')}</span>
+                                        </div>
+                                        {clientName && (
+                                            <div className="text-xs text-primary mt-1">Client: {clientName}</div>
                                         )}
-                                        {expense.description}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground pl-6">{expense.date.split('T')[0]}</p>
+                                    </div>
+                                    <div className="hidden md:grid md:grid-cols-4 gap-4 items-center">
+                                        <div className="col-span-2">
+                                            <p className="font-semibold flex items-center gap-2">
+                                                {expense.isReadOnly && (
+                                                    <span title="Auto-generated from Credentials">
+                                                        <Award size={14} className="text-amber-500" />
+                                                    </span>
+                                                )}
+                                                {expense.description}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">{expense.date.split('T')[0]} {clientName && `• ${clientName}`}</p>
+                                        </div>
+                                        <p className="text-sm capitalize">{expense.category.replace(/_/g, ' ')}</p>
+                                        <p className="text-right font-medium text-rose-600">-${(Number(expense.amount) || 0).toFixed(2)}</p>
+                                    </div>
                                 </div>
-                                <p className="text-sm capitalize">{expense.category.replace(/_/g, ' ')}</p>
-                                <p className="text-sm">{clients.find(c => c.id === expense.clientId)?.name || 'N/A'}</p>
-                                {/* ✅ FIX: Ensure amount is treated as a number before calling toFixed */}
-                                <p className="text-right font-medium text-rose-600">-${(Number(expense.amount) || 0).toFixed(2)}</p>
-                            </div>
-                        ))}
+                            );
+                        })}
                         {filteredAndSortedExpenses.length === 0 && (
                             <div className="text-center py-8 text-muted-foreground">
                                 <p>No expenses match your filters.</p>
@@ -203,25 +226,11 @@ export default function ExpensesPageContent({
             </div>
 
             {isFormModalOpen && (
-                <ExpenseModal
-                    isOpen={isFormModalOpen}
-                    onClose={handleCloseFormModal}
-                    onSave={handleSave}
-                    expense={selectedExpense || undefined}
-                    userId={userId}
-                    clients={clients}
-                    userProfile={userProfile}
-                />
+                <ExpenseModal isOpen={isFormModalOpen} onClose={handleCloseFormModal} onSave={handleSave} expense={selectedExpense || undefined} userId={userId} clients={clients} userProfile={userProfile}/>
             )}
 
             {selectedExpense && !isFormModalOpen && (
-                <ExpenseDetailModal
-                    expense={selectedExpense}
-                    clients={clients}
-                    onClose={() => setSelectedExpense(null)}
-                    onEdit={() => handleOpenFormModal(selectedExpense)}
-                    onDelete={handleDelete}
-                />
+                <ExpenseDetailModal expense={selectedExpense} clients={clients} onClose={() => setSelectedExpense(null)} onEdit={() => handleOpenFormModal(selectedExpense)} onDelete={handleDelete}/>
             )}
         </>
     );
