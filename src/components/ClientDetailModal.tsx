@@ -12,11 +12,10 @@ import {
     convertClientToContact,
     convertContactToClient
 } from '@/utils/firestoreService';
-// ✅ Import DropdownMenu components and a new icon
-import { X, Edit, Trash2, Mail, FileText, Repeat, ClipboardCopy, Check, MoreHorizontal } from 'lucide-react';
+// ✅ FIX 1: Removed the unused 'Check' icon from this import
+import { X, Edit, Trash2, Mail, FileText, Repeat, ClipboardCopy, MoreHorizontal } from 'lucide-react';
 import ClientForm from './ClientForm';
 import ContactForm from './ContactForm';
-// ✅ Import our UI components for the dropdown
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -62,7 +61,6 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
         return null;
     }
     
-    // ✅ All handler functions are fully expanded here
     const handleSave = async (formData: Partial<Client | PersonalNetworkContact>) => {
         if (!item.id) return;
         setIsSubmitting(true);
@@ -137,13 +135,15 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
         });
     };
     
+    // ✅ FIX 2 & 3: Rewrote this function to avoid unused variables
     const handleDuplicate = () => {
         if (itemType !== 'Company') return;
-        const { id, createdAt, ...duplicateData } = item as Client;
+        const duplicateData = { ...(item as Client) };
+        delete duplicateData.id;
+        delete duplicateData.createdAt;
         const dataString = encodeURIComponent(JSON.stringify(duplicateData));
         router.push(`/dashboard/clients/new-company?data=${dataString}`);
     };
-
 
     const emailToUse = item.email || (itemType === 'Company' ? (item as Client).billingEmail : '');
     const jobFileLink = relevantJobFiles.length === 1 && relevantJobFiles[0].id
