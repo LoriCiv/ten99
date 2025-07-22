@@ -1,6 +1,6 @@
 // src/app/api/upload/route.ts
 import { NextResponse } from 'next/server';
-import admin from '@/lib/firebase-admin'; 
+import { storage } from '@/lib/firebase-admin'; // ✅ FIX: Use the named 'storage' import
 import { v4 as uuidv4 } from 'uuid';
 
 const TEMP_USER_ID = "dev-user-1";
@@ -14,15 +14,13 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'No file provided.' }, { status: 400 });
         }
 
-        // ✅ THE FINAL FIX: We are now forcing the code to use the specific bucket name,
-        // bypassing any and all configuration loading issues.
-        const bucket = admin.storage().bucket("ten-99.firebasestorage.app");
-
+        const bucket = storage.bucket(process.env.FIREBASE_STORAGE_BUCKET);
         const fileExtension = file.name.split('.').pop();
         const fileName = `${uuidv4()}.${fileExtension}`;
         const filePath = `jobFiles/${TEMP_USER_ID}/${fileName}`;
         
         const fileBuffer = Buffer.from(await file.arrayBuffer());
+
         const fileUpload = bucket.file(filePath);
 
         await fileUpload.save(fileBuffer, {

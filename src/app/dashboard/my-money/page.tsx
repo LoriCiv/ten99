@@ -80,8 +80,8 @@ export default function MyMoneyPage() {
     }, [invoices, expenses, certifications, allCeus]);
     
     const taxStats = useMemo(() => {
-        const ytdIncome = stats.ytdIncome;
-        const totalExpenses = Number(manualYtdExpenses) || stats.ytdExpenses;
+        const ytdIncome = stats.ytdIncome || 0;
+        const totalExpenses = Number(manualYtdExpenses) || stats.ytdExpenses || 0;
         const selfEmploymentTaxRate = 0.153;
         const standardDeduction = 14600;
         const netEarningsFromSE = ytdIncome * 0.9235;

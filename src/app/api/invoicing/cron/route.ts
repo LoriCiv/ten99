@@ -1,9 +1,7 @@
 // src/app/api/invoicing/cron/route.ts
 import { NextResponse } from 'next/server';
-import admin from '@/lib/firebase-admin'; // Use default import
-import type { Invoice } from '@/types/app-interfaces';
-
-const db = admin.firestore(); // Get firestore from the admin object
+import { db } from '@/lib/firebase-admin';
+import type { QueryDocumentSnapshot } from 'firebase-admin/firestore';
 
 export async function GET(request: Request) {
     const today = new Date().toISOString().split('T')[0];
@@ -17,7 +15,7 @@ export async function GET(request: Request) {
         }
 
         const batch = db.batch();
-        snapshot.forEach(doc => { // No 'any' type error here
+        snapshot.forEach((doc: QueryDocumentSnapshot) => {
             const invoiceRef = doc.ref;
             batch.update(invoiceRef, { status: 'overdue' });
         });

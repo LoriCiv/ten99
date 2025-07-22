@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import type { Expense, Client } from '@/types/app-interfaces';
+import type { Expense, Client, UserProfile } from '@/types/app-interfaces';
 import { deleteExpense, addExpense, updateExpense } from '@/utils/firestoreService';
 import { PlusCircle, Award } from 'lucide-react';
 import ExpenseModal from '@/components/ExpenseModal';
@@ -12,13 +12,15 @@ import ExpenseDetailModal from '@/components/ExpenseDetailModal';
 interface ExpensesPageContentProps {
     initialExpenses: Expense[];
     initialClients: Client[];
+    initialProfile: UserProfile | null;
     userId: string;
 }
 
-export default function ExpensesPageContent({ initialExpenses, initialClients, userId }: ExpensesPageContentProps) {
+export default function ExpensesPageContent({ initialExpenses, initialClients, initialProfile, userId }: ExpensesPageContentProps) {
     const router = useRouter();
     const [expenses, setExpenses] = useState(initialExpenses);
     const [clients] = useState(initialClients);
+    const [userProfile] = useState(initialProfile);
 
     const [isFormModalOpen, setIsFormModalOpen] = useState(false);
     const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
@@ -32,10 +34,10 @@ export default function ExpensesPageContent({ initialExpenses, initialClients, u
     }, [initialExpenses]);
 
     const filteredAndSortedExpenses = useMemo(() => {
-        return expenses
+        return [...expenses]
             .filter(expense => {
                 const categoryMatch = categoryFilter === 'all' || expense.category === categoryFilter;
-                const clientMatch = clientFilter === 'all' || expense.clientId === clientFilter;
+                const clientMatch = clientFilter === 'all' || !expense.isReadOnly && expense.clientId === clientFilter;
                 return categoryMatch && clientMatch;
             })
             .sort((a, b) => {
@@ -53,7 +55,6 @@ export default function ExpensesPageContent({ initialExpenses, initialClients, u
             });
     }, [expenses, categoryFilter, clientFilter, sortOrder]);
 
-
     const handleOpenFormModal = (expense?: Expense) => {
         if (expense?.isReadOnly) return;
         setSelectedExpense(expense || null);
@@ -67,7 +68,7 @@ export default function ExpensesPageContent({ initialExpenses, initialClients, u
 
     const handleSave = async (data: Partial<Expense>) => {
         try {
-            if (selectedExpense?.id) {
+            if (selectedExpense?.id && !selectedExpense.id.startsWith('cert-') && !selectedExpense.id.startsWith('ceu-')) {
                 await updateExpense(userId, selectedExpense.id, data);
                 alert("Expense updated!");
             } else {
@@ -112,11 +113,9 @@ export default function ExpensesPageContent({ initialExpenses, initialClients, u
                             <label htmlFor="categoryFilter" className="block text-sm font-medium text-muted-foreground mb-1">Category</label>
                             <select id="categoryFilter" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="w-full p-2 border rounded-md bg-background">
                                 <option value="all">All Categories</option>
-                                <option value="travel">Travel</option>
-                                <option value="equipment">Equipment</option>
-                                <option value="supplies">Supplies</option>
-                                <option value="professional_development">Professional Development</option>
-                                <option value="other">Other</option>
+                                {(userProfile?.expenseCategories || ['Travel', 'Equipment', 'Supplies', 'Professional Development', 'Other']).map(cat => (
+                                     <option key={cat} value={cat.toLowerCase().replace(/\s/g, '_')}>{cat}</option>
+                                ))}
                             </select>
                         </div>
                         <div>
@@ -146,7 +145,6 @@ export default function ExpensesPageContent({ initialExpenses, initialClients, u
                             <div key={expense.id} onClick={() => !expense.isReadOnly && setSelectedExpense(expense)} className={`grid grid-cols-4 gap-4 items-center p-3 rounded-md ${expense.isReadOnly ? 'bg-muted/50' : 'hover:bg-muted cursor-pointer'}`}>
                                 <div>
                                     <p className="font-semibold flex items-center gap-2">
-                                        {/* ✅ THE FIX IS HERE: Wrapped the icon in a span to apply the title tooltip */}
                                         {expense.isReadOnly && (
                                             <span title="Auto-generated from Credentials">
                                                 <Award size={14} className="text-amber-500" />
@@ -154,7 +152,7 @@ export default function ExpensesPageContent({ initialExpenses, initialClients, u
                                         )}
                                         {expense.description}
                                     </p>
-                                    <p className="text-xs text-muted-foreground pl-6">{expense.date}</p>
+                                    <p className="text-xs text-muted-foreground pl-6">{expense.date.split('T')[0]}</p>
                                 </div>
                                 <p className="text-sm capitalize">{expense.category.replace(/_/g, ' ')}</p>
                                 <p className="text-sm">{clients.find(c => c.id === expense.clientId)?.name || 'N/A'}</p>
@@ -178,6 +176,7 @@ export default function ExpensesPageContent({ initialExpenses, initialClients, u
                     expense={selectedExpense || undefined}
                     userId={userId}
                     clients={clients}
+                    userProfile={userProfile}
                 />
             )}
 

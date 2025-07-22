@@ -34,12 +34,12 @@ export default function ExpenseForm({ onSave, onCancel, clients, initialData = {
     useEffect(() => {
         setFormData({
             date: new Date().toISOString().split('T')[0],
-            category: 'other',
+            category: userProfile?.expenseCategories?.[0]?.toLowerCase().replace(/\s/g, '_') || 'other',
             ...initialData,
         });
         setSelectedFile(null);
         setAiMessage('');
-    }, [initialData]);
+    }, [initialData, userProfile]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
@@ -47,9 +47,7 @@ export default function ExpenseForm({ onSave, onCancel, clients, initialData = {
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        console.log("✅ CHECKPOINT 1: File input was clicked.");
         if (e.target.files && e.target.files[0]) {
-            console.log("✅ CHECKPOINT 2: File was successfully selected:", e.target.files[0].name);
             setSelectedFile(e.target.files[0]);
             setAiMessage('');
         }
@@ -58,7 +56,6 @@ export default function ExpenseForm({ onSave, onCancel, clients, initialData = {
     const handleParseReceipt = async () => {
         if (!selectedFile) return;
         
-        console.log("✅ CHECKPOINT 4: Starting AI parse function...");
         setIsParsing(true);
         setAiMessage("AI is reading your receipt...");
 
@@ -94,7 +91,6 @@ export default function ExpenseForm({ onSave, onCancel, clients, initialData = {
                 date: parsed.date || prev.date,
             }));
             setAiMessage("Receipt parsed successfully!");
-            console.log("✅ CHECKPOINT 5: AI Parse successful.");
         } catch (error) {
             console.error("AI Receipt Parsing Error:", error);
             setAiMessage("Sorry, I couldn't read that receipt.");
@@ -103,8 +99,8 @@ export default function ExpenseForm({ onSave, onCancel, clients, initialData = {
         }
     };
 
+    // This useEffect hook now automatically runs the AI parser when a file is selected.
     useEffect(() => {
-        console.log("✅ CHECKPOINT 3: useEffect has detected the selected file:", selectedFile?.name);
         if (selectedFile) {
             handleParseReceipt();
         }
@@ -131,13 +127,12 @@ export default function ExpenseForm({ onSave, onCancel, clients, initialData = {
             <h3 className="text-2xl font-bold text-foreground">{isEditMode ? 'Edit Expense' : 'Add New Expense'}</h3>
             
             <div>
-                <label className="block text-sm font-medium text-muted-foreground">Receipt</label>
+                <label className="block text-sm font-medium text-muted-foreground">Scan Receipt with AI</label>
                 <div className="flex items-center gap-2 mt-1">
                     <input type="file" onChange={handleFileChange} accept="image/*" className="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"/>
                 </div>
-                 {isParsing && <p className="text-xs text-muted-foreground mt-1 text-center flex items-center justify-center gap-2"><Loader2 size={14} className="animate-spin" /> {aiMessage}</p>}
-                 {!isParsing && aiMessage && <p className="text-xs text-muted-foreground mt-1 text-center">{aiMessage}</p>}
-
+                {isParsing && <p className="text-xs text-muted-foreground mt-2 text-center flex items-center justify-center gap-2"><Loader2 size={14} className="animate-spin" /> {aiMessage}</p>}
+                {!isParsing && aiMessage && <p className="text-xs text-muted-foreground mt-2 text-center">{aiMessage}</p>}
                 {formData.receiptUrl && !selectedFile && (
                     <a href={formData.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline mt-1 inline-flex items-center gap-1">
                         <Paperclip size={12}/> View Existing Receipt
@@ -163,7 +158,7 @@ export default function ExpenseForm({ onSave, onCancel, clients, initialData = {
 
             <div>
                 <label htmlFor="category" className="block text-sm font-medium text-muted-foreground">Category*</label>
-                <select id="category" name="category" value={formData.category || 'other'} onChange={handleInputChange} className="w-full mt-1 p-2 border rounded-md bg-background" required>
+                <select id="category" name="category" value={formData.category} onChange={handleInputChange} className="w-full mt-1 p-2 border rounded-md bg-background" required>
                     {(userProfile?.expenseCategories && userProfile.expenseCategories.length > 0 ? userProfile.expenseCategories : ['Travel', 'Equipment', 'Supplies', 'Professional Development', 'Other'])
                         .map((cat: string) => (
                             <option key={cat} value={cat.toLowerCase().replace(/\s/g, '_')}>{cat}</option>

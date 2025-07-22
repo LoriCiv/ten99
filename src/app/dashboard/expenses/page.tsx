@@ -1,10 +1,18 @@
-// src/app/dashboard/expenses/page.tsx
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import type { Expense, Client, Certification, CEU } from '@/types/app-interfaces';
-import { getExpenses, getClients, deleteExpense, addExpense, updateExpense, getCertifications, getAllCEUs } from '@/utils/firestoreService';
+import type { Expense, Client, Certification, CEU, UserProfile } from '@/types/app-interfaces';
+import { 
+    getExpenses, 
+    getClients, 
+    deleteExpense, 
+    addExpense, 
+    updateExpense, 
+    getCertifications, 
+    getAllCEUs,
+    getUserProfile 
+} from '@/utils/firestoreService';
 import { PlusCircle, Award } from 'lucide-react';
 import ExpenseModal from '@/components/ExpenseModal';
 import ExpenseDetailModal from '@/components/ExpenseDetailModal';
@@ -17,11 +25,12 @@ export default function ExpensesPage() {
     const [clients, setClients] = useState<Client[]>([]);
     const [certifications, setCertifications] = useState<Certification[]>([]);
     const [allCeus, setAllCeus] = useState<CEU[]>([]);
+    const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isFormModalOpen, setIsFormModalOpen] = useState(false);
     const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
 
-    // ✅ 1. State for our new filters and sorting
+    // ✅ STATE FOR SORTING AND FILTERING
     const [categoryFilter, setCategoryFilter] = useState('all');
     const [clientFilter, setClientFilter] = useState('all');
     const [sortOrder, setSortOrder] = useState('date-desc');
@@ -30,8 +39,9 @@ export default function ExpensesPage() {
         const unsubExpenses = getExpenses(TEMP_USER_ID, setExpenses);
         const unsubClients = getClients(TEMP_USER_ID, setClients);
         const unsubCerts = getCertifications(TEMP_USER_ID, setCertifications);
-        const unsubCeus = getAllCEUs(TEMP_USER_ID, (data) => {
-            setAllCeus(data);
+        const unsubCeus = getAllCEUs(TEMP_USER_ID, setAllCeus);
+        const unsubProfile = getUserProfile(TEMP_USER_ID, (profile) => {
+            setUserProfile(profile);
             setIsLoading(false);
         });
 
@@ -40,10 +50,11 @@ export default function ExpensesPage() {
             unsubClients();
             unsubCerts();
             unsubCeus();
+            unsubProfile();
         };
     }, []);
     
-    // ✅ 2. This hook now combines, filters, AND sorts the expenses
+    // ✅ USEMEMO NOW INCLUDES FILTERING AND SORTING LOGIC
     const filteredAndSortedExpenses = useMemo(() => {
         const certExpenses: Expense[] = certifications
             .filter(cert => cert.renewalCost && cert.renewalCost > 0)
@@ -70,7 +81,6 @@ export default function ExpensesPage() {
         return [...expenses, ...certExpenses, ...ceuExpenses]
             .filter(expense => {
                 const categoryMatch = categoryFilter === 'all' || expense.category === categoryFilter;
-                // Note: client filter only applies to manual expenses
                 const clientMatch = clientFilter === 'all' || !expense.isReadOnly && expense.clientId === clientFilter;
                 return categoryMatch && clientMatch;
             })
@@ -144,18 +154,16 @@ export default function ExpensesPage() {
                     </button>
                 </header>
 
-                {/* ✅ 3. The new filter and sort controls */}
+                {/* ✅ JSX FOR THE FILTER AND SORT CONTROLS */}
                 <div className="mb-6 p-4 bg-card border rounded-lg">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                             <label htmlFor="categoryFilter" className="block text-sm font-medium text-muted-foreground mb-1">Category</label>
                             <select id="categoryFilter" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="w-full p-2 border rounded-md bg-background">
                                 <option value="all">All Categories</option>
-                                <option value="travel">Travel</option>
-                                <option value="equipment">Equipment</option>
-                                <option value="supplies">Supplies</option>
-                                <option value="professional_development">Professional Development</option>
-                                <option value="other">Other</option>
+                                {(userProfile?.expenseCategories || ['Travel', 'Equipment', 'Supplies', 'Professional Development', 'Other']).map(cat => (
+                                     <option key={cat} value={cat.toLowerCase().replace(/\s/g, '_')}>{cat}</option>
+                                ))}
                             </select>
                         </div>
                         <div>
@@ -192,7 +200,7 @@ export default function ExpensesPage() {
                                         )}
                                         {expense.description}
                                     </p>
-                                    <p className="text-xs text-muted-foreground pl-6">{expense.date}</p>
+                                    <p className="text-xs text-muted-foreground pl-6">{expense.date.split('T')[0]}</p>
                                 </div>
                                 <p className="text-sm capitalize">{expense.category.replace(/_/g, ' ')}</p>
                                 <p className="text-sm">{clients.find(c => c.id === expense.clientId)?.name || 'N/A'}</p>
@@ -216,6 +224,7 @@ export default function ExpensesPage() {
                     expense={selectedExpense || undefined}
                     userId={TEMP_USER_ID}
                     clients={clients}
+                    userProfile={userProfile}
                 />
             )}
 

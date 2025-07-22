@@ -1,12 +1,9 @@
 // src/app/api/inbound-email/route.ts
 import { NextResponse } from 'next/server';
-import admin from '@/lib/firebase-admin'; // Use default import
+import { db } from '@/lib/firebase-admin'; // ✅ FIX: Use named import
+import { FieldValue } from 'firebase-admin/firestore';
 
-const db = admin.firestore(); // Get firestore from the admin object
-
-// This function can be expanded later
 const findRecipientUserId = async (toEmail: string): Promise<string | null> => {
-    // For now, all inbound emails go to our dev user
     return "dev-user-1";
 };
 
@@ -14,23 +11,20 @@ export async function POST(request: Request) {
     try {
         const formData = await request.formData();
         const from = formData.get('from') as string;
-        const to = formData.get('to') as string;
-        // ... other fields
-
-        const recipientId = await findRecipientUserId(to);
+        const recipientId = await findRecipientUserId(formData.get('to') as string);
 
         if (!recipientId) {
             return NextResponse.json({ message: 'Recipient not found.' });
         }
         
-        // Your existing logic...
         const newMessage = {
-            // ...data
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            senderName: from, senderId: from, recipientId: recipientId,
+            subject: formData.get('subject') as string,
+            body: formData.get('text') as string,
+            isRead: false, createdAt: FieldValue.serverTimestamp(),
         };
 
         await db.collection('users').doc(recipientId).collection('messages').add(newMessage);
-        
         return NextResponse.json({ message: 'Email processed.' });
 
     } catch (error) {

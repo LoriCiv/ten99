@@ -1,52 +1,34 @@
 // src/app/api/appointments/cron/route.ts
 import { NextResponse } from 'next/server';
-import admin from '@/lib/firebase-admin'; // Use default import
-
-const db = admin.firestore(); // Get firestore from the admin object
-const TEMP_USER_ID = "dev-user-1";
+import { db } from '@/lib/firebase-admin';
+import type { QueryDocumentSnapshot } from 'firebase-admin/firestore'; // ✅ Corrected import
 
 export async function GET(request: Request) {
-    const authHeader = request.headers.get('authorization');
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-        return new Response('Unauthorized', { status: 401 });
-    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-    console.log('Running hourly appointment status update cron job...');
+    const appointmentsRef = db.collectionGroup('appointments');
+    const q = appointmentsRef.where('status', 'in', ['scheduled', 'pending']);
 
     try {
-        const now = new Date();
-        const appointmentsRef = db.collection(`users/${TEMP_USER_ID}/appointments`);
-        
-        const snapshot = await appointmentsRef
-            .where('status', '==', 'scheduled')
-            .get();
-
+        const snapshot = await q.get();
         if (snapshot.empty) {
-            console.log('No scheduled jobs found to update.');
-            return NextResponse.json({ message: 'No scheduled jobs to update.' });
+            return NextResponse.json({ message: 'No appointments to update.' });
         }
 
         const batch = db.batch();
-        let updatesCount = 0;
-
-        snapshot.forEach(doc => {
+        snapshot.forEach((doc: QueryDocumentSnapshot) => { // ✅ Corrected type
             const appointment = doc.data();
-            const apptDateTime = new Date(`${appointment.date}T${appointment.time}`);
-            
-            if (apptDateTime < now) {
+            const apptDate = new Date(appointment.date + 'T23:59:59');
+
+            if (apptDate < today) {
                 const apptRef = doc.ref;
                 batch.update(apptRef, { status: 'completed' });
-                updatesCount++;
             }
         });
 
-        if (updatesCount > 0) {
-            await batch.commit();
-        }
-
-        const message = `Cron job finished. Updated ${updatesCount} appointments to "completed".`;
-        console.log(message);
-        return NextResponse.json({ message });
+        await batch.commit();
+        return NextResponse.json({ message: 'Past appointments updated to "completed".' });
 
     } catch (error) {
         console.error("Cron job (appointments) failed:", error);
