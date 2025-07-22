@@ -1,8 +1,6 @@
 "use client";
 
-// ✅ Removed unused 'useMemo' import
 import { useState, useEffect } from 'react';
-// ✅ Removed unused 'InvoiceLineItemTemplate' import and fixed the `any` type
 import type { Invoice, Client, UserProfile } from '@/types/app-interfaces';
 import { PlusCircle, Trash2, Save, Loader2 } from 'lucide-react';
 
@@ -56,7 +54,6 @@ export default function InvoiceForm({ onSave, onCancel, clients = [], initialDat
         setFormData(prev => ({ ...prev, [name]: finalValue }));
     };
     
-    // ✅ Rewrote this function to be fully type-safe and remove `any`
     const handleLineItemChange = (index: number, field: keyof LineItem, value: string | number | boolean) => {
         const updatedItems = [...lineItems];
         const item: LineItem = { ...updatedItems[index] };
@@ -75,7 +72,7 @@ export default function InvoiceForm({ onSave, onCancel, clients = [], initialDat
     };
 
     const addLineItem = () => { setLineItems([...lineItems, { description: '', quantity: 1, unitPrice: 0, total: 0, isTaxable: true }]); };
-    const removeLineItem = (index: number) => { const updatedItems = [...lineItems]; updatedItems.splice(index, 1); setLineItems(updatedItems); };
+    const removeLineItem = (index: number) => { const updatedItems = lineItems.filter((_, i) => i !== index); setLineItems(updatedItems); };
     
     const handleAddPredefinedItem = () => {
         if (!selectedItemId) return;
@@ -102,7 +99,7 @@ export default function InvoiceForm({ onSave, onCancel, clients = [], initialDat
     const clientName = formData.clientId ? (clients.find(c => c.id === formData.clientId)?.companyName || clients.find(c => c.id === formData.clientId)?.name) : '';
 
     return (
-        <div className="bg-card p-6 sm:p-8 rounded-lg shadow-lg border">
+        <div className="bg-card p-4 sm:p-6 rounded-lg shadow-lg border">
             <div className="flex justify-between items-start mb-6 pb-6 border-b">
                 <div>
                     <h2 className="text-2xl font-bold text-foreground">{userProfile?.professionalTitle || 'Your Name'}</h2>
@@ -166,24 +163,52 @@ export default function InvoiceForm({ onSave, onCancel, clients = [], initialDat
                     </div>
                 </div>
 
-                <div className="space-y-2 pt-6 border-t">
-                    <div className="grid grid-cols-12 gap-2 text-sm font-semibold text-muted-foreground px-2 mb-2">
+                {/* ✅ RESPONSIVE LINE ITEMS SECTION */}
+                <div className="space-y-4 pt-6 border-t">
+                    {/* Desktop Headers: Hidden on mobile */}
+                    <div className="hidden md:grid md:grid-cols-12 gap-2 text-sm font-semibold text-muted-foreground px-2">
                         <div className="col-span-5">DESCRIPTION</div>
                         <div className="col-span-2 text-center">HOURS/QTY</div>
                         <div className="col-span-2 text-right">RATE/PRICE</div>
                         <div className="col-span-2 text-right">AMOUNT</div>
-                        <div className="col-span-1 text-center">TAX?</div>
+                        <div className="col-span-1"></div> {/* Spacer for checkbox/delete */}
                     </div>
+
+                    {/* Line Items Loop */}
                     {lineItems.map((item, index) => (
-                        <div key={index} className="grid grid-cols-12 gap-2 items-start">
-                            <div className="col-span-5"><textarea rows={3} placeholder="Service, product, or expense" value={item.description} onChange={e => handleLineItemChange(index, 'description', e.target.value)} className="w-full p-2 border rounded-md bg-background" /></div>
-                            <div className="col-span-2"><input type="number" step="0.01" placeholder="1" value={item.quantity} onChange={e => handleLineItemChange(index, 'quantity', e.target.value)} className="w-full p-2 border rounded-md bg-background text-center" /></div>
-                            <div className="col-span-2"><input type="number" step="0.01" placeholder="0.00" value={item.unitPrice} onChange={e => handleLineItemChange(index, 'unitPrice', e.target.value)} className="w-full p-2 border rounded-md bg-background text-right" /></div>
-                            <div className="col-span-2 text-right font-medium p-2">${item.total.toFixed(2)}</div>
-                            <div className="col-span-1 flex justify-center items-center h-full">
-                                <input type="checkbox" checked={!!item.isTaxable} onChange={e => handleLineItemChange(index, 'isTaxable', e.target.checked)} />
+                        <div key={index} className="bg-background/50 p-4 rounded-lg space-y-4 md:p-0 md:bg-transparent md:space-y-0 md:grid md:grid-cols-12 md:gap-2 md:items-start border-b md:border-0 pb-4 md:pb-2">
+                            
+                            <div className="md:col-span-5">
+                                <label className="text-sm font-medium text-muted-foreground md:hidden">Description</label>
+                                <textarea rows={3} placeholder="Service, product, or expense" value={item.description} onChange={e => handleLineItemChange(index, 'description', e.target.value)} className="w-full p-2 border rounded-md bg-background" />
                             </div>
-                            <div className="col-span-12 flex justify-end -mt-2"><button type="button" onClick={() => removeLineItem(index)} className="p-1 text-muted-foreground hover:text-destructive"><Trash2 size={14}/></button></div>
+
+                            <div className="grid grid-cols-2 gap-4 md:contents">
+                                <div className="md:col-span-2 flex flex-col">
+                                    <label className="text-sm font-medium text-muted-foreground md:hidden text-center">Hours/Qty</label>
+                                    <input type="number" step="0.01" placeholder="1" value={item.quantity} onChange={e => handleLineItemChange(index, 'quantity', e.target.value)} className="w-full p-2 border rounded-md bg-background text-center" />
+                                </div>
+                                <div className="md:col-span-2 flex flex-col">
+                                    <label className="text-sm font-medium text-muted-foreground md:hidden text-right">Rate/Price</label>
+                                    <input type="number" step="0.01" placeholder="0.00" value={item.unitPrice} onChange={e => handleLineItemChange(index, 'unitPrice', e.target.value)} className="w-full p-2 border rounded-md bg-background text-right" />
+                                </div>
+                            </div>
+                            
+                            <div className="md:col-span-2 flex flex-col">
+                                <label className="text-sm font-medium text-muted-foreground md:hidden text-right">Amount</label>
+                                <p className="w-full p-2 text-right font-medium h-10 flex items-center justify-end">${item.total.toFixed(2)}</p>
+                            </div>
+                            
+                            <div className="flex justify-between items-center pt-2 border-t md:border-0 md:pt-0 md:col-span-1 md:h-full md:items-center">
+                                <div className="flex items-center gap-2">
+                                    <label htmlFor={`isTaxable-${index}`} className="text-sm font-medium text-muted-foreground">Taxable</label>
+                                    <input id={`isTaxable-${index}`} type="checkbox" checked={!!item.isTaxable} onChange={e => handleLineItemChange(index, 'isTaxable', e.target.checked)} className="h-4 w-4"/>
+                                </div>
+                                <button type="button" onClick={() => removeLineItem(index)} className="p-1 text-muted-foreground hover:text-destructive md:absolute md:right-0 md:top-0">
+                                    <Trash2 size={16}/>
+                                    <span className="sr-only">Remove Item</span>
+                                </button>
+                            </div>
                         </div>
                     ))}
                     <button type="button" onClick={addLineItem} className="flex items-center gap-2 text-sm font-semibold text-primary hover:underline pt-2"><PlusCircle size={16}/> Add Item / Expense</button>
