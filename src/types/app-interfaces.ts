@@ -199,6 +199,7 @@ export interface InvoiceLineItemTemplate {
 export interface UserProfile {
     id?: string;
     userId?: string;
+    name?: string; // ✅ ADDED THIS LINE
     photoUrl?: string;
     professionalTitle?: string;
     bio?: string;
@@ -211,12 +212,12 @@ export interface UserProfile {
     defaultInvoiceNotes?: string;
     defaultPaymentDetails?: string;
     estimatedStateTaxRate?: number;
+    defaultTaxRate?: number;
     address?: string;
     phone?: string;
     email?: string;
     expenseCategories?: string[];
     invoiceLineItems?: InvoiceLineItemTemplate[];
-    defaultTaxRate?: number; // ✅ ADDED THIS LINE
 }
 
 export interface JobPosting {

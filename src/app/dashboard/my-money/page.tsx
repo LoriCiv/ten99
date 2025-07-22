@@ -3,8 +3,8 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import type { Invoice, Expense, Client, UserProfile, Certification, CEU } from '@/types/app-interfaces';
-import {
-    getInvoices, getExpenses, getClients, getUserProfile,
+import { 
+    getInvoices, getExpenses, getClients, getUserProfile, 
     updateUserProfile, getCertifications, getAllCEUs, addExpense
 } from '@/utils/firestoreService';
 import Link from 'next/link';
@@ -136,10 +136,10 @@ export default function MyMoneyPage() {
                 </header>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <StatCard title="YTD Income (Paid)" value={`$${stats.ytdIncome.toFixed(2)}`} icon={DollarSign} theme="green" />
-                    <StatCard title="YTD Expenses" value={`$${stats.ytdExpenses.toFixed(2)}`} icon={FileText} theme="red" />
-                    <StatCard title="Credential Costs" value={`$${stats.ytdCredentialCosts.toFixed(2)}`} icon={Award} theme="yellow" />
-                    <StatCard title="Net Income" value={`$${stats.netIncome.toFixed(2)}`} icon={Landmark} theme="primary" />
+                    <StatCard title="YTD Income (Paid)" value={`$${(stats.ytdIncome || 0).toFixed(2)}`} icon={DollarSign} theme="green" />
+                    <StatCard title="YTD Expenses" value={`$${(stats.ytdExpenses || 0).toFixed(2)}`} icon={FileText} theme="red" />
+                    <StatCard title="Credential Costs" value={`$${(stats.ytdCredentialCosts || 0).toFixed(2)}`} icon={Award} theme="yellow" />
+                    <StatCard title="Net Income" value={`$${(stats.netIncome || 0).toFixed(2)}`} icon={Landmark} theme="primary" />
                 </div>
                 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -157,7 +157,7 @@ export default function MyMoneyPage() {
                             <h3 className="text-lg font-semibold">Estimated Tax Liability</h3>
                              <div className="text-right my-4">
                                  <p className="text-sm text-muted-foreground">Total Owed (YTD)</p>
-                                 <p className="text-3xl font-bold text-primary">${taxStats.totalTaxOwed.toFixed(2)}</p>
+                                 <p className="text-3xl font-bold text-primary">${(taxStats.totalTaxOwed || 0).toFixed(2)}</p>
                              </div>
                              <div className="space-y-4">
                                  <div>
@@ -203,8 +203,6 @@ export default function MyMoneyPage() {
                                 <ExpensePieChart expenses={expenses} />
                              </div>
                         </div>
-
-                        {/* ✅ ADDED THE "COMING SOON" TEASER HERE */}
                         <div className="bg-gradient-to-br from-primary/20 to-card p-6 rounded-lg border border-primary/30">
                              <div className="flex justify-between items-center mb-4">
                                 <div>
