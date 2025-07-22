@@ -169,7 +169,8 @@ export default function InvoiceDetailModal({ invoice, clients, userProfile, onCl
                                 <X size={20} />
                             </button>
                             <div className="p-6 sm:p-8">
-                                <div className="flex justify-between items-start mb-6 pb-6 border-b">
+                                {/* ✅ THE FIX: Added right padding (pr-8) to this div */}
+                                <div className="flex justify-between items-start mb-6 pb-6 border-b pr-8">
                                     <div>
                                         <h2 className="text-2xl font-bold text-foreground">{userProfile?.professionalTitle || 'Your Name'}</h2>
                                         <p className="text-sm text-muted-foreground">{userProfile?.email}</p>
