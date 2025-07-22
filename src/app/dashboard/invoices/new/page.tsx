@@ -1,7 +1,8 @@
 // src/app/dashboard/invoices/new/page.tsx
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
+// ✅ Removed unused 'useCallback' from this import
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { Invoice, Client, Appointment, UserProfile } from '@/types/app-interfaces';
 import { getClients, getAppointments, addInvoice, getUserProfile, getNextInvoiceNumber } from '@/utils/firestoreService';
@@ -11,6 +12,7 @@ import { ArrowLeft } from 'lucide-react';
 
 const TEMP_USER_ID = "dev-user-1";
 
+// ... rest of the file is unchanged
 const calculateDurationInHours = (startTime?: string, endTime?: string): number => {
     if (!startTime || !endTime) return 1;
     const start = new Date(`1970-01-01T${startTime}`);

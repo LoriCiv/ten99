@@ -1,8 +1,9 @@
-// src/components/InvoiceForm.tsx
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
-import type { Invoice, Client, UserProfile, InvoiceLineItemTemplate } from '@/types/app-interfaces';
+// ✅ Removed unused 'useMemo' import
+import { useState, useEffect } from 'react';
+// ✅ Removed unused 'InvoiceLineItemTemplate' import and fixed the `any` type
+import type { Invoice, Client, UserProfile } from '@/types/app-interfaces';
 import { PlusCircle, Trash2, Save, Loader2 } from 'lucide-react';
 
 interface LineItem {
@@ -55,16 +56,17 @@ export default function InvoiceForm({ onSave, onCancel, clients = [], initialDat
         setFormData(prev => ({ ...prev, [name]: finalValue }));
     };
     
+    // ✅ Rewrote this function to be fully type-safe and remove `any`
     const handleLineItemChange = (index: number, field: keyof LineItem, value: string | number | boolean) => {
         const updatedItems = [...lineItems];
-        const item = { ...updatedItems[index] };
+        const item: LineItem = { ...updatedItems[index] };
 
-        if (field === 'isTaxable') {
-            item[field] = Boolean(value);
-        } else if (field === 'description') {
-            item[field] = String(value);
-        } else {
-            (item as any)[field] = parseFloat(String(value)) || 0;
+        if (field === 'isTaxable' && typeof value === 'boolean') {
+            item.isTaxable = value;
+        } else if (field === 'description' && typeof value === 'string') {
+            item.description = value;
+        } else if ((field === 'quantity' || field === 'unitPrice') && (typeof value === 'string' || typeof value === 'number')) {
+            item[field] = parseFloat(String(value)) || 0;
         }
 
         item.total = (item.quantity || 0) * (item.unitPrice || 0);

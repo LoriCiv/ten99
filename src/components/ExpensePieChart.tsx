@@ -1,4 +1,3 @@
-// src/components/ExpensePieChart.tsx
 "use client";
 
 import { useMemo, memo } from 'react';
@@ -9,10 +8,20 @@ interface ExpensePieChartProps {
     expenses: Expense[];
 }
 
-// More distinct colors for better visual separation
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: {
+    name: string;
+    value: number;
+    payload: {
+        name: string;
+        value: number;
+    }
+  }[];
+}
+
 const COLORS = ['#3b82f6', '#10b981', '#f97316', '#ec4899', '#8b5cf6', '#f59e0b'];
 
-// A helper to format category names consistently
 const formatCategoryName = (name: string) => {
     return name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 };
@@ -23,10 +32,8 @@ const ExpensePieChartComponent = ({ expenses }: ExpensePieChartProps) => {
         if (!expenses || expenses.length === 0) {
             return [];
         }
-
-        const categoryTotals = expenses.reduce((acc, expense) => {
+        const categoryTotals = expenses.reduce((acc, expense: Expense) => {
             const category = formatCategoryName(expense.category);
-            // ✅ FIX: Ensure the amount is always treated as a number during summation
             const amount = Number(expense.amount) || 0;
             acc[category] = (acc[category] || 0) + amount;
             return acc;
@@ -34,14 +41,27 @@ const ExpensePieChartComponent = ({ expenses }: ExpensePieChartProps) => {
 
         return Object.entries(categoryTotals)
             .map(([name, value]) => ({ name, value }))
-            .sort((a, b) => b.value - a.value); // Sort by value, largest first
+            .sort((a, b) => b.value - a.value);
 
     }, [expenses]);
 
-    // A more informative custom label for pie slices
-    const renderCustomizedLabel = (props: any) => {
-        const { cx, cy, midAngle, innerRadius, outerRadius, percent, name } = props;
-        if (percent < 0.05) return null; // Don't label very small slices
+    // ✅ FIX: Mark geometric properties as optional and add a guard clause.
+    const renderCustomizedLabel = (props: {
+        cx: number;
+        cy: number;
+        midAngle?: number;
+        innerRadius?: number;
+        outerRadius?: number;
+        percent?: number;
+    }) => {
+        const { cx, cy, midAngle, innerRadius, outerRadius, percent } = props;
+
+        // Gracefully handle cases where props might be undefined
+        if (percent === undefined || midAngle === undefined || innerRadius === undefined || outerRadius === undefined) {
+            return null;
+        }
+
+        if (percent < 0.05) return null;
 
         const RADIAN = Math.PI / 180;
         const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
@@ -55,8 +75,7 @@ const ExpensePieChartComponent = ({ expenses }: ExpensePieChartProps) => {
         );
     };
     
-    // Custom Tooltip for better styling
-    const CustomTooltip = ({ active, payload }: any) => {
+    const CustomTooltip = ({ active, payload }: CustomTooltipProps) => {
         if (active && payload && payload.length) {
             return (
                 <div className="p-2 bg-background border rounded-md shadow-lg">
@@ -85,7 +104,7 @@ const ExpensePieChartComponent = ({ expenses }: ExpensePieChartProps) => {
                     cy="50%"
                     labelLine={false}
                     label={renderCustomizedLabel}
-                    outerRadius={100} // Made the pie slightly larger
+                    outerRadius={100}
                     fill="#8884d8"
                     dataKey="value"
                     nameKey="name"

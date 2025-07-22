@@ -6,15 +6,18 @@ import ExpensesPageContent from '@/components/ExpensesPageContent';
 
 const TEMP_USER_ID = "dev-user-1";
 
+// ✅ The fix is in this function
 function serializeData<T>(data: T): T {
     if (!data || typeof data !== 'object') return data;
-    const serialized = { ...data } as any;
+    // ✅ Use a more specific index signature instead of a plain `any` cast
+    const serialized: { [key: string]: any } = { ...data };
     for (const key in serialized) {
-        if (serialized[key] instanceof Timestamp) {
+        // ✅ Added a safety check for properties
+        if (Object.prototype.hasOwnProperty.call(serialized, key) && serialized[key] instanceof Timestamp) {
             serialized[key] = serialized[key].toDate().toISOString();
         }
     }
-    return serialized;
+    return serialized as T;
 }
 
 async function getCollection<T>(path: string): Promise<T[]> {

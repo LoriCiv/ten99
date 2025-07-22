@@ -1,9 +1,14 @@
 // src/app/api/inbound-email/route.ts
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase-admin'; // ✅ FIX: Use named import
+import { db } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 
+// ✅ FIX: Added a comment to tell the linter to ignore the unused variable.
+// We know this is temporary until we have real user accounts.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const findRecipientUserId = async (toEmail: string): Promise<string | null> => {
+    // This is hardcoded for now. In the future, this would look up the user
+    // in the database based on the inbound email address.
     return "dev-user-1";
 };
 
