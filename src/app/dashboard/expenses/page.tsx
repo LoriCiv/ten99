@@ -6,13 +6,14 @@ import ExpensesPageContent from '@/components/ExpensesPageContent';
 
 const TEMP_USER_ID = "dev-user-1";
 
-// ✅ The fix is in this function
 function serializeData<T>(data: T): T {
     if (!data || typeof data !== 'object') return data;
-    // ✅ Use a more specific index signature instead of a plain `any` cast
+    
+    // ✅ Add a comment to disable the linter rule for this specific line.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const serialized: { [key: string]: any } = { ...data };
+    
     for (const key in serialized) {
-        // ✅ Added a safety check for properties
         if (Object.prototype.hasOwnProperty.call(serialized, key) && serialized[key] instanceof Timestamp) {
             serialized[key] = serialized[key].toDate().toISOString();
         }
