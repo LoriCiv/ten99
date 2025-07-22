@@ -1,4 +1,3 @@
-// src/components/ExpensesPageContent.tsx
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
@@ -27,8 +26,7 @@ export default function ExpensesPageContent({
     userId 
 }: ExpensesPageContentProps) {
     const router = useRouter();
-    // Use the data passed from the server component as the initial state
-    const [expenses] = useState(initialExpenses);
+    const [expenses, setExpenses] = useState(initialExpenses);
     const [clients] = useState(initialClients);
     const [userProfile] = useState(initialProfile);
     const [certifications] = useState(initialCerts);
@@ -40,6 +38,10 @@ export default function ExpensesPageContent({
     const [categoryFilter, setCategoryFilter] = useState('all');
     const [clientFilter, setClientFilter] = useState('all');
     const [sortOrder, setSortOrder] = useState('date-desc');
+
+    useEffect(() => {
+        setExpenses(initialExpenses);
+    }, [initialExpenses]);
 
     const filteredAndSortedExpenses = useMemo(() => {
         const certExpenses: Expense[] = (certifications || [])
@@ -73,9 +75,10 @@ export default function ExpensesPageContent({
             .sort((a, b) => {
                 switch (sortOrder) {
                     case 'amount-desc':
-                        return (b.amount || 0) - (a.amount || 0);
+                        // Ensure sorting works even if amount is a string
+                        return (Number(b.amount) || 0) - (Number(a.amount) || 0);
                     case 'amount-asc':
-                        return (a.amount || 0) - (b.amount || 0);
+                        return (Number(a.amount) || 0) - (Number(b.amount) || 0);
                     case 'date-asc':
                         return new Date(a.date).getTime() - new Date(b.date).getTime();
                     case 'date-desc':
@@ -84,6 +87,7 @@ export default function ExpensesPageContent({
                 }
             });
     }, [expenses, certifications, allCeus, categoryFilter, clientFilter, sortOrder]);
+
 
     const handleOpenFormModal = (expense?: Expense) => {
         if (expense?.isReadOnly) return;
@@ -143,7 +147,7 @@ export default function ExpensesPageContent({
                             <select id="categoryFilter" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="w-full p-2 border rounded-md bg-background">
                                 <option value="all">All Categories</option>
                                 {(userProfile?.expenseCategories || ['Travel', 'Equipment', 'Supplies', 'Professional Development', 'Other']).map(cat => (
-                                     <option key={cat} value={cat.toLowerCase().replace(/\s/g, '_')}>{cat}</option>
+                                    <option key={cat} value={cat.toLowerCase().replace(/\s/g, '_')}>{cat}</option>
                                 ))}
                             </select>
                         </div>
@@ -185,10 +189,11 @@ export default function ExpensesPageContent({
                                 </div>
                                 <p className="text-sm capitalize">{expense.category.replace(/_/g, ' ')}</p>
                                 <p className="text-sm">{clients.find(c => c.id === expense.clientId)?.name || 'N/A'}</p>
-                                <p className="text-right font-medium text-rose-600">-${(expense.amount || 0).toFixed(2)}</p>
+                                {/* ✅ FIX: Ensure amount is treated as a number before calling toFixed */}
+                                <p className="text-right font-medium text-rose-600">-${(Number(expense.amount) || 0).toFixed(2)}</p>
                             </div>
                         ))}
-                         {filteredAndSortedExpenses.length === 0 && (
+                        {filteredAndSortedExpenses.length === 0 && (
                             <div className="text-center py-8 text-muted-foreground">
                                 <p>No expenses match your filters.</p>
                             </div>

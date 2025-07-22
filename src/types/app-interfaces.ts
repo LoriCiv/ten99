@@ -1,4 +1,3 @@
-// src/types/app-interfaces.ts
 import type { Timestamp, FieldValue } from 'firebase/firestore';
 
 export interface Client {
@@ -134,7 +133,7 @@ export interface Invoice {
     notes?: string;
     paymentDetails?: string;
     paymentDate?: string;
-    createdAt?: Timestamp;
+    createdAt?: Timestamp | FieldValue; // ✅ Corrected this line
 }
 
 export interface Expense {
@@ -163,6 +162,7 @@ export interface Message {
     createdAt: Timestamp | FieldValue;
     status?: 'new' | 'pending' | 'approved' | 'declined';
     proposedDate?: string;
+
     proposedTime?: string;
     appointmentId?: string;
 }
@@ -199,7 +199,7 @@ export interface InvoiceLineItemTemplate {
 export interface UserProfile {
     id?: string;
     userId?: string;
-    name?: string; // ✅ ADDED THIS LINE
+    name?: string;
     photoUrl?: string;
     professionalTitle?: string;
     bio?: string;

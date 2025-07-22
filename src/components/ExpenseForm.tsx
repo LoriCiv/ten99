@@ -22,10 +22,16 @@ const toBase64 = (file: File): Promise<string> => new Promise((resolve, reject) 
     reader.onerror = error => reject(error);
 });
 
+// A type for our form state that allows `amount` to be a string for the input field
+type ExpenseFormData = Omit<Partial<Expense>, 'amount'> & {
+    amount?: string | number;
+};
+
 export default function ExpenseForm({ onSave, onCancel, clients, initialData = {}, isSubmitting, userId, userProfile }: ExpenseFormProps) {
     const isEditMode = !!initialData?.id;
     
-    const [formData, setFormData] = useState<Partial<Expense>>({});
+    // State is now typed to allow string for amount, for better UX in the input field
+    const [formData, setFormData] = useState<ExpenseFormData>({});
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [isParsing, setIsParsing] = useState(false);
     const [aiMessage, setAiMessage] = useState('');
@@ -64,7 +70,8 @@ export default function ExpenseForm({ onSave, onCancel, clients, initialData = {
             setFormData(prev => ({
                 ...prev,
                 description: parsed.description || prev.description,
-                amount: parsed.amount || prev.amount,
+                // AI result is a number, convert to string for the form
+                amount: parsed.amount !== undefined ? String(parsed.amount) : prev.amount,
                 date: parsed.date || prev.date,
             }));
             setAiMessage("Receipt parsed successfully!");
@@ -77,10 +84,13 @@ export default function ExpenseForm({ onSave, onCancel, clients, initialData = {
     }, [selectedFile]);
 
     useEffect(() => {
+        // When initial data changes, reset the form
+        // Importantly, convert the initial `amount` (number) to a string for the input
         setFormData({
             date: new Date().toISOString().split('T')[0],
             category: userProfile?.expenseCategories?.[0]?.toLowerCase().replace(/\s/g, '_') || 'other',
             ...initialData,
+            amount: initialData.amount !== undefined ? String(initialData.amount) : '',
         });
         setSelectedFile(null);
         setAiMessage('');
@@ -91,10 +101,11 @@ export default function ExpenseForm({ onSave, onCancel, clients, initialData = {
             handleParseReceipt();
         }
     }, [selectedFile, handleParseReceipt]);
-
+    
+    // Simplified handler: just updates the state with the raw string from the input
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
-        setFormData(prev => ({...prev, [name]: value}));
+        setFormData(prev => ({ ...prev, [name]: value }));
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -106,7 +117,14 @@ export default function ExpenseForm({ onSave, onCancel, clients, initialData = {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const finalData = { ...formData };
+        
+        // Final conversion and validation happens here, just before saving
+        const finalData: Partial<Expense> = { 
+            ...formData,
+            // Safely parse the string amount to a number, defaulting to 0 if invalid.
+            amount: parseFloat(String(formData.amount)) || 0,
+        };
+
         if (selectedFile) {
             try {
                 const receiptUrl = await uploadFile(userId, selectedFile);
