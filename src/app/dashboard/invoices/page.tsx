@@ -6,10 +6,32 @@ import { useSearchParams } from 'next/navigation';
 import type { Invoice, Client, UserProfile } from '@/types/app-interfaces';
 import { getInvoices, getClients, getUserProfile } from '@/utils/firestoreService';
 import Link from 'next/link';
-import { PlusCircle } from 'lucide-react';
+import { PlusCircle, ArrowUpDown } from 'lucide-react';
 import InvoiceDetailModal from '@/components/InvoiceDetailModal';
 
 const TEMP_USER_ID = "dev-user-1";
+
+const getStatusStyles = (status: Invoice['status']) => {
+    switch (status) {
+        case 'paid':
+            return { borderColor: 'border-l-emerald-500', bgColor: 'bg-emerald-500/5', textColor: 'text-emerald-600' };
+        case 'overdue':
+            return { borderColor: 'border-l-rose-500', bgColor: 'bg-rose-500/5', textColor: 'text-rose-600' };
+        case 'sent':
+            return { borderColor: 'border-l-sky-500', bgColor: 'bg-sky-500/5', textColor: 'text-sky-600' };
+        case 'draft':
+        default:
+            return { borderColor: 'border-l-slate-400', bgColor: 'bg-slate-500/5', textColor: 'text-slate-500' };
+    }
+};
+
+const SortButton = ({ active, direction, onClick, children }: { active: boolean, direction: string, onClick: () => void, children: React.ReactNode }) => (
+    <button onClick={onClick} className={`px-3 py-1 text-sm rounded-md flex items-center gap-1 ${active ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'}`}>
+        {children}
+        {active && <ArrowUpDown size={14} className={`transition-transform ${direction === 'descending' ? 'rotate-180' : ''}`} />}
+    </button>
+);
+
 
 function InvoicesPageInternal() {
     const searchParams = useSearchParams();
@@ -18,29 +40,70 @@ function InvoicesPageInternal() {
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+    
+    // ✅ 1. ADD STATE FOR NEW FILTERS
+    const [statusFilter, setStatusFilter] = useState('all');
+    const [clientFilter, setClientFilter] = useState('all');
+    const [sortConfig, setSortConfig] = useState<{ key: keyof Invoice; direction: 'ascending' | 'descending' }>({ key: 'invoiceDate', direction: 'descending' });
 
-    const filter = searchParams.get('filter');
+    const initialFilter = searchParams.get('filter');
 
     useEffect(() => {
+        if (initialFilter) {
+            setStatusFilter(initialFilter);
+        }
         const unsubInvoices = getInvoices(TEMP_USER_ID, setInvoices);
         const unsubClients = getClients(TEMP_USER_ID, setClients);
-        const unsubProfile = getUserProfile(TEMP_USER_ID, setUserProfile);
-
-        // A simple way to handle initial load
-        const timer = setTimeout(() => setIsLoading(false), 1500);
+        const unsubProfile = getUserProfile(TEMP_USER_ID, (profile) => {
+            setUserProfile(profile);
+            setIsLoading(false);
+        });
 
         return () => {
             unsubInvoices();
             unsubClients();
             unsubProfile();
-            clearTimeout(timer);
         };
-    }, []);
+    }, [initialFilter]);
 
-    const filteredInvoices = useMemo(() => {
-        if (!filter) return invoices;
-        return invoices.filter(inv => inv.status === filter);
-    }, [invoices, filter]);
+    // ✅ 2. UPDATE MEMO TO HANDLE SORTING AND FILTERING
+    const processedInvoices = useMemo(() => {
+        let filteredInvoices = [...invoices];
+
+        // Apply status filter
+        if (statusFilter !== 'all') {
+            filteredInvoices = filteredInvoices.filter(inv => inv.status === statusFilter);
+        }
+
+        // Apply client filter
+        if (clientFilter !== 'all') {
+            filteredInvoices = filteredInvoices.filter(inv => inv.clientId === clientFilter);
+        }
+        
+        // Apply sorting
+        filteredInvoices.sort((a, b) => {
+            const aValue = a[sortConfig.key] || 0; // Fallback for safety
+            const bValue = b[sortConfig.key] || 0; // Fallback for safety
+
+            let comparison = 0;
+            if (aValue > bValue) {
+                comparison = 1;
+            } else if (aValue < bValue) {
+                comparison = -1;
+            }
+            return sortConfig.direction === 'ascending' ? comparison : -comparison;
+        });
+        
+        return filteredInvoices;
+    }, [invoices, statusFilter, clientFilter, sortConfig]);
+    
+    const handleSort = (key: keyof Invoice) => {
+        let direction: 'ascending' | 'descending' = 'ascending';
+        if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+            direction = 'descending';
+        }
+        setSortConfig({ key, direction });
+    };
 
     if (isLoading) {
         return <div className="p-8 text-center text-muted-foreground">Loading Invoices...</div>;
@@ -56,19 +119,52 @@ function InvoicesPageInternal() {
                     </Link>
                 </header>
 
+                {/* ✅ 3. ADD THE NEW FILTERING AND SORTING UI */}
+                <div className="bg-card border rounded-lg p-4 mb-6 flex flex-wrap gap-4 items-end">
+                    <div className="flex-1 min-w-[150px]">
+                        <label className="text-sm font-medium text-muted-foreground">Filter by Status</label>
+                        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full mt-1 p-2 border rounded-md bg-background">
+                            <option value="all">All Statuses</option>
+                            <option value="draft">Draft</option>
+                            <option value="sent">Sent</option>
+                            <option value="paid">Paid</option>
+                            <option value="overdue">Overdue</option>
+                        </select>
+                    </div>
+                    <div className="flex-1 min-w-[150px]">
+                        <label className="text-sm font-medium text-muted-foreground">Filter by Client</label>
+                        <select value={clientFilter} onChange={(e) => setClientFilter(e.target.value)} className="w-full mt-1 p-2 border rounded-md bg-background">
+                            <option value="all">All Clients</option>
+                            {clients.map(client => <option key={client.id} value={client.id!}>{client.name}</option>)}
+                        </select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-muted-foreground self-center">Sort by:</span>
+                        <SortButton active={sortConfig.key === 'invoiceDate'} direction={sortConfig.direction} onClick={() => handleSort('invoiceDate')}>Date</SortButton>
+                        <SortButton active={sortConfig.key === 'status'} direction={sortConfig.direction} onClick={() => handleSort('status')}>Status</SortButton>
+                        <SortButton active={sortConfig.key === 'total'} direction={sortConfig.direction} onClick={() => handleSort('total')}>Amount</SortButton>
+                    </div>
+                </div>
+
+
                 <div className="space-y-3">
-                    {filteredInvoices.length > 0 ? (
-                        filteredInvoices.map(invoice => {
+                    {processedInvoices.length > 0 ? (
+                        processedInvoices.map(invoice => {
                             const client = clients.find(c => c.id === invoice.clientId);
+                            const { borderColor, bgColor, textColor } = getStatusStyles(invoice.status);
                             return (
-                                <div key={invoice.id} onClick={() => setSelectedInvoice(invoice)} className="bg-card p-4 rounded-lg border flex justify-between items-center cursor-pointer hover:bg-muted">
+                                <div 
+                                    key={invoice.id} 
+                                    onClick={() => setSelectedInvoice(invoice)} 
+                                    className={`bg-card p-4 rounded-lg border border-l-4 ${borderColor} ${bgColor} flex justify-between items-center cursor-pointer hover:shadow-md transition-shadow`}
+                                >
                                     <div>
                                         <p className="font-bold">#{invoice.invoiceNumber} - {client?.name || 'N/A'}</p>
                                         <p className="text-sm text-muted-foreground">Due: {invoice.dueDate}</p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="font-bold">${invoice.total.toFixed(2)}</p>
-                                        <p className="text-sm capitalize">{invoice.status}</p>
+                                        <p className="font-bold">${(invoice.total || 0).toFixed(2)}</p>
+                                        <p className={`text-sm font-semibold capitalize ${textColor}`}>{invoice.status}</p>
                                     </div>
                                 </div>
                             );

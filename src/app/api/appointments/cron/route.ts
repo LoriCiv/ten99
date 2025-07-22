@@ -1,8 +1,8 @@
 // src/app/api/appointments/cron/route.ts
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase-admin';
-import type { Appointment } from '@/types/app-interfaces';
+import admin from '@/lib/firebase-admin'; // Use default import
 
+const db = admin.firestore(); // Get firestore from the admin object
 const TEMP_USER_ID = "dev-user-1";
 
 export async function GET(request: Request) {
@@ -10,7 +10,7 @@ export async function GET(request: Request) {
     if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
         return new Response('Unauthorized', { status: 401 });
     }
-    
+
     console.log('Running hourly appointment status update cron job...');
 
     try {
@@ -19,7 +19,6 @@ export async function GET(request: Request) {
         
         const snapshot = await appointmentsRef
             .where('status', '==', 'scheduled')
-            .where('eventType', '==', 'job') 
             .get();
 
         if (snapshot.empty) {
@@ -28,46 +27,29 @@ export async function GET(request: Request) {
         }
 
         const batch = db.batch();
-        let updatedCount = 0;
+        let updatesCount = 0;
 
-        for (const doc of snapshot.docs) {
-            const appt = { id: doc.id, ...doc.data() } as Appointment;
-
-            if (!appt.date || !appt.time) {
-                continue; 
-            }
-
-            let endTimeString = appt.endTime;
-            if (!endTimeString) {
-                const [hours, minutes] = appt.time.split(':');
-                const nextHour = (parseInt(hours, 10) + 1) % 24;
-                endTimeString = `${String(nextHour).padStart(2, '0')}:${minutes}`;
-            }
+        snapshot.forEach(doc => {
+            const appointment = doc.data();
+            const apptDateTime = new Date(`${appointment.date}T${appointment.time}`);
             
-            const endDateTime = new Date(`${appt.date}T${endTimeString}`);
-
-            if (endDateTime < now) {
-                console.log(`Updating job ${appt.id} to "completed".`);
-                // ✅ THE FIX: Use the correct syntax for the Admin SDK
-                const docRef = db.doc(`users/${TEMP_USER_ID}/appointments/${appt.id}`);
-                batch.update(docRef, { status: 'completed' });
-                updatedCount++;
+            if (apptDateTime < now) {
+                const apptRef = doc.ref;
+                batch.update(apptRef, { status: 'completed' });
+                updatesCount++;
             }
-        }
+        });
 
-        if (updatedCount > 0) {
+        if (updatesCount > 0) {
             await batch.commit();
         }
 
-        const message = `Cron job finished. Updated ${updatedCount} jobs to "completed".`;
+        const message = `Cron job finished. Updated ${updatesCount} appointments to "completed".`;
         console.log(message);
         return NextResponse.json({ message });
 
     } catch (error) {
-        console.error("Cron job failed:", error);
-        if (error instanceof Error) {
-            return NextResponse.json({ error: error.message }, { status: 500 });
-        }
-        return NextResponse.json({ error: 'An unknown error occurred.' }, { status: 500 });
+        console.error("Cron job (appointments) failed:", error);
+        return NextResponse.json({ error: 'Failed to process appointments.' }, { status: 500 });
     }
 }

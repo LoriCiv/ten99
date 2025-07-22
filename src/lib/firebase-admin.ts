@@ -1,28 +1,19 @@
 // src/lib/firebase-admin.ts
 import admin from 'firebase-admin';
+import { getApps } from 'firebase-admin/app';
+import serviceAccount from './serviceAccountKey.json';
 
-// ✅ This file now builds the credentials from environment variables
-
-if (!admin.apps.length) {
-  try {
-    const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
-
-    if (!privateKey) {
-        throw new Error("FIREBASE_PRIVATE_KEY environment variable is not set.");
+if (!getApps().length) {
+    try {
+        admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount as any),
+            storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+        });
+        console.log("Firebase Admin SDK initialized successfully.");
+    } catch (error) {
+        console.error('Firebase Admin Initialization Error:', error);
     }
-    
-    admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: privateKey,
-      }),
-      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-    });
-  } catch (error) {
-    console.error('Firebase admin initialization error', error);
-  }
 }
 
-export const db = admin.firestore();
-export const storage = admin.storage();
+// ✅ FIX: We now export the entire admin object by default
+export default admin;

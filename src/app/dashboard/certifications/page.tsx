@@ -3,43 +3,37 @@
 
 import { useState, useEffect } from 'react';
 import type { Certification, CEU } from '@/types/app-interfaces';
-import { getCertifications, getCEUsForCertification } from '@/utils/firestoreService';
+import { getCertifications, getAllCEUs } from '@/utils/firestoreService';
 import CertificationsPageContent from '@/components/CertificationsPageContent';
 
 const TEMP_USER_ID = "dev-user-1";
 
-export default function CertificationsPage() { // ✅ FIX: Removed unused 'params'
+export default function CertificationsPage() {
     const [certifications, setCertifications] = useState<Certification[]>([]);
     const [allCeus, setAllCeus] = useState<CEU[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        const unsubCertifications = getCertifications(TEMP_USER_ID, (certs) => {
-            setCertifications(certs);
-            if (certs.length === 0) {
-                setIsLoading(false);
-                return;
-            }
-            const ceuPromises = certs.map(cert => 
-                new Promise<CEU[]>((resolve) => {
-                    getCEUsForCertification(TEMP_USER_ID, cert.id!, resolve);
-                })
-            );
-            Promise.all(ceuPromises).then(results => {
-                const flattenedCeus = results.flat();
-                setAllCeus(flattenedCeus);
-                setIsLoading(false);
-            });
+        const unsubCerts = getCertifications(TEMP_USER_ID, setCertifications);
+        // This now uses our new, more efficient function to get all CEUs at once
+        const unsubCEUs = getAllCEUs(TEMP_USER_ID, (ceus) => {
+            setAllCeus(ceus);
+            setIsLoading(false); // We know all data is loaded now
         });
-        return () => { unsubCertifications(); };
+
+        return () => {
+            unsubCerts();
+            unsubCEUs();
+        };
     }, []);
 
     if (isLoading) {
-        return <div className="p-8 text-center text-muted-foreground">Loading Credentials...</div>;
+        return <div className="p-8 text-center text-muted-foreground">Loading credentials...</div>;
     }
 
+    // We pass the fully loaded data down to the component that displays it
     return (
-        <CertificationsPageContent 
+        <CertificationsPageContent
             initialCertifications={certifications}
             initialCeus={allCeus}
             userId={TEMP_USER_ID}

@@ -31,3 +31,6 @@ next-env.d.ts
 # This is the most important part
 .env.local
 serviceAccountKey.json
+
+# Ignore Firebase service account key
+src/lib/serviceAccountKey.json

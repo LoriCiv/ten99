@@ -32,16 +32,40 @@ function NewInvoicePageInternal() {
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [nextInvoiceNumber, setNextInvoiceNumber] = useState('');
 
-    const fetchData = useCallback(() => {
-        getClients(TEMP_USER_ID, setClients);
-        getAppointments(TEMP_USER_ID, setAppointments);
-        getUserProfile(TEMP_USER_ID, setUserProfile);
+    useEffect(() => {
+        let profileLoaded = false;
+        let clientsLoaded = false;
+        let appointmentsLoaded = false;
+
+        const checkLoadingState = () => {
+            if (profileLoaded && clientsLoaded && appointmentsLoaded) {
+                // This will be handled by the next useEffect
+            }
+        };
+
+        const unsubClients = getClients(TEMP_USER_ID, (data) => {
+            setClients(data);
+            clientsLoaded = true;
+            checkLoadingState();
+        });
+        const unsubAppointments = getAppointments(TEMP_USER_ID, (data) => {
+            setAppointments(data);
+            appointmentsLoaded = true;
+            checkLoadingState();
+        });
+        const unsubProfile = getUserProfile(TEMP_USER_ID, (profile) => {
+            setUserProfile(profile);
+            profileLoaded = true;
+            checkLoadingState();
+        });
+        
         getNextInvoiceNumber(TEMP_USER_ID).then(setNextInvoiceNumber);
+
+        return () => { unsubClients(); unsubAppointments(); unsubProfile(); };
     }, []);
 
-    useEffect(() => { fetchData(); }, [fetchData]);
-
     useEffect(() => {
+        // This effect runs once all the data is available
         if (clients.length > 0 && appointments.length > 0 && userProfile) {
             const appointmentId = searchParams.get('appointmentId');
             
@@ -58,22 +82,18 @@ function NewInvoicePageInternal() {
                 if (linkedAppointment && linkedClient) {
                     const rate = linkedClient.rate || 0;
                     const duration = calculateDurationInHours(linkedAppointment.time, linkedAppointment.endTime);
-                    const detailedDescription = `${linkedAppointment.subject || 'Services Rendered'}\nDate: ${linkedAppointment.date} from ${linkedAppointment.time} to ${linkedAppointment.endTime}\nJob #: ${linkedAppointment.jobNumber || 'N/A'}`;
+                    const detailedDescription = `${linkedAppointment.subject || 'Services Rendered'}\nDate: ${linkedAppointment.date}`;
                     
                     prefilledData.clientId = linkedAppointment.clientId;
                     prefilledData.lineItems = [{ description: detailedDescription, quantity: duration, unitPrice: rate, total: duration * rate }];
-                    
-                    if (linkedAppointment.locationType === 'physical') {
-                        prefilledData.lineItems.push({ description: 'Travel Time (hours)', quantity: 0, unitPrice: rate, total: 0 });
-                        prefilledData.lineItems.push({ description: 'Mileage (miles)', quantity: 0, unitPrice: 0.67, total: 0 });
-                    }
                 }
             }
             setInitialData(prefilledData);
-            setIsLoading(false);
+            setIsLoading(false); // Only stop loading when everything is processed
+        } else if (userProfile) { // Handle case with no clients/appointments
+             setIsLoading(false);
         }
     }, [clients, appointments, userProfile, searchParams]);
-
 
     const handleSaveInvoice = async (invoiceData: Partial<Invoice>) => {
         setIsSubmitting(true);
@@ -104,7 +124,6 @@ function NewInvoicePageInternal() {
                 onSave={handleSaveInvoice}
                 onCancel={() => router.push('/dashboard/invoices')}
                 clients={clients}
-                // ✅ THE FIX: The 'appointments' prop has been removed here.
                 isSubmitting={isSubmitting}
                 initialData={initialData}
                 userProfile={userProfile}

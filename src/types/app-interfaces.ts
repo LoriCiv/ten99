@@ -65,7 +65,7 @@ export interface JobFile {
     id?: string;
     userId?: string;
     originalUserId?: string;
-    createdAt?: Timestamp;
+    createdAt?: Timestamp | FieldValue;
     updatedAt?: Timestamp;
     jobTitle: string;
     fileUrl?: string;
@@ -126,6 +126,7 @@ export interface Invoice {
         quantity: number;
         unitPrice: number;
         total: number;
+        isTaxable?: boolean;
     }[];
     subtotal: number;
     tax?: number;
@@ -133,6 +134,21 @@ export interface Invoice {
     notes?: string;
     paymentDetails?: string;
     paymentDate?: string;
+    createdAt?: Timestamp;
+}
+
+export interface Expense {
+    id?: string;
+    userId?: string;
+    createdAt?: Timestamp;
+    date: string;
+    category: string;
+    description: string;
+    amount: number;
+    receiptUrl?: string;
+    notes?: string;
+    clientId?: string;
+    isReadOnly?: boolean;
 }
 
 export interface Message {
@@ -157,7 +173,7 @@ export interface Template {
     name: string;
     subject: string;
     body: string;
-    type: 'decline' | 'pending' | 'general';
+    type: 'decline' | 'pending' | 'general' | 'approve';
     createdAt?: Timestamp | FieldValue;
 }
 
@@ -173,40 +189,39 @@ export interface EducationEntry {
     notes?: string;
 }
 
+export interface InvoiceLineItemTemplate {
+    id: string;
+    description: string;
+    unitPrice: number;
+    isTaxable?: boolean;
+}
+
 export interface UserProfile {
     id?: string;
     userId?: string;
-    name?: string;
     photoUrl?: string;
     professionalTitle?: string;
     bio?: string;
-    address?: string;
-    phone?: string;
     zipCode?: string;
     isVirtual: boolean;
     skills?: string[];
     languages?: string[];
     jobHistory?: JobHistoryEntry[];
     education?: EducationEntry[];
-    estimatedStateTaxRate?: number;
     defaultInvoiceNotes?: string;
     defaultPaymentDetails?: string;
-}
-
-export interface Expense {
-    id?: string;
-    userId?: string;
-    createdAt?: Timestamp;
-    date: string;
-    category: 'travel' | 'equipment' | 'supplies' | 'professional_development' | 'other';
-    description: string; // ✅ THE FIX IS HERE
-    amount: number;
-    receiptUrl?: string;
+    estimatedStateTaxRate?: number;
+    address?: string;
+    phone?: string;
+    email?: string;
+    expenseCategories?: string[];
+    invoiceLineItems?: InvoiceLineItemTemplate[];
+    defaultTaxRate?: number; // ✅ ADDED THIS LINE
 }
 
 export interface JobPosting {
     id?: string;
-    userId: string;
+    userId: string; 
     title: string;
     description: string;
     location?: string;
