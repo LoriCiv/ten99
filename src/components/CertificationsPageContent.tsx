@@ -1,10 +1,8 @@
-// src/components/CertificationsPageContent.tsx
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Certification, CEU } from '@/types/app-interfaces';
-// ✅ THE ONLY FIX: Removed unused 'X' and 'Loader2' from this import line.
 import { PlusCircle, Edit, Trash2, Award, BookOpen, Library, Users } from 'lucide-react';
 import { addCertification, updateCertification, deleteCertification, addCEU, updateCEU, deleteCEU } from '@/utils/firestoreService';
 import CertificationForm from './CertificationForm';
@@ -143,12 +141,19 @@ export default function CertificationsPageContent({ initialCertifications, initi
     return (
         <>
             <div className="p-4 sm:p-6 lg:p-8">
-                <header className="flex justify-between items-center mb-6">
-                    <h1 className="text-3xl font-bold text-foreground">Credentials</h1>
-                    <button onClick={() => handleOpenCertModal(null)} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90">
-                        <PlusCircle size={20} /> Add Credential
-                    </button>
+                {/* ✅ STANDARDIZED HEADER LAYOUT */}
+                <header className="mb-6">
+                    <div>
+                        <h1 className="text-3xl font-bold text-foreground">Credentials</h1>
+                        <p className="text-muted-foreground mt-1">Manage your licenses, certifications, and memberships.</p>
+                    </div>
+                    <div className="mt-4 flex justify-end">
+                         <button onClick={() => handleOpenCertModal(null)} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90">
+                            <PlusCircle size={20} /> Add Credential
+                        </button>
+                    </div>
                 </header>
+
                 <div className="border-b border-border"><nav className="-mb-px flex space-x-6"><button onClick={() => setActiveTab('certs')} className={`${activeTab === 'certs' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'} whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm`}>My Credentials</button><button onClick={() => setActiveTab('ceus')} className={`${activeTab === 'ceus' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'} whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm`}>CEU Log</button></nav></div>
                 
                 <div className="mt-6">
