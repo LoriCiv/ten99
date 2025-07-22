@@ -1,10 +1,16 @@
-// src/components/InvoiceDetailModal.tsx
 "use client";
 
 import { useState, useEffect } from 'react';
 import type { Invoice, Client, UserProfile } from '@/types/app-interfaces';
 import { updateInvoice, deleteInvoice } from '@/utils/firestoreService';
-import { X, Edit, Trash2, Send, CheckCircle, Loader2 } from 'lucide-react';
+import { X, Edit, Trash2, Send, CheckCircle, Loader2, MoreHorizontal } from 'lucide-react';
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import InvoiceForm from './InvoiceForm';
 
 const TEMP_USER_ID = "dev-user-1";
@@ -54,7 +60,6 @@ export default function InvoiceDetailModal({ invoice, clients, userProfile, onCl
                 onSave();
                 onClose();
             } catch (error) {
-                // ✅ THE FIX: Using the 'error' variable so it's no longer 'unused'.
                 console.error("Error deleting invoice:", error);
                 alert("Failed to delete invoice.");
             }
@@ -144,9 +149,9 @@ export default function InvoiceDetailModal({ invoice, clients, userProfile, onCl
 
     return (
         <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4">
-            <div className="bg-card rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto border">
+            <div className="bg-card rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col border">
                 {isEditing ? (
-                    <div className="p-4 sm:p-6 lg:p-8">
+                    <div className="p-4 sm:p-6 lg:p-8 flex-1 overflow-y-auto">
                         <InvoiceForm
                             initialData={invoice}
                             onSave={handleUpdate}
@@ -158,84 +163,109 @@ export default function InvoiceDetailModal({ invoice, clients, userProfile, onCl
                         />
                     </div>
                 ) : (
-                    <div>
-                        <div className="p-6 sm:p-8">
-                            <div className="flex justify-between items-start mb-6 pb-6 border-b">
-                               <div>
-                                    <h2 className="text-2xl font-bold text-foreground">{userProfile?.professionalTitle || 'Your Name'}</h2>
-                                    <p className="text-sm text-muted-foreground">your.email@ten99.app</p>
-                                    {userProfile?.address && <p className="text-sm text-muted-foreground whitespace-pre-line">{userProfile.address}</p>}
-                                    {userProfile?.phone && <p className="text-sm text-muted-foreground">{userProfile.phone}</p>}
-                                </div>
-                                <div className="text-right">
-                                    <h3 className="text-3xl font-bold text-muted-foreground">INVOICE</h3>
-                                    <p className="text-sm"># {invoice.invoiceNumber}</p>
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div className="space-y-1">
-                                    <p className="text-sm font-semibold text-muted-foreground">BILLED TO</p>
-                                    <p className="font-medium">{client?.companyName || client?.name}</p>
-                                </div>
-                                <div className="space-y-1 text-left md:text-right">
-                                    <p className="text-sm font-semibold text-muted-foreground">INVOICE DATE</p>
-                                    <p>{invoice.invoiceDate}</p>
-                                </div>
-                                 <div className="space-y-1 text-left md:text-right">
-                                    <p className="text-sm font-semibold text-muted-foreground">DUE DATE</p>
-                                    <p>{invoice.dueDate}</p>
-                                </div>
-                            </div>
-                            <div className="mt-6 pt-6 border-t">
-                                <div className="grid grid-cols-12 gap-2 text-sm font-semibold text-muted-foreground px-2 mb-2">
-                                    <div className="col-span-6">DESCRIPTION</div>
-                                    <div className="col-span-2 text-center">HOURS/QTY</div>
-                                    <div className="col-span-2 text-right">RATE/PRICE</div>
-                                    <div className="col-span-2 text-right">AMOUNT</div>
-                                </div>
-                                {invoice.lineItems.map((item, index) => (
-                                    <div key={index} className="grid grid-cols-12 gap-2 py-2 border-b">
-                                        <div className="col-span-6 whitespace-pre-line text-sm">{item.description}</div>
-                                        <div className="col-span-2 text-center text-sm">{item.quantity}</div>
-                                        <div className="col-span-2 text-right text-sm">${item.unitPrice.toFixed(2)}</div>
-                                        <div className="col-span-2 text-right font-medium text-sm">${item.total.toFixed(2)}</div>
+                    <>
+                        <div className="flex-1 overflow-y-auto relative">
+                            <button onClick={onClose} className="absolute top-4 right-4 p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full z-10">
+                                <X size={20} />
+                            </button>
+                            <div className="p-6 sm:p-8">
+                                <div className="flex justify-between items-start mb-6 pb-6 border-b">
+                                    <div>
+                                        <h2 className="text-2xl font-bold text-foreground">{userProfile?.professionalTitle || 'Your Name'}</h2>
+                                        <p className="text-sm text-muted-foreground">{userProfile?.email}</p>
+                                        {userProfile?.address && <p className="text-sm text-muted-foreground whitespace-pre-line">{userProfile.address}</p>}
+                                        {userProfile?.phone && <p className="text-sm text-muted-foreground">{userProfile.phone}</p>}
                                     </div>
-                                ))}
-                            </div>
-                            <div className="flex justify-end pt-4">
-                                <div className="w-full max-w-sm space-y-2 text-right">
-                                    <p className="flex justify-between"><span>Subtotal:</span> <span>${(invoice.subtotal || 0).toFixed(2)}</span></p>
-                                    <p className="flex justify-between"><span>Tax:</span> <span>${(invoice.tax || 0).toFixed(2)}</span></p>
-                                    <p className="flex justify-between font-bold text-lg text-foreground"><span>Amount Due:</span> <span>${(invoice.total || 0).toFixed(2)}</span></p>
+                                    <div className="text-right">
+                                        <h3 className="text-3xl font-bold text-muted-foreground">INVOICE</h3>
+                                        <p className="text-sm"># {invoice.invoiceNumber}</p>
+                                    </div>
+                                </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div className="space-y-1">
+                                        <p className="text-sm font-semibold text-muted-foreground">BILLED TO</p>
+                                        <p className="font-medium">{client?.companyName || client?.name}</p>
+                                    </div>
+                                    <div className="space-y-1 text-left md:text-right">
+                                        <p className="text-sm font-semibold text-muted-foreground">INVOICE DATE</p>
+                                        <p>{invoice.invoiceDate}</p>
+                                    </div>
+                                     <div className="space-y-1 text-left md:text-right">
+                                        <p className="text-sm font-semibold text-muted-foreground">DUE DATE</p>
+                                        <p>{invoice.dueDate}</p>
+                                    </div>
+                                </div>
+                                
+                                <div className="mt-6 pt-6 border-t">
+                                    <div className="hidden md:grid md:grid-cols-12 gap-2 text-sm font-semibold text-muted-foreground px-2 mb-2">
+                                        <div className="col-span-6">DESCRIPTION</div>
+                                        <div className="col-span-2 text-center">HOURS/QTY</div>
+                                        <div className="col-span-2 text-right">RATE/PRICE</div>
+                                        <div className="col-span-2 text-right">AMOUNT</div>
+                                    </div>
+
+                                    {invoice.lineItems.map((item, index) => (
+                                        <div key={index} className="grid grid-cols-5 md:grid-cols-12 gap-2 py-3 border-b">
+                                            <div className="col-span-3 md:col-span-6 text-sm">
+                                                <p className="font-medium text-foreground whitespace-pre-line">{item.description}</p>
+                                                <p className="text-muted-foreground md:hidden">{item.quantity} x ${item.unitPrice.toFixed(2)}</p>
+                                            </div>
+                                            <div className="hidden md:block col-span-2 text-center text-sm">{item.quantity}</div>
+                                            <div className="hidden md:block col-span-2 text-right text-sm">${item.unitPrice.toFixed(2)}</div>
+                                            <div className="col-span-2 text-right font-medium text-sm">${item.total.toFixed(2)}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                                
+                                <div className="flex justify-end pt-4">
+                                    <div className="w-full max-w-xs space-y-2 text-right">
+                                        <p className="flex justify-between"><span>Subtotal:</span> <span>${(invoice.subtotal || 0).toFixed(2)}</span></p>
+                                        <p className="flex justify-between"><span>Tax:</span> <span>${(invoice.tax || 0).toFixed(2)}</span></p>
+                                        <p className="flex justify-between font-bold text-lg text-foreground pt-2 border-t"><span>Amount Due:</span> <span>${(invoice.total || 0).toFixed(2)}</span></p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                         
-                        <div className="p-6 flex justify-between items-center bg-background/50 border-t">
-                             <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X size={24} /></button>
-                             <div className="flex gap-2 flex-wrap justify-end">
-                                 {invoice.status === 'paid' && (
-                                     <button onClick={handleSendReceipt} disabled={isSubmitting} className="flex items-center gap-2 bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-purple-700 disabled:opacity-50">
-                                         {isSubmitting ? <Loader2 size={16} className="animate-spin"/> : <Send size={16}/>}
-                                         {isSubmitting ? 'Sending...' : 'Send Receipt'}
-                                     </button>
-                                 )}
-                                 {(invoice.status === 'draft' || invoice.status === 'sent') && (
-                                     <button onClick={handleSendInvoice} disabled={isSubmitting} className="flex items-center gap-2 bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50">
-                                         {isSubmitting ? <Loader2 size={16} className="animate-spin"/> : <Send size={16}/>}
-                                         {isSubmitting ? 'Sending...' : (invoice.status === 'draft' ? 'Send Invoice' : 'Resend Invoice')}
-                                     </button>
-                                 )}
-                                 {(invoice.status === 'sent' || invoice.status === 'overdue' || invoice.status === 'draft') && (
-                                     <button onClick={handleMarkAsPaid} className="flex items-center gap-2 bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700"><CheckCircle size={16}/>Mark as Paid</button>
-                                 )}
-                                <button onClick={handleDelete} className="flex items-center gap-2 bg-destructive text-destructive-foreground font-semibold py-2 px-4 rounded-lg hover:bg-destructive/80"><Trash2 size={16}/>Delete</button>
-                                {(invoice.status === 'draft' || invoice.status === 'sent') && (
-                                    <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90"><Edit size={16}/>Edit</button>
-                                )}
-                             </div>
+                        <div className="p-4 flex justify-end items-center gap-2 bg-background/50 border-t sticky bottom-0">
+                            {(invoice.status === 'sent' || invoice.status === 'overdue' || invoice.status === 'draft') && (
+                                <Button onClick={handleMarkAsPaid} className="flex items-center gap-2 bg-green-600 hover:bg-green-700">
+                                    <CheckCircle size={16}/>Mark as Paid
+                                </Button>
+                            )}
+                            {(invoice.status === 'draft' || invoice.status === 'sent') && (
+                                <Button onClick={handleSendInvoice} disabled={isSubmitting} className="flex items-center gap-2">
+                                    {isSubmitting ? <Loader2 size={16} className="animate-spin"/> : <Send size={16}/>}
+                                    {isSubmitting ? 'Sending...' : (invoice.status === 'draft' ? 'Send Invoice' : 'Resend Invoice')}
+                                 </Button>
+                            )}
+                            {invoice.status === 'paid' && (
+                                 <Button onClick={handleSendReceipt} disabled={isSubmitting} className="flex items-center gap-2">
+                                     {isSubmitting ? <Loader2 size={16} className="animate-spin"/> : <Send size={16}/>}
+                                     {isSubmitting ? 'Sending...' : 'Send Receipt'}
+                                 </Button>
+                            )}
+                            
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="icon">
+                                        <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    {(invoice.status === 'draft' || invoice.status === 'sent') && (
+                                        <DropdownMenuItem onSelect={() => setIsEditing(true)} className="cursor-pointer">
+                                            <Edit className="mr-2 h-4 w-4" /> Edit
+                                        </DropdownMenuItem>
+                                    )}
+                                    <DropdownMenuItem onSelect={handleDelete} className="cursor-pointer text-red-600 focus:text-red-600">
+                                        <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         </div>
-                    </div>
+                    </>
                 )}
             </div>
         </div>
