@@ -1,11 +1,10 @@
-// src/app/dashboard/appointments/page.tsx
 "use client";
 
-import { useState, useEffect } from 'react'; // ✅ FIX: Removed unused 'useCallback'
+import { useState, useEffect, useMemo } from 'react';
 import type { Appointment, Client, PersonalNetworkContact, JobFile } from '@/types/app-interfaces';
 import { getAppointments, getClients, getPersonalNetwork, getJobFiles } from '@/utils/firestoreService';
 import { format } from 'date-fns';
-import { PlusCircle } from 'lucide-react';
+import { PlusCircle, ChevronDown, Search } from 'lucide-react';
 import Link from 'next/link';
 import AppointmentDetailModal from '@/components/AppointmentDetailModal';
 import InteractiveCalendar from '@/components/InteractiveCalendar';
@@ -31,6 +30,9 @@ export default function AppointmentsPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    // ✅ Changed default state to false
+    const [isKeyOpen, setIsKeyOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
         setIsLoading(true);
@@ -50,6 +52,25 @@ export default function AppointmentsPage() {
         };
     }, []);
 
+    const filteredAppointments = useMemo(() => {
+        if (!searchTerm) {
+            return allAppointments;
+        }
+        const lowercasedTerm = searchTerm.toLowerCase();
+        return allAppointments.filter(appt => {
+            const client = clients.find(c => c.id === appt.clientId);
+            const clientName = client?.companyName || client?.name || '';
+
+            return (
+                appt.subject?.toLowerCase().includes(lowercasedTerm) ||
+                appt.notes?.toLowerCase().includes(lowercasedTerm) ||
+                appt.address?.toLowerCase().includes(lowercasedTerm) ||
+                appt.virtualLink?.toLowerCase().includes(lowercasedTerm) ||
+                clientName.toLowerCase().includes(lowercasedTerm)
+            );
+        });
+    }, [allAppointments, searchTerm, clients]);
+
     const handleAppointmentClick = (appointment: Appointment) => {
         setSelectedAppointment(appointment);
         setIsModalOpen(true);
@@ -64,7 +85,7 @@ export default function AppointmentsPage() {
         console.log("Data saved, UI will update automatically via listeners.");
     };
 
-    const appointmentsForSelectedDay = allAppointments
+    const appointmentsForSelectedDay = filteredAppointments
         .filter(appt => {
             const apptDate = new Date(appt.date + 'T00:00:00');
             return apptDate.toDateString() === selectedDate.toDateString();
@@ -78,18 +99,36 @@ export default function AppointmentsPage() {
     return (
         <>
             <div className="p-4 sm:p-6 lg:p-8">
-                <header className="flex justify-between items-center mb-6">
-                    <h1 className="text-3xl font-bold text-foreground">Appointments</h1>
-                    <Link href="/dashboard/appointments/new" className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90 transition-colors">
-                        <PlusCircle size={20}/>
-                        New Event
-                    </Link>
+                <header className="mb-6">
+                    <div>
+                        <h1 className="text-3xl font-bold text-foreground">Appointments</h1>
+                        <p className="text-muted-foreground mt-1">View and manage your schedule.</p>
+                    </div>
+                    <div className="mt-4 flex justify-end">
+                        <Link href="/dashboard/appointments/new" className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90 transition-colors">
+                            <PlusCircle size={20}/>
+                            New Event
+                        </Link>
+                    </div>
                 </header>
+
+                <div className="mb-6 p-4 bg-card border rounded-lg">
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                        <input 
+                            type="text" 
+                            placeholder="Search by subject, client, location, notes..." 
+                            value={searchTerm} 
+                            onChange={(e) => setSearchTerm(e.target.value)} 
+                            className="w-full pl-10 p-2 border rounded-md bg-background"
+                        />
+                    </div>
+                </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div className="lg:col-span-2">
                         <InteractiveCalendar
-                            appointments={allAppointments}
+                            appointments={filteredAppointments}
                             selectedDate={selectedDate}
                             onDateSelect={(day) => setSelectedDate(day || new Date())}
                             currentMonth={currentMonth}
@@ -98,11 +137,21 @@ export default function AppointmentsPage() {
                     </div>
 
                     <div className="space-y-4">
-                        <div className="p-3 bg-card border rounded-lg space-y-2">
-                            <h3 className="font-semibold text-sm text-muted-foreground">Key</h3>
-                            <div className="flex items-center gap-2 text-sm"><div className="w-3 h-3 rounded-full bg-green-400 border"></div> Job / Appointment</div>
-                            <div className="flex items-center gap-2 text-sm"><div className="w-3 h-3 rounded-full bg-blue-400 border"></div> Personal Event</div>
-                            <div className="flex items-center gap-2 text-sm"><div className="w-3 h-3 rounded-full bg-yellow-400 border"></div> Billing Reminder</div>
+                        <div className="p-3 bg-card border rounded-lg">
+                            <button 
+                                className="w-full flex justify-between items-center"
+                                onClick={() => setIsKeyOpen(!isKeyOpen)}
+                            >
+                                <h3 className="font-semibold text-sm text-muted-foreground">Key</h3>
+                                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isKeyOpen ? 'rotate-180' : ''}`} />
+                            </button>
+                            {isKeyOpen && (
+                                <div className="pt-2 space-y-2 animate-in fade-in-0">
+                                    <div className="flex items-center gap-2 text-sm"><div className="w-3 h-3 rounded-full bg-green-400 border"></div> Job / Appointment</div>
+                                    <div className="flex items-center gap-2 text-sm"><div className="w-3 h-3 rounded-full bg-blue-400 border"></div> Personal Event</div>
+                                    <div className="flex items-center gap-2 text-sm"><div className="w-3 h-3 rounded-full bg-yellow-400 border"></div> Billing Reminder</div>
+                                </div>
+                            )}
                         </div>
 
                         <h2 className="text-xl font-semibold border-b pb-2">

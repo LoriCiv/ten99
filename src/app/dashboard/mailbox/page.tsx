@@ -1,13 +1,11 @@
-// src/app/dashboard/mailbox/page.tsx
 "use client";
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-// ✅ THE FIX: Removed all unused icons from this line
-import { Pencil } from 'lucide-react';
+// ✅ Import Search icon
+import { Pencil, ArrowLeft, Trash2, Search } from 'lucide-react';
 import type { Message } from '@/types/app-interfaces';
-// ✅ THE FIX: Removed unused 'getTemplates'
-import { getMessagesForUser, getSentMessagesForUser, sendAppMessage, updateMessage, approveMessageAndCreateAppointment } from '@/utils/firestoreService';
+import { getMessagesForUser, getSentMessagesForUser, sendAppMessage, updateMessage, approveMessageAndCreateAppointment, deleteMessage } from '@/utils/firestoreService';
 import ComposeMessageForm from '@/components/ComposeMessageForm';
 
 const TEMP_USER_ID = "dev-user-1";
@@ -19,6 +17,8 @@ function MailboxPageInternal() {
     const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
     const [isComposing, setIsComposing] = useState(false);
     const [activeFolder, setActiveFolder] = useState<'inbox' | 'sent'>('inbox');
+    // ✅ State for the search term
+    const [searchTerm, setSearchTerm] = useState('');
     
     const initialRecipient = searchParams.get('to');
 
@@ -36,6 +36,19 @@ function MailboxPageInternal() {
         setSelectedMessage(null);
         return () => unsub();
     }, [activeFolder]);
+
+    // ✅ Filter messages based on search term
+    const filteredMessages = useMemo(() => {
+        if (!searchTerm) {
+            return messages;
+        }
+        const lowercasedTerm = searchTerm.toLowerCase();
+        return messages.filter(message => 
+            message.senderName.toLowerCase().includes(lowercasedTerm) ||
+            message.subject.toLowerCase().includes(lowercasedTerm) ||
+            message.body.toLowerCase().includes(lowercasedTerm)
+        );
+    }, [messages, searchTerm]);
 
     const handleSelectMessage = (message: Message) => {
         setSelectedMessage(message);
@@ -69,7 +82,6 @@ function MailboxPageInternal() {
         try {
             await approveMessageAndCreateAppointment(TEMP_USER_ID, selectedMessage);
             alert("Appointment created successfully!");
-            // After approving, deselect the message
             setSelectedMessage(null);
         } catch (error) {
             console.error("Error approving message:", error);
@@ -77,9 +89,23 @@ function MailboxPageInternal() {
         }
     };
 
+    const handleDelete = async () => {
+        if (!selectedMessage || !selectedMessage.id) return;
+        if (window.confirm("Are you sure you want to permanently delete this message?")) {
+            try {
+                await deleteMessage(TEMP_USER_ID, selectedMessage.id);
+                alert("Message deleted.");
+                setSelectedMessage(null);
+            } catch (error) {
+                console.error("Error deleting message:", error);
+                alert("Failed to delete message.");
+            }
+        }
+    };
+
     return (
         <div className="flex h-[calc(100vh-8rem)] bg-card border rounded-lg overflow-hidden">
-            <div className="w-1/3 border-r border-border flex flex-col">
+            <div className={`w-full md:w-1/3 border-r border-border flex-col ${selectedMessage || isComposing ? 'hidden' : 'flex'} md:flex`}>
                 <div className="p-4 border-b flex justify-between items-center">
                     <div className="flex gap-2">
                         <button onClick={() => setActiveFolder('inbox')} className={`px-3 py-1 text-sm font-semibold rounded-md ${activeFolder === 'inbox' ? 'bg-secondary' : 'hover:bg-muted'}`}>Inbox</button>
@@ -87,8 +113,24 @@ function MailboxPageInternal() {
                     </div>
                     <button onClick={handleCompose} className="p-2 rounded-full hover:bg-muted"><Pencil size={18} /></button>
                 </div>
+
+                {/* ✅ Search input for the message list */}
+                <div className="p-2 border-b">
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <input
+                            type="text"
+                            placeholder="Search mail..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full pl-9 p-2 text-sm border rounded-md bg-background"
+                        />
+                    </div>
+                </div>
+
                 <ul className="overflow-y-auto">
-                    {messages.map(message => (
+                    {/* ✅ Use the filteredMessages array for rendering */}
+                    {filteredMessages.map(message => (
                         <li key={message.id} onClick={() => handleSelectMessage(message)} className={`p-4 border-b cursor-pointer ${selectedMessage?.id === message.id ? 'bg-primary/5' : 'hover:bg-muted'}`}>
                             <p className={`font-semibold ${!message.isRead && activeFolder === 'inbox' ? 'text-primary' : ''}`}>{message.senderName}</p>
                             <p className="text-sm truncate">{message.subject}</p>
@@ -96,28 +138,39 @@ function MailboxPageInternal() {
                     ))}
                 </ul>
             </div>
-            <div className="w-2/3 p-6 overflow-y-auto">
+            
+            <div className={`w-full md:w-2/3 p-6 overflow-y-auto ${!selectedMessage && !isComposing ? 'hidden' : 'block'} md:block`}>
                  {isComposing ? (
-                     <ComposeMessageForm onSend={handleSend} onClose={() => setIsComposing(false)} initialRecipient={initialRecipient || ''} />
+                      <ComposeMessageForm onSend={handleSend} onClose={() => setIsComposing(false)} initialRecipient={initialRecipient || ''} />
                  ) : selectedMessage ? (
-                     <div>
-                         <h2 className="text-2xl font-bold mb-2">{selectedMessage.subject}</h2>
-                         <p className="text-sm text-muted-foreground">From: {selectedMessage.senderName} &lt;{selectedMessage.senderId}&gt;</p>
-                         <div className="mt-6 prose prose-sm max-w-none whitespace-pre-wrap">{selectedMessage.body}</div>
-                         
-                         {activeFolder === 'inbox' && selectedMessage.status === 'new' && (
-                            <div className="mt-8 pt-6 border-t space-y-4">
-                                <h3 className="font-semibold">Actions</h3>
-                                <div className="flex gap-2">
-                                    <button onClick={handleApprove} className="flex items-center gap-2 bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700">
-                                        Approve & Create Appointment
-                                    </button>
-                                </div>
-                            </div>
-                         )}
-                     </div>
+                      <div>
+                          <div className="flex justify-between items-start">
+                              <button onClick={() => setSelectedMessage(null)} className="md:hidden mb-4 flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-primary">
+                                  <ArrowLeft size={16} />
+                                  Back to {activeFolder === 'inbox' ? 'Inbox' : 'Sent'}
+                              </button>
+                              <button onClick={handleDelete} className="p-2 text-muted-foreground hover:text-destructive rounded-full hover:bg-muted ml-auto">
+                                <Trash2 size={18} />
+                                <span className="sr-only">Delete message</span>
+                              </button>
+                          </div>
+                          <h2 className="text-2xl font-bold mb-2">{selectedMessage.subject}</h2>
+                          <p className="text-sm text-muted-foreground">From: {selectedMessage.senderName} &lt;{selectedMessage.senderId}&gt;</p>
+                          <div className="mt-6 prose prose-sm max-w-none whitespace-pre-wrap">{selectedMessage.body}</div>
+                          
+                          {activeFolder === 'inbox' && selectedMessage.status === 'new' && (
+                              <div className="mt-8 pt-6 border-t space-y-4">
+                                  <h3 className="font-semibold">Actions</h3>
+                                  <div className="flex gap-2">
+                                      <button onClick={handleApprove} className="flex items-center gap-2 bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700">
+                                          Approve & Create Appointment
+                                      </button>
+                                  </div>
+                              </div>
+                          )}
+                      </div>
                  ) : (
-                     <div className="flex items-center justify-center h-full"><p className="text-muted-foreground">Select a message to read.</p></div>
+                      <div className="hidden md:flex items-center justify-center h-full"><p className="text-muted-foreground">Select a message to read.</p></div>
                  )}
             </div>
         </div>

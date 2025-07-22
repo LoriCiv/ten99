@@ -1,4 +1,3 @@
-// src/app/dashboard/invoices/page.tsx
 "use client";
 
 import { useState, useEffect, useMemo, Suspense } from 'react';
@@ -32,7 +31,6 @@ const SortButton = ({ active, direction, onClick, children }: { active: boolean,
     </button>
 );
 
-
 function InvoicesPageInternal() {
     const searchParams = useSearchParams();
     const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -40,8 +38,6 @@ function InvoicesPageInternal() {
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
-    
-    // ✅ 1. ADD STATE FOR NEW FILTERS
     const [statusFilter, setStatusFilter] = useState('all');
     const [clientFilter, setClientFilter] = useState('all');
     const [sortConfig, setSortConfig] = useState<{ key: keyof Invoice; direction: 'ascending' | 'descending' }>({ key: 'invoiceDate', direction: 'descending' });
@@ -66,25 +62,19 @@ function InvoicesPageInternal() {
         };
     }, [initialFilter]);
 
-    // ✅ 2. UPDATE MEMO TO HANDLE SORTING AND FILTERING
     const processedInvoices = useMemo(() => {
         let filteredInvoices = [...invoices];
 
-        // Apply status filter
         if (statusFilter !== 'all') {
             filteredInvoices = filteredInvoices.filter(inv => inv.status === statusFilter);
         }
-
-        // Apply client filter
         if (clientFilter !== 'all') {
             filteredInvoices = filteredInvoices.filter(inv => inv.clientId === clientFilter);
         }
         
-        // Apply sorting
         filteredInvoices.sort((a, b) => {
-            const aValue = a[sortConfig.key] || 0; // Fallback for safety
-            const bValue = b[sortConfig.key] || 0; // Fallback for safety
-
+            const aValue = a[sortConfig.key] || 0;
+            const bValue = b[sortConfig.key] || 0;
             let comparison = 0;
             if (aValue > bValue) {
                 comparison = 1;
@@ -112,14 +102,19 @@ function InvoicesPageInternal() {
     return (
         <>
             <div className="p-4 sm:p-6 lg:p-8">
-                <header className="flex justify-between items-center mb-6">
-                    <h1 className="text-3xl font-bold text-foreground">Invoices</h1>
-                    <Link href="/dashboard/invoices/new" className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90">
-                        <PlusCircle size={20} /> New Invoice
-                    </Link>
+                {/* ✅ STANDARDIZED HEADER LAYOUT */}
+                <header className="mb-6">
+                    <div>
+                        <h1 className="text-3xl font-bold text-foreground">Invoices</h1>
+                        <p className="text-muted-foreground mt-1">Track your billing and get paid.</p>
+                    </div>
+                    <div className="mt-4 flex justify-end">
+                        <Link href="/dashboard/invoices/new" className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90">
+                            <PlusCircle size={20} /> New Invoice
+                        </Link>
+                    </div>
                 </header>
 
-                {/* ✅ 3. ADD THE NEW FILTERING AND SORTING UI */}
                 <div className="bg-card border rounded-lg p-4 mb-6 flex flex-wrap gap-4 items-end">
                     <div className="flex-1 min-w-[150px]">
                         <label className="text-sm font-medium text-muted-foreground">Filter by Status</label>
@@ -145,7 +140,6 @@ function InvoicesPageInternal() {
                         <SortButton active={sortConfig.key === 'total'} direction={sortConfig.direction} onClick={() => handleSort('total')}>Amount</SortButton>
                     </div>
                 </div>
-
 
                 <div className="space-y-3">
                     {processedInvoices.length > 0 ? (

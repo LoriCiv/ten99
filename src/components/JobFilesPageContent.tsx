@@ -1,7 +1,6 @@
-// src/components/JobFilesPageContent.tsx
 "use client";
 
-import { useState, useMemo } from 'react'; // ✅ THE FIX: Removed unused 'useEffect'
+import { useState, useMemo } from 'react';
 import type { JobFile, Client } from '@/types/app-interfaces';
 import Link from 'next/link';
 import { FilePlus, Search, X, CalendarDays, Tag, Clock, CheckCircle, Star, Pin, PinOff } from 'lucide-react';
@@ -104,11 +103,17 @@ export default function JobFilesPageContent({
 
     return (
         <div className="p-4 sm:p-6 lg:p-8">
-            <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-                <h1 className="text-3xl font-bold text-foreground">Job Files</h1>
-                <Link href={`/dashboard/job-files/new?clientId=${clientFilter}`} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90 transition-colors">
-                    <FilePlus size={20}/> New Job File
-                </Link>
+            {/* ✅ STANDARDIZED HEADER LAYOUT */}
+            <header className="mb-6">
+                <div>
+                    <h1 className="text-3xl font-bold text-foreground">Job Files</h1>
+                    <p className="text-muted-foreground mt-1">Organize all your project-related documents and notes.</p>
+                </div>
+                <div className="mt-4 flex justify-end">
+                    <Link href={`/dashboard/job-files/new?clientId=${clientFilter}`} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90 transition-colors">
+                        <FilePlus size={20}/> New Job File
+                    </Link>
+                </div>
             </header>
             
             <div className="mb-6 p-4 bg-card border rounded-lg">
