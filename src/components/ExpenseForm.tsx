@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Expense, Client, UserProfile } from '@/types/app-interfaces';
 import { uploadFile } from '@/utils/firestoreService';
-import { Loader2, Save, Paperclip, Sparkles } from 'lucide-react';
+import { Loader2, Save, Paperclip } from 'lucide-react';
 
 interface ExpenseFormProps {
     onSave: (data: Partial<Expense>) => Promise<void>;
@@ -106,7 +106,7 @@ export default function ExpenseForm({ onSave, onCancel, clients, initialData = {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        let finalData = { ...formData };
+        const finalData = { ...formData };
         if (selectedFile) {
             try {
                 const receiptUrl = await uploadFile(userId, selectedFile);
