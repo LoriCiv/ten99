@@ -1,4 +1,3 @@
-// src/app/dashboard/my-money/page.tsx
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
@@ -162,7 +161,7 @@ export default function MyMoneyPage() {
                              <div className="space-y-4">
                                  <div>
                                      <label className="block text-sm font-medium">Override Expenses (for estimation)</label>
-                                     <input type="number" value={manualYtdExpenses} onChange={(e) => setManualYtdExpenses(e.target.value === '' ? '' : Number(e.target.value))} className="w-full mt-1 p-2 bg-background border rounded-md" placeholder={`Auto-calculated: $${stats.ytdExpenses.toFixed(2)}`} />
+                                     <input type="number" value={manualYtdExpenses} onChange={(e) => setManualYtdExpenses(e.target.value === '' ? '' : Number(e.target.value))} className="w-full mt-1 p-2 bg-background border rounded-md" placeholder={`Auto-calculated: $${(stats.ytdExpenses || 0).toFixed(2)}`} />
                                  </div>
                                  <div>
                                      <label className="block text-sm font-medium">Your State Tax Rate (%)</label>

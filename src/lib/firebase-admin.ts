@@ -1,9 +1,8 @@
 // src/lib/firebase-admin.ts
 import admin from 'firebase-admin';
-import { getApps, getApp } from 'firebase-admin/app';
+import { getApps } from 'firebase-admin/app';
 
 // This version reads from environment variables, NOT the JSON file.
-// It is safe for both local development and Vercel deployment.
 if (!getApps().length) {
     try {
         admin.initializeApp({
@@ -19,10 +18,8 @@ if (!getApps().length) {
     }
 }
 
-// Export the initialized services
-const app = getApp();
-const db = admin.firestore(app);
-const auth = admin.auth(app);
-const storage = admin.storage(app);
+const db = admin.firestore();
+const auth = admin.auth();
+const storage = admin.storage();
 
 export { db, auth, storage };

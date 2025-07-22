@@ -1,7 +1,6 @@
-// src/components/ExpenseForm.tsx
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { Expense, Client, UserProfile } from '@/types/app-interfaces';
 import { uploadFile } from '@/utils/firestoreService';
 import { Loader2, Save, Paperclip, Sparkles } from 'lucide-react';
@@ -31,29 +30,7 @@ export default function ExpenseForm({ onSave, onCancel, clients, initialData = {
     const [isParsing, setIsParsing] = useState(false);
     const [aiMessage, setAiMessage] = useState('');
 
-    useEffect(() => {
-        setFormData({
-            date: new Date().toISOString().split('T')[0],
-            category: userProfile?.expenseCategories?.[0]?.toLowerCase().replace(/\s/g, '_') || 'other',
-            ...initialData,
-        });
-        setSelectedFile(null);
-        setAiMessage('');
-    }, [initialData, userProfile]);
-
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({...prev, [name]: value}));
-    };
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            setSelectedFile(e.target.files[0]);
-            setAiMessage('');
-        }
-    };
-
-    const handleParseReceipt = async () => {
+    const handleParseReceipt = useCallback(async () => {
         if (!selectedFile) return;
         
         setIsParsing(true);
@@ -97,14 +74,35 @@ export default function ExpenseForm({ onSave, onCancel, clients, initialData = {
         } finally {
             setIsParsing(false);
         }
-    };
+    }, [selectedFile]);
 
-    // This useEffect hook now automatically runs the AI parser when a file is selected.
+    useEffect(() => {
+        setFormData({
+            date: new Date().toISOString().split('T')[0],
+            category: userProfile?.expenseCategories?.[0]?.toLowerCase().replace(/\s/g, '_') || 'other',
+            ...initialData,
+        });
+        setSelectedFile(null);
+        setAiMessage('');
+    }, [initialData, userProfile]);
+
     useEffect(() => {
         if (selectedFile) {
             handleParseReceipt();
         }
-    }, [selectedFile]);
+    }, [selectedFile, handleParseReceipt]);
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({...prev, [name]: value}));
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            setSelectedFile(e.target.files[0]);
+            setAiMessage('');
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

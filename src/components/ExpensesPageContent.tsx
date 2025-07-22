@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import type { Expense, Client, UserProfile } from '@/types/app-interfaces';
+import type { Expense, Client, UserProfile, Certification, CEU } from '@/types/app-interfaces';
 import { deleteExpense, addExpense, updateExpense } from '@/utils/firestoreService';
 import { PlusCircle, Award } from 'lucide-react';
 import ExpenseModal from '@/components/ExpenseModal';
@@ -13,14 +13,25 @@ interface ExpensesPageContentProps {
     initialExpenses: Expense[];
     initialClients: Client[];
     initialProfile: UserProfile | null;
+    initialCerts: Certification[];
+    initialCeus: CEU[];
     userId: string;
 }
 
-export default function ExpensesPageContent({ initialExpenses, initialClients, initialProfile, userId }: ExpensesPageContentProps) {
+export default function ExpensesPageContent({ 
+    initialExpenses, 
+    initialClients, 
+    initialProfile,
+    initialCerts,
+    initialCeus,
+    userId 
+}: ExpensesPageContentProps) {
     const router = useRouter();
     const [expenses, setExpenses] = useState(initialExpenses);
     const [clients] = useState(initialClients);
     const [userProfile] = useState(initialProfile);
+    const [certifications] = useState(initialCerts);
+    const [allCeus] = useState(initialCeus);
 
     const [isFormModalOpen, setIsFormModalOpen] = useState(false);
     const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
@@ -34,7 +45,29 @@ export default function ExpensesPageContent({ initialExpenses, initialClients, i
     }, [initialExpenses]);
 
     const filteredAndSortedExpenses = useMemo(() => {
-        return [...expenses]
+        const certExpenses: Expense[] = (certifications || [])
+            .filter(cert => cert.renewalCost && cert.renewalCost > 0)
+            .map(cert => ({
+                id: `cert-${cert.id}`,
+                description: `Renewal for ${cert.name}`,
+                amount: cert.renewalCost!,
+                date: cert.issueDate || new Date().toISOString().split('T')[0],
+                category: 'professional_development',
+                isReadOnly: true,
+            }));
+
+        const ceuExpenses: Expense[] = (allCeus || [])
+            .filter(ceu => ceu.cost && ceu.cost > 0)
+            .map(ceu => ({
+                id: `ceu-${ceu.id}`,
+                description: `CEU: ${ceu.activityName}`,
+                amount: ceu.cost!,
+                date: ceu.dateCompleted,
+                category: 'professional_development',
+                isReadOnly: true,
+            }));
+            
+        return [...expenses, ...certExpenses, ...ceuExpenses]
             .filter(expense => {
                 const categoryMatch = categoryFilter === 'all' || expense.category === categoryFilter;
                 const clientMatch = clientFilter === 'all' || !expense.isReadOnly && expense.clientId === clientFilter;
@@ -53,7 +86,8 @@ export default function ExpensesPageContent({ initialExpenses, initialClients, i
                         return new Date(b.date).getTime() - new Date(a.date).getTime();
                 }
             });
-    }, [expenses, categoryFilter, clientFilter, sortOrder]);
+    }, [expenses, certifications, allCeus, categoryFilter, clientFilter, sortOrder]);
+
 
     const handleOpenFormModal = (expense?: Expense) => {
         if (expense?.isReadOnly) return;
@@ -70,11 +104,10 @@ export default function ExpensesPageContent({ initialExpenses, initialClients, i
         try {
             if (selectedExpense?.id && !selectedExpense.id.startsWith('cert-') && !selectedExpense.id.startsWith('ceu-')) {
                 await updateExpense(userId, selectedExpense.id, data);
-                alert("Expense updated!");
             } else {
                 await addExpense(userId, data);
-                alert("Expense added!");
             }
+            alert("Expense saved!");
             handleCloseFormModal();
             router.refresh();
         } catch (error) {
