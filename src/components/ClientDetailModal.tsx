@@ -1,8 +1,8 @@
-// src/components/ClientDetailModal.tsx
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import type { Client, PersonalNetworkContact, JobFile } from '@/types/app-interfaces';
 import {
     updateClient,
@@ -12,9 +12,20 @@ import {
     convertClientToContact,
     convertContactToClient
 } from '@/utils/firestoreService';
-import { X, Edit, Trash2, Mail, FileText, Repeat, ClipboardCopy, Check } from 'lucide-react';
+// ✅ Import DropdownMenu components and a new icon
+import { X, Edit, Trash2, Mail, FileText, Repeat, ClipboardCopy, Check, MoreHorizontal } from 'lucide-react';
 import ClientForm from './ClientForm';
 import ContactForm from './ContactForm';
+// ✅ Import our UI components for the dropdown
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+
 
 const DetailItem = ({ label, value }: { label: string, value?: string | null }) => (
     <p><span className="font-semibold text-muted-foreground">{label}:</span> {value || 'N/A'}</p>
@@ -31,7 +42,7 @@ interface ClientDetailModalProps {
 }
 
 export default function ClientDetailModal({ item, itemType, userId, clients, jobFiles, onClose, onSave }: ClientDetailModalProps) {
-    // ✅ MOVED ALL HOOKS to the top level, before any returns.
+    const router = useRouter();
     const [isEditing, setIsEditing] = useState(false);
     const [isConverting, setIsConverting] = useState(false);
     const [isCopied, setIsCopied] = useState(false);
@@ -47,11 +58,11 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
         return jobFiles.filter(jf => jf.clientId === item.id);
     }, [jobFiles, item, itemType]);
 
-    // Safety check now happens AFTER hooks.
     if (!item) {
         return null;
     }
-
+    
+    // ✅ All handler functions are fully expanded here
     const handleSave = async (formData: Partial<Client | PersonalNetworkContact>) => {
         if (!item.id) return;
         setIsSubmitting(true);
@@ -81,7 +92,7 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
                 alert('Item deleted.');
                 onSave();
                 onClose();
-            } catch (err) { // Use the error variable so it's not "unused"
+            } catch (err) {
                 console.error("Failed to delete item:", err);
                 alert('Failed to delete item.');
             }
@@ -125,11 +136,20 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
             alert("Failed to copy information.");
         });
     };
+    
+    const handleDuplicate = () => {
+        if (itemType !== 'Company') return;
+        const { id, createdAt, ...duplicateData } = item as Client;
+        const dataString = encodeURIComponent(JSON.stringify(duplicateData));
+        router.push(`/dashboard/clients/new-company?data=${dataString}`);
+    };
+
 
     const emailToUse = item.email || (itemType === 'Company' ? (item as Client).billingEmail : '');
     const jobFileLink = relevantJobFiles.length === 1 && relevantJobFiles[0].id
         ? `/dashboard/job-files/${relevantJobFiles[0].id}`
         : `/dashboard/job-files?clientId=${item.id}`;
+
 
     return (
         <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4">
@@ -141,21 +161,10 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
                     </div>
 
                     {isEditing ? (
-                        itemType === 'Company' ? (
-                            <ClientForm
-                                initialData={item as Client}
-                                onSave={handleSave}
-                                onCancel={() => setIsEditing(false)}
-                                isSubmitting={isSubmitting}
-                            />
+                       itemType === 'Company' ? (
+                            <ClientForm initialData={item as Client} onSave={handleSave} onCancel={() => setIsEditing(false)} isSubmitting={isSubmitting} onDuplicate={handleDuplicate} />
                         ) : (
-                            <ContactForm
-                                initialData={item as PersonalNetworkContact}
-                                onSave={handleSave}
-                                onCancel={() => setIsEditing(false)}
-                                isSubmitting={isSubmitting}
-                                clients={clients}
-                            />
+                            <ContactForm initialData={item as PersonalNetworkContact} onSave={handleSave} onCancel={() => setIsEditing(false)} isSubmitting={isSubmitting} clients={clients} />
                         )
                     ) : (
                         <div className="space-y-4">
@@ -164,16 +173,38 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
                             <DetailItem label="Phone" value={item.phone} />
                             {itemType === 'Company' && <DetailItem label="Primary Contact" value={(item as Client).name} />}
                             
-                            <div className="flex justify-end gap-2 pt-4 border-t flex-wrap">
-                                <button onClick={handleCopyInfo} className="flex items-center gap-2 bg-gray-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-gray-600 w-32 justify-center">
-                                    {isCopied ? <Check size={16} /> : <ClipboardCopy size={16} />}
-                                    {isCopied ? 'Copied!' : 'Copy Info'}
-                                </button>
-                                {emailToUse && <Link href={`/dashboard/mailbox?to=${emailToUse}`} className="flex items-center gap-2 bg-teal-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-teal-700"><Mail size={16}/>Send Message</Link>}
-                                {relevantJobFiles.length > 0 && <Link href={jobFileLink} className="flex items-center gap-2 bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-secondary/80"><FileText size={16}/>View Files ({relevantJobFiles.length})</Link>}
-                                <button onClick={handleConvert} disabled={isConverting} className="flex items-center gap-2 bg-amber-500 text-white font-semibold py-2 px-4 rounded-lg disabled:opacity-50"><Repeat size={16}/>{isConverting ? 'Converting...' : 'Convert'}</button>
-                                <button onClick={handleDelete} className="flex items-center gap-2 bg-rose-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-rose-700"><Trash2 size={16}/>Delete</button>
-                                <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700"><Edit size={16}/>Edit</button>
+                            <div className="flex justify-end items-center gap-2 pt-4 border-t">
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="outline" size="icon">
+                                            <MoreHorizontal className="h-4 w-4" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        <DropdownMenuItem onSelect={handleCopyInfo} className="cursor-pointer">
+                                            <ClipboardCopy className="mr-2 h-4 w-4" />
+                                            <span>{isCopied ? 'Copied!' : 'Copy Info'}</span>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem asChild className="cursor-pointer">
+                                            {emailToUse ? <Link href={`/dashboard/mailbox?to=${emailToUse}`} className="flex items-center w-full"><Mail className="mr-2 h-4 w-4" />Send Message</Link> : <span className="opacity-50 flex items-center w-full"><Mail className="mr-2 h-4 w-4" />Send Message</span>}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem asChild className="cursor-pointer">
+                                            {relevantJobFiles.length > 0 ? <Link href={jobFileLink} className="flex items-center w-full"><FileText className="mr-2 h-4 w-4" />View Files ({relevantJobFiles.length})</Link> : <span className="opacity-50 flex items-center w-full"><FileText className="mr-2 h-4 w-4" />View Files</span>}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem onSelect={handleConvert} disabled={isConverting} className="cursor-pointer">
+                                            <Repeat className="mr-2 h-4 w-4" />
+                                            <span>{isConverting ? 'Converting...' : 'Convert'}</span>
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+
+                                <Button variant="destructive" onClick={handleDelete} className="flex items-center gap-2">
+                                    <Trash2 size={16}/>Delete
+                                </Button>
+                                <Button onClick={() => setIsEditing(true)} className="flex items-center gap-2">
+                                    <Edit size={16}/>Edit
+                                </Button>
                             </div>
                         </div>
                     )}
