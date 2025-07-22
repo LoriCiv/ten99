@@ -1,3 +1,4 @@
+// src/app/dashboard/my-money/page.tsx
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
@@ -10,6 +11,7 @@ import Link from 'next/link';
 import { DollarSign, FileText, Landmark, Save, Loader2, ArrowRight, Award, Zap } from 'lucide-react';
 import InvoiceDetailModal from '@/components/InvoiceDetailModal';
 import ExpenseForm from '@/components/ExpenseForm';
+// ✅ THE FIX: Changed to a default import to match the ExpensePieChart file
 import ExpensePieChart from '@/components/ExpensePieChart';
 
 const TEMP_USER_ID = "dev-user-1";
