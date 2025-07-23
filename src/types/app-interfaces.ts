@@ -40,7 +40,8 @@ export interface Appointment {
     createdAt?: Timestamp | FieldValue;
     eventType: 'job' | 'personal' | 'billing';
     subject: string;
-    status: 'pending' | 'scheduled' | 'completed' | 'canceled' | 'canceled-billable';
+    // ✅ ADDED 'pending-confirmation' status
+    status: 'pending' | 'scheduled' | 'completed' | 'canceled' | 'canceled-billable' | 'pending-confirmation';
     date: string;
     time: string;
     endTime?: string;
@@ -75,8 +76,8 @@ export interface JobFile {
     tags?: string[];
     startDate?: string;
     endDate?: string;
-    isPinned?: boolean; // Kept for backwards compatibility
-    priority?: number;  // ✅ NEW: 0 = None, 1 = Medium, 2 = High
+    isPinned?: boolean;
+    priority?: number; 
 }
 
 export interface Certification {
@@ -219,6 +220,7 @@ export interface UserProfile {
     email?: string;
     expenseCategories?: string[];
     invoiceLineItems?: InvoiceLineItemTemplate[];
+    sendOverdueReminders?: boolean; 
 }
 
 export interface JobPosting {

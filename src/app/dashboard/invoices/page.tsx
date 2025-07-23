@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import type { Invoice, Client, UserProfile } from '@/types/app-interfaces';
-import { getInvoices, getClients, getUserProfile } from '@/utils/firestoreService';
+import type { Invoice, Client, UserProfile, Appointment } from '@/types/app-interfaces';
+import { getInvoices, getClients, getUserProfile, getAppointments } from '@/utils/firestoreService';
 import Link from 'next/link';
 import { PlusCircle, ArrowUpDown } from 'lucide-react';
 import InvoiceDetailModal from '@/components/InvoiceDetailModal';
@@ -18,6 +18,8 @@ const getStatusStyles = (status: Invoice['status']) => {
             return { borderColor: 'border-l-rose-500', bgColor: 'bg-rose-500/5', textColor: 'text-rose-600' };
         case 'sent':
             return { borderColor: 'border-l-sky-500', bgColor: 'bg-sky-500/5', textColor: 'text-sky-600' };
+        // ✅ FIX: Added a case for the 'void' status
+        case 'void':
         case 'draft':
         default:
             return { borderColor: 'border-l-slate-400', bgColor: 'bg-slate-500/5', textColor: 'text-slate-500' };
@@ -35,6 +37,7 @@ function InvoicesPageInternal() {
     const searchParams = useSearchParams();
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
+    const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
@@ -50,6 +53,7 @@ function InvoicesPageInternal() {
         }
         const unsubInvoices = getInvoices(TEMP_USER_ID, setInvoices);
         const unsubClients = getClients(TEMP_USER_ID, setClients);
+        const unsubAppointments = getAppointments(TEMP_USER_ID, setAppointments);
         const unsubProfile = getUserProfile(TEMP_USER_ID, (profile) => {
             setUserProfile(profile);
             setIsLoading(false);
@@ -58,33 +62,26 @@ function InvoicesPageInternal() {
         return () => {
             unsubInvoices();
             unsubClients();
+            unsubAppointments();
             unsubProfile();
         };
     }, [initialFilter]);
 
     const processedInvoices = useMemo(() => {
-        let filteredInvoices = [...invoices];
-
-        if (statusFilter !== 'all') {
-            filteredInvoices = filteredInvoices.filter(inv => inv.status === statusFilter);
-        }
-        if (clientFilter !== 'all') {
-            filteredInvoices = filteredInvoices.filter(inv => inv.clientId === clientFilter);
-        }
-        
-        filteredInvoices.sort((a, b) => {
-            const aValue = a[sortConfig.key] || 0;
-            const bValue = b[sortConfig.key] || 0;
-            let comparison = 0;
-            if (aValue > bValue) {
-                comparison = 1;
-            } else if (aValue < bValue) {
-                comparison = -1;
-            }
-            return sortConfig.direction === 'ascending' ? comparison : -comparison;
-        });
-        
-        return filteredInvoices;
+        return invoices
+            .filter(inv => statusFilter === 'all' || inv.status === statusFilter)
+            .filter(inv => clientFilter === 'all' || inv.clientId === clientFilter)
+            .sort((a, b) => {
+                const aValue = a[sortConfig.key] || 0;
+                const bValue = b[sortConfig.key] || 0;
+                let comparison = 0;
+                if (aValue > bValue) {
+                    comparison = 1;
+                } else if (aValue < bValue) {
+                    comparison = -1;
+                }
+                return sortConfig.direction === 'ascending' ? comparison : -comparison;
+            });
     }, [invoices, statusFilter, clientFilter, sortConfig]);
     
     const handleSort = (key: keyof Invoice) => {
@@ -101,8 +98,7 @@ function InvoicesPageInternal() {
 
     return (
         <>
-            <div className="p-4 sm:p-6 lg:p-8">
-                {/* ✅ STANDARDIZED HEADER LAYOUT */}
+            <div>
                 <header className="mb-6">
                     <div>
                         <h1 className="text-3xl font-bold text-foreground">Invoices</h1>
@@ -124,6 +120,7 @@ function InvoicesPageInternal() {
                             <option value="sent">Sent</option>
                             <option value="paid">Paid</option>
                             <option value="overdue">Overdue</option>
+                            <option value="void">Void</option>
                         </select>
                     </div>
                     <div className="flex-1 min-w-[150px]">
@@ -145,6 +142,7 @@ function InvoicesPageInternal() {
                     {processedInvoices.length > 0 ? (
                         processedInvoices.map(invoice => {
                             const client = clients.find(c => c.id === invoice.clientId);
+                            const appointment = appointments.find(appt => appt.id === invoice.appointmentId);
                             const { borderColor, bgColor, textColor } = getStatusStyles(invoice.status);
                             return (
                                 <div 
@@ -154,6 +152,9 @@ function InvoicesPageInternal() {
                                 >
                                     <div>
                                         <p className="font-bold">#{invoice.invoiceNumber} - {client?.name || 'N/A'}</p>
+                                        {appointment && (
+                                            <p className="text-sm text-muted-foreground">Service Date: {appointment.date}</p>
+                                        )}
                                         <p className="text-sm text-muted-foreground">Due: {invoice.dueDate}</p>
                                     </div>
                                     <div className="text-right">

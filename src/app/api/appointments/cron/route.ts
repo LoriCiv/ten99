@@ -1,37 +1,38 @@
 // src/app/api/appointments/cron/route.ts
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase-admin';
-import type { QueryDocumentSnapshot } from 'firebase-admin/firestore';
+import type { Appointment } from '@/types/app-interfaces';
 
-export async function GET() { // Remove unused 'request' parameter
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
+export async function GET() {
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Find all appointments across all users that are still 'scheduled' but their date is in the past
     const appointmentsRef = db.collectionGroup('appointments');
-    const q = appointmentsRef.where('status', 'in', ['scheduled', 'pending']);
+    const q = appointmentsRef.where('status', '==', 'scheduled').where('date', '<', today);
 
     try {
         const snapshot = await q.get();
         if (snapshot.empty) {
+            console.log("Appointment Cron: No appointments to update.");
             return NextResponse.json({ message: 'No appointments to update.' });
         }
 
         const batch = db.batch();
-        snapshot.forEach((doc: QueryDocumentSnapshot) => {
-            const appointment = doc.data();
-            const apptDate = new Date(appointment.date + 'T23:59:59');
+        let updatedCount = 0;
 
-            if (apptDate < today) {
-                const apptRef = doc.ref;
-                batch.update(apptRef, { status: 'completed' });
-            }
+        snapshot.docs.forEach(doc => {
+            const appointmentRef = doc.ref;
+            batch.update(appointmentRef, { status: 'completed' });
+            updatedCount++;
         });
 
         await batch.commit();
-        return NextResponse.json({ message: 'Past appointments updated to "completed".' });
+        const summary = `${updatedCount} appointments marked as 'completed'.`;
+        console.log(`Appointment Cron finished: ${summary}`);
+        return NextResponse.json({ message: summary });
 
     } catch (error) {
-        console.error("Cron job (appointments) failed:", error);
+        console.error("Appointment Cron job failed:", error);
         return NextResponse.json({ error: 'Failed to process appointments.' }, { status: 500 });
     }
 }

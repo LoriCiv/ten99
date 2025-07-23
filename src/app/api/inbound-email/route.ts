@@ -2,43 +2,51 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
-// ✅ Use the correct 'mailparser' library
-import { simpleParser } from 'mailparser';
 
 const findRecipientUserId = async (toEmail: string): Promise<string | null> => {
-    console.log(`Looking for user associated with: ${toEmail}`);
+    console.log(`[Step 1] Looking for user associated with: ${toEmail}`);
+    // For now, we are hardcoding this to our dev user.
     return "dev-user-1"; 
 };
 
+const parseFromHeader = (fromHeader: string): { name: string; email: string } => {
+    const match = fromHeader.match(/(.*)<(.*)>/);
+    if (match) {
+        return { name: match[1].trim(), email: match[2].trim() };
+    }
+    return { name: fromHeader, email: fromHeader };
+};
+
 export async function POST(request: Request) {
+    console.log("--- Inbound Email Function Triggered ---");
     try {
         const formData = await request.formData();
+        console.log("[Step 0] Received request from SendGrid.");
         
-        // --- SendGrid sends data in specific fields ---
         const from = formData.get('from') as string;
         const to = formData.get('to') as string;
         const subject = formData.get('subject') as string;
-        const body = formData.get('text') as string; // Plain text version of the body
-        const email = formData.get('email') as string; // The full raw email
+        const body = formData.get('text') as string;
         
-        if (!email) {
-            throw new Error("No raw email content found in webhook payload.");
+        console.log(`[Data Check] From: ${from}`);
+        console.log(`[Data Check] To: ${to}`);
+        console.log(`[Data Check] Subject: ${subject}`);
+        
+        if (!to || !from || !subject || !body) {
+            console.error("[ERROR] Webhook payload is missing one or more required fields.");
+            throw new Error("Webhook payload is missing required fields.");
         }
 
-        // Parse the 'to' address to find our target user
-        const parsedToHeader = await simpleParser(to);
-        const recipientEmail = parsedToHeader.to?.value[0]?.address || '';
-        const recipientId = await findRecipientUserId(recipientEmail);
+        const recipientId = await findRecipientUserId(to);
 
         if (!recipientId) {
-            console.log(`Recipient not found for email: ${recipientEmail}`);
+            console.warn(`[Step 2 - FAIL] Recipient not found for email: ${to}. Discarding email.`);
             return NextResponse.json({ message: 'Recipient not found, but acknowledged.' });
         }
+        console.log(`[Step 2 - SUCCESS] Found recipient user ID: ${recipientId}`);
         
-        // Parse the 'from' address to get sender details
-        const parsedFromHeader = await simpleParser(from);
-        const senderName = parsedFromHeader.from?.value[0]?.name || from;
-        const senderEmail = parsedFromHeader.from?.value[0]?.address || from;
+        const { name: senderName, email: senderEmail } = parseFromHeader(from);
+        console.log(`[Step 3] Parsed sender info: Name='${senderName}', Email='${senderEmail}'`);
 
         const newMessage = {
             senderName: senderName,
@@ -48,16 +56,18 @@ export async function POST(request: Request) {
             body: body,
             isRead: false,
             createdAt: FieldValue.serverTimestamp(),
-            status: 'new',
+            status: 'new' as const,
         };
 
-        await db.collection('users').doc(recipientId).collection('messages').add(newMessage);
-        
-        console.log(`Successfully processed inbound email from ${senderEmail} to ${recipientEmail}`);
-        return NextResponse.json({ message: 'Email processed successfully.' });
+        console.log("[Step 4] Preparing to save the following message object to Firestore:", newMessage);
+
+        const messageRef = await db.collection('users').doc(recipientId).collection('messages').add(newMessage);
+        console.log(`[Step 5 - SUCCESS] Successfully saved new message with ID: ${messageRef.id}`);
+
+        return NextResponse.json({ message: 'Email received and saved successfully.' });
 
     } catch (error) {
-        console.error("Inbound email processing error:", error);
+        console.error("[FATAL ERROR] Inbound email processing failed:", error);
         return NextResponse.json({ error: 'Failed to process email.' }, { status: 500 });
     }
 }

@@ -69,11 +69,8 @@ export default function DashboardLayout({
                     className="fixed inset-y-0 left-0 z-50 w-64 bg-card p-6 flex flex-col" 
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <div className="flex items-center justify-between mb-10">
-                        <Link href="/dashboard" className="flex items-center gap-2">
-                            <ThumbsUp className="h-8 w-8 text-primary" />
-                            <h1 className="text-2xl font-bold">Ten99</h1>
-                        </Link>
+                    {/* ✅ CHANGE 1: REMOVED the logo from the flyout, leaving only the close button */}
+                    <div className="flex items-center justify-end mb-10 h-8">
                         <button onClick={() => setIsMobileMenuOpen(false)} className="p-1">
                            <X className="h-6 w-6"/>
                         </button>
@@ -84,8 +81,8 @@ export default function DashboardLayout({
         )}
 
         <div className="flex flex-col flex-1">
-            {/* ✅ REMOVED the extra "Ten99" title from the mobile header */}
-            <header className="lg:hidden sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:h-auto sm:border-0 sm:bg-transparent sm:px-6 py-2">
+             {/* ✅ CHANGE 2: ADDED the logo link to the main mobile header */}
+            <header className="lg:hidden sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4">
                 <button 
                     onClick={() => setIsMobileMenuOpen(true)}
                     className="p-1"
@@ -93,9 +90,13 @@ export default function DashboardLayout({
                     <Menu className="h-6 w-6"/>
                     <span className="sr-only">Open Menu</span>
                 </button>
+                <Link href="/dashboard" className="flex items-center gap-2">
+                    <ThumbsUp className="h-6 w-6 text-primary" />
+                    <span className="font-bold">Ten99</span>
+                </Link>
             </header>
             
-            <main className="flex-1">
+            <main className="flex-1 p-4 sm:p-6 lg:p-8">
                 {children}
             </main>
         </div>

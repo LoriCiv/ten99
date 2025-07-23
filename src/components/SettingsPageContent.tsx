@@ -1,4 +1,3 @@
-// src/components/SettingsPageContent.tsx
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -7,7 +6,7 @@ import type { Template, UserProfile, InvoiceLineItemTemplate } from '@/types/app
 import { addTemplate, updateTemplate, deleteTemplate, updateUserProfile } from '@/utils/firestoreService';
 import TemplateFormModal from './TemplateFormModal';
 import ProfileForm from './ProfileForm';
-import { PlusCircle, Edit, Trash2, Save, Loader2, ArrowUp, ArrowDown } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Save, Loader2, ArrowUp, ArrowDown, Info } from 'lucide-react';
 
 const defaultTermsText = `This contract incorporates pre-negotiated terms and conditions governing the provision of interpretation services. Receipt of this invoice means these services have been completed, and you acknowledge your agreement to these terms and conditions without further negotiation. These terms are non-negotiable and supersede all prior or contemporaneous communications, representations, or agreements, whether oral or written.`;
 const defaultPaymentText = `Payment can be made via:\n- Venmo: @YourUsername\n- Zelle: your@email.com\n\nThank you for your business!`;
@@ -51,7 +50,6 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
         setDefaultTaxRate(initialProfile.defaultTaxRate || '');
     }, [initialTemplates, initialProfile]);
 
-    // --- TEMPLATE HANDLERS ---
     const handleOpenTemplateModal = (template: Partial<Template> | null) => { setEditingTemplate(template); setIsTemplateModalOpen(true); };
     const handleCloseTemplateModal = () => { setIsTemplateModalOpen(false); setEditingTemplate(null); };
     const handleSaveTemplate = async (data: Partial<Template>) => {
@@ -78,7 +76,6 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
         }
     };
     
-    // --- PROFILE HANDLER ---
     const handleSaveProfile = async (data: Partial<UserProfile>) => {
         setIsSubmitting(true);
         try {
@@ -93,7 +90,6 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
         }
     };
 
-    // --- EXPENSE CATEGORY HANDLERS ---
     const handleAddCategory = () => {
         const trimmedCategory = newCategory.trim();
         if (trimmedCategory && !expenseCategories.find(c => c.toLowerCase() === trimmedCategory.toLowerCase())) {
@@ -129,7 +125,6 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
         }
     };
 
-    // --- INVOICE SETTINGS HANDLERS ---
     const handleAddLineItem = () => {
         if (newItemDesc.trim() && newItemPrice !== '') {
             const newItem: InvoiceLineItemTemplate = {
@@ -159,7 +154,8 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
                 defaultInvoiceNotes: invoiceNotes,
                 defaultPaymentDetails: paymentDetails,
                 invoiceLineItems: lineItems,
-                defaultTaxRate: Number(defaultTaxRate) || 0
+                defaultTaxRate: Number(defaultTaxRate) || 0,
+                sendOverdueReminders: profile.sendOverdueReminders || false
             });
             alert("Invoice settings saved!");
             router.refresh();
@@ -173,7 +169,7 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
 
     return (
         <>
-            <div className="p-4 sm:p-6 lg:p-8">
+            <div>
                 <header className="mb-6"><h1 className="text-3xl font-bold text-foreground">Settings</h1></header>
 
                 <div className="border-b border-border">
@@ -255,9 +251,42 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
                             </div>
                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-muted-foreground">Default Tax Rate (%)</label>
-                                    <input type="number" value={defaultTaxRate} onChange={(e) => setDefaultTaxRate(e.target.value === '' ? '' : Number(e.target.value))} className="w-full mt-1 p-2 bg-background border rounded-md" placeholder="e.g., 7.25" step="0.01"/>
+                                    <div className="flex justify-between items-center">
+                                        <label htmlFor="defaultTaxRate" className="block text-sm font-medium text-muted-foreground">Default Tax Rate (%)</label>
+                                        <a 
+                                            href="https://www.avalara.com/taxrates/en/state-rates.html" 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="text-xs text-muted-foreground hover:text-primary underline flex items-center gap-1"
+                                        >
+                                            <Info size={12} />
+                                            Look up sales tax rates
+                                        </a>
+                                    </div>
+                                    <input 
+                                        id="defaultTaxRate"
+                                        type="number" 
+                                        value={defaultTaxRate} 
+                                        onChange={(e) => setDefaultTaxRate(e.target.value === '' ? '' : Number(e.target.value))} 
+                                        className="w-full mt-1 p-2 bg-background border rounded-md" 
+                                        placeholder="e.g., 7.25" step="0.01"
+                                    />
                                 </div>
+
+                                <div className="flex items-center gap-3 pt-2">
+                                    <input 
+                                        type="checkbox" 
+                                        id="sendOverdueReminders" 
+                                        name="sendOverdueReminders"
+                                        checked={profile.sendOverdueReminders || false} 
+                                        onChange={(e) => setProfile(prev => ({ ...prev, sendOverdueReminders: e.target.checked }))}
+                                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" 
+                                    />
+                                    <label htmlFor="sendOverdueReminders" className="text-sm font-medium text-muted-foreground">
+                                        Automatically send reminders for overdue invoices
+                                    </label>
+                                </div>
+
                                 <div>
                                     <label className="block text-sm font-medium text-muted-foreground">Default Notes / Terms & Conditions</label>
                                     <textarea value={invoiceNotes} onChange={(e) => setInvoiceNotes(e.target.value)} rows={5} className="w-full mt-1 p-2 bg-background border rounded-md"></textarea>

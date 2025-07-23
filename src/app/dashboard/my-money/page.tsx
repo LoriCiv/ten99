@@ -1,4 +1,3 @@
-// src/app/dashboard/my-money/page.tsx
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
@@ -8,14 +7,15 @@ import {
     updateUserProfile, getCertifications, getAllCEUs, addExpense
 } from '@/utils/firestoreService';
 import Link from 'next/link';
-import { DollarSign, FileText, Landmark, Save, Loader2, ArrowRight, Award, Zap } from 'lucide-react';
+import { DollarSign, FileText, Landmark, Save, Loader2, ArrowRight, Award, Zap, Info } from 'lucide-react';
 import InvoiceDetailModal from '@/components/InvoiceDetailModal';
 import ExpenseForm from '@/components/ExpenseForm';
 import ExpensePieChart from '@/components/ExpensePieChart';
 
 const TEMP_USER_ID = "dev-user-1";
 
-const newExpenseInitialData = {};
+// Define filing statuses for clarity
+type FilingStatus = 'single' | 'married_jointly' | 'married_separately' | 'head_of_household';
 
 const StatCard = ({ title, value, icon: Icon, note, theme = 'primary' }: { title: string; value: string; icon: React.ElementType; note?: string; theme?: 'primary' | 'green' | 'red' | 'yellow' }) => {
     const themes = {
@@ -42,7 +42,7 @@ const StatCard = ({ title, value, icon: Icon, note, theme = 'primary' }: { title
 
 export default function MyMoneyPage() {
     const [invoices, setInvoices] = useState<Invoice[]>([]);
-    const [manualExpenses, setManualExpenses] = useState<Expense[]>([]); // Renamed for clarity
+    const [manualExpenses, setManualExpenses] = useState<Expense[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [certifications, setCertifications] = useState<Certification[]>([]);
@@ -51,26 +51,30 @@ export default function MyMoneyPage() {
     const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
     const [isSubmittingTax, setIsSubmittingTax] = useState(false);
     const [isSubmittingExpense, setIsSubmittingExpense] = useState(false);
+    
+    // State for the simplified tax calculator
     const [stateRate, setStateRate] = useState<number | ''>('');
-    const [manualYtdExpenses, setManualYtdExpenses] = useState<number | ''>('');
+    const [filingStatus, setFilingStatus] = useState<FilingStatus>('single');
+    const [dependents, setDependents] = useState<number | ''>(0);
 
     useEffect(() => {
         const unsubscribers = [
             getInvoices(TEMP_USER_ID, setInvoices),
-            getExpenses(TEMP_USER_ID, setManualExpenses), // Fetches manual expenses
+            getExpenses(TEMP_USER_ID, setManualExpenses),
             getClients(TEMP_USER_ID, setClients),
             getCertifications(TEMP_USER_ID, setCertifications),
             getAllCEUs(TEMP_USER_ID, setAllCeus),
             getUserProfile(TEMP_USER_ID, (profile) => {
                 setUserProfile(profile);
-                if (profile) setStateRate(profile.estimatedStateTaxRate || '');
+                if (profile) {
+                    setStateRate(profile.estimatedStateTaxRate || '');
+                }
                 setIsLoading(false);
             })
         ];
         return () => unsubscribers.forEach(unsub => unsub());
     }, []);
 
-    // ✅ Combines all expense sources into one array for the pie chart
     const allExpenses = useMemo(() => {
         const certExpenses: Expense[] = (certifications || [])
             .filter(cert => cert.renewalCost && cert.renewalCost > 0)
@@ -101,32 +105,47 @@ export default function MyMoneyPage() {
     const stats = useMemo(() => {
         const currentYear = new Date().getFullYear();
         const ytdIncome = invoices.filter(inv => inv.status === 'paid' && new Date(inv.invoiceDate).getFullYear() === currentYear).reduce((sum, inv) => sum + (inv.total || 0), 0);
-        
-        // Use the combined 'allExpenses' array for an accurate total
         const totalYtdExpenses = allExpenses.filter(exp => new Date(exp.date).getFullYear() === currentYear).reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
-        
         const ytdCredentialCosts = totalYtdExpenses - manualExpenses.filter(exp => new Date(exp.date).getFullYear() === currentYear).reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
         
         return { ytdIncome, ytdExpenses: totalYtdExpenses, ytdCredentialCosts, netIncome: ytdIncome - totalYtdExpenses };
     }, [invoices, allExpenses, manualExpenses]);
     
     const taxStats = useMemo(() => {
+        // Based on 2025 estimated tax rules for simplicity
+        const standardDeductions: Record<FilingStatus, number> = {
+            single: 14600,
+            married_jointly: 29200,
+            married_separately: 14600,
+            head_of_household: 21900,
+        };
+        
         const ytdIncome = stats.ytdIncome || 0;
-        const totalExpenses = Number(manualYtdExpenses) || stats.ytdExpenses || 0;
-        const selfEmploymentTaxRate = 0.153;
-        const standardDeduction = 14600;
-        const netEarningsFromSE = ytdIncome * 0.9235;
-        const selfEmploymentTax = netEarningsFromSE * selfEmploymentTaxRate;
-        const adjustedGrossIncome = ytdIncome - totalExpenses;
+        const totalExpenses = stats.ytdExpenses || 0;
+        
+        // Self-Employment Tax Calculation
+        const netEarningsFromSE = (ytdIncome - totalExpenses) * 0.9235;
+        const selfEmploymentTax = Math.max(0, netEarningsFromSE) * 0.153;
+
+        // Income Tax Calculation
+        const standardDeduction = standardDeductions[filingStatus];
+        const childTaxCredit = (Number(dependents) || 0) * 2000;
+        const adjustedGrossIncome = ytdIncome - totalExpenses - (selfEmploymentTax / 2);
         const taxableIncome = Math.max(0, adjustedGrossIncome - standardDeduction);
+        
+        // Simplified Federal Tax Brackets (Single Filer for this example)
         let federalTax = 0;
         if (taxableIncome > 47150) { federalTax = (taxableIncome - 47150) * 0.22 + 5184; } 
         else if (taxableIncome > 11600) { federalTax = (taxableIncome - 11600) * 0.12 + 1160; } 
         else { federalTax = taxableIncome * 0.10; }
+
         const stateTax = taxableIncome * ((Number(stateRate) || 0) / 100);
-        const totalTaxOwed = selfEmploymentTax + federalTax + stateTax;
-        return { totalTaxOwed };
-    }, [stats.ytdIncome, stats.ytdExpenses, stateRate, manualYtdExpenses]);
+        
+        const totalTaxOwed = Math.max(0, selfEmploymentTax + federalTax + stateTax - childTaxCredit);
+        const quarterlyPayment = totalTaxOwed / 4;
+
+        return { totalTaxOwed, quarterlyPayment };
+    }, [stats.ytdIncome, stats.ytdExpenses, stateRate, filingStatus, dependents]);
         
     const handleSaveTaxSettings = async () => {
         setIsSubmittingTax(true);
@@ -160,7 +179,7 @@ export default function MyMoneyPage() {
 
     return (
         <>
-            <div className="p-4 sm:p-6 lg:p-8 space-y-8">
+            <div className="space-y-8">
                 <header>
                     <h1 className="text-3xl font-bold text-foreground">My Money</h1>
                     <p className="text-muted-foreground">Your financial command center.</p>
@@ -182,26 +201,53 @@ export default function MyMoneyPage() {
                             clients={clients}
                             isSubmitting={isSubmittingExpense}
                             userProfile={userProfile}
-                            initialData={newExpenseInitialData}
+                            initialData={{}}
                         />
                         <div className="bg-card p-6 rounded-lg border">
                             <h3 className="text-lg font-semibold">Estimated Tax Liability</h3>
-                             <div className="text-right my-4">
-                                <p className="text-sm text-muted-foreground">Total Owed (YTD)</p>
-                                <p className="text-3xl font-bold text-primary">${Number(taxStats.totalTaxOwed || 0).toFixed(2)}</p>
+                             <div className="my-4 space-y-2">
+                                <div className="text-right">
+                                    <p className="text-sm text-muted-foreground">Estimated Quarterly Payment</p>
+                                    <p className="text-3xl font-bold text-primary">${Number(taxStats.quarterlyPayment || 0).toFixed(2)}</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-xs text-muted-foreground">Total Owed (YTD)</p>
+                                    <p className="text-lg font-semibold">${Number(taxStats.totalTaxOwed || 0).toFixed(2)}</p>
+                                </div>
                              </div>
-                             <div className="space-y-4">
+                             <div className="space-y-4 pt-4 border-t">
                                 <div>
-                                    <label className="block text-sm font-medium">Override Expenses (for estimation)</label>
-                                    <input type="number" value={manualYtdExpenses} onChange={(e) => setManualYtdExpenses(e.target.value === '' ? '' : Number(e.target.value))} className="w-full mt-1 p-2 bg-background border rounded-md" placeholder={`Auto-calculated: $${Number(stats.ytdExpenses || 0).toFixed(2)}`} />
+                                    <label htmlFor="filingStatus" className="block text-sm font-medium">Filing Status</label>
+                                    <select id="filingStatus" value={filingStatus} onChange={(e) => setFilingStatus(e.target.value as FilingStatus)} className="w-full mt-1 p-2 bg-background border rounded-md">
+                                        <option value="single">Single</option>
+                                        <option value="married_jointly">Married Filing Jointly</option>
+                                        <option value="head_of_household">Head of Household</option>
+                                        <option value="married_separately">Married Filing Separately</option>
+                                    </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium">Your State Tax Rate (%)</label>
-                                    <input type="number" value={stateRate} onChange={(e) => setStateRate(e.target.value === '' ? '' : Number(e.target.value))} className="w-full mt-1 p-2 bg-background border rounded-md" placeholder="e.g., 5" />
+                                    <label htmlFor="dependents" className="block text-sm font-medium">Number of Dependents</label>
+                                    <input id="dependents" type="number" value={dependents} onChange={(e) => setDependents(e.target.value === '' ? '' : Number(e.target.value))} className="w-full mt-1 p-2 bg-background border rounded-md" placeholder="e.g., 2" />
+                                </div>
+                                <div>
+                                    <div className="flex justify-between items-center mb-1">
+                                        <label htmlFor="stateRate" className="block text-sm font-medium">Your State Income Tax Rate (%)</label>
+                                        {/* ✅ THIS IS THE FIX */}
+                                        <a 
+                                            href="https://www.irs.gov/tax-professionals/government-sites" 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="text-xs text-muted-foreground hover:text-primary underline flex items-center gap-1"
+                                        >
+                                            <Info size={12} />
+                                            Look up rate
+                                        </a>
+                                    </div>
+                                    <input id="stateRate" type="number" value={stateRate} onChange={(e) => setStateRate(e.target.value === '' ? '' : Number(e.target.value))} className="w-full p-2 bg-background border rounded-md" placeholder="e.g., 5" />
                                 </div>
                                 <button onClick={handleSaveTaxSettings} disabled={isSubmittingTax} className="w-full bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 hover:bg-secondary/80 disabled:opacity-50">
                                     {isSubmittingTax ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                                    {isSubmittingTax ? 'Saving...' : 'Save Tax Settings'}
+                                    {isSubmittingTax ? 'Saving...' : 'Save Rate'}
                                 </button>
                              </div>
                         </div>
@@ -231,8 +277,7 @@ export default function MyMoneyPage() {
                                  <Link href="/dashboard/expenses" className="flex items-center gap-1 text-sm font-semibold text-primary hover:underline">View All <ArrowRight size={14} /></Link>
                              </div>
                              <div className="w-full h-[300px]">
-                                {/* ✅ Pass the newly combined 'allExpenses' array to the chart */}
-                                <ExpensePieChart expenses={allExpenses} />
+                                 <ExpensePieChart expenses={allExpenses} />
                              </div>
                         </div>
                         <div className="bg-gradient-to-br from-primary/20 to-card p-6 rounded-lg border border-primary/30">

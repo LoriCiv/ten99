@@ -1,4 +1,3 @@
-// src/app/dashboard/appointments/new/page.tsx
 "use client";
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
@@ -7,7 +6,7 @@ import type { Appointment, Client, PersonalNetworkContact, JobFile } from '@/typ
 import { getClients, getPersonalNetwork, getJobFiles, addAppointment, getAppointments, addClient } from '@/utils/firestoreService';
 import AppointmentForm from '@/components/AppointmentForm';
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 
 const TEMP_USER_ID = "dev-user-1";
 
@@ -46,42 +45,124 @@ function NewAppointmentPageInternal() {
     }, [fetchData]);
 
     const handleParseWithAI = async () => {
-        if (!pastedText.trim()) return setAiMessage('Please paste some text to parse.');
+        if (!pastedText.trim()) {
+            setAiMessage('Please paste some text to parse.');
+            return;
+        }
+
         const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-        if (!apiKey) return setAiMessage("Error: Gemini API key is not configured.");
+        if (!apiKey) {
+            setAiMessage("Error: Gemini API key is not configured.");
+            return;
+        }
+
         setIsParsing(true);
         setAiMessage('AI is parsing the text...');
-        setPrefilledData(undefined);
+        setPrefilledData(undefined); // Clear previous results
+
         const clientListForAI = clients.map(c => ({ id: c.id, name: c.companyName || c.name }));
-        const prompt = `You are a scheduling assistant... CLIENTS: ${JSON.stringify(clientListForAI)} TEXT: ${pastedText}`;
-        const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
+
+        // ✅ FIX: A much more detailed and robust prompt for the AI
+        const prompt = `
+You are an intelligent scheduling assistant for an application called Ten99. Your task is to parse unstructured text about a job or appointment and convert it into a structured JSON object.
+
+CONTEXT:
+- Today's Date: ${new Date().toLocaleDateString()}
+- Existing Clients List: ${JSON.stringify(clientListForAI)}
+
+INSTRUCTIONS:
+1. Analyze the 'TEXT TO PARSE' below.
+2. Extract the relevant details for an appointment. Infer a 'subject' if one is not explicitly provided.
+3. Format the extracted data into a JSON object that strictly adheres to the following schema.
+4. **Date and Time:**
+    - Convert all dates to 'YYYY-MM-DD' format.
+    - Convert all times to 24-hour 'HH:mm' format.
+5. **Client Matching:**
+    - If the text mentions a company name that closely matches a name in the 'Existing Clients List', use the corresponding 'id' for the 'clientId' field in the JSON output.
+    - If no suitable client is found, do NOT create a 'clientId'. Instead, create a 'newClientName' field with the parsed company name.
+6. **Output:** Respond with ONLY the valid JSON object. Do not include any explanatory text, markdown formatting like \`\`\`json, or any other characters outside the JSON object itself.
+
+JSON SCHEMA:
+{
+  "subject": "string",
+  "date": "YYYY-MM-DD",
+  "time": "HH:mm",
+  "endTime": "HH:mm" | null,
+  "clientId": "string" | null,
+  "newClientName": "string" | null,
+  "jobNumber": "string" | null,
+  "notes": "string | null",
+  "address": "string | null",
+  "city": "string | null",
+  "state": "string" | null,
+  "zip": "string" | null",
+  "locationType": "physical" | "virtual" | null
+}
+---
+
+TEXT TO PARSE:
+${pastedText}
+`;
+
+        const payload = {
+            contents: [{ parts: [{ text: prompt }] }],
+            // Add safety settings to prevent the model from refusing to answer
+            safetySettings: [
+                { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+                { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+                { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+                { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+            ]
+        };
+
         try {
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            if (!response.ok) throw new Error(`API request failed: ${response.status}`);
+
+            if (!response.ok) {
+                 const errorBody = await response.text();
+                 console.error("API Error Response Body:", errorBody);
+                 throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+            }
+
             const result = await response.json();
+            
+            if (!result.candidates || result.candidates.length === 0) {
+                 throw new Error("AI response was empty or blocked. Check safety settings in Google AI Studio if this persists.");
+            }
+
             const rawText = result.candidates[0].content.parts[0].text;
-            const cleanText = rawText.replace(/```json\n/g, '').replace(/\n```/g, '');
-            const jsonStart = cleanText.indexOf('{');
-            const jsonEnd = cleanText.lastIndexOf('}');
-            if (jsonStart === -1 || jsonEnd === -1) throw new Error("No valid JSON object found in AI response.");
-            const parsedJson = JSON.parse(cleanText.substring(jsonStart, jsonEnd + 1));
+            
+            // Clean the response to ensure it's just the JSON object
+            const jsonStart = rawText.indexOf('{');
+            const jsonEnd = rawText.lastIndexOf('}');
+            if (jsonStart === -1 || jsonEnd === -1) {
+                console.error("Invalid response from AI:", rawText);
+                throw new Error("No valid JSON object found in AI response.");
+            }
+            
+            const jsonString = rawText.substring(jsonStart, jsonEnd + 1);
+            const parsedJson = JSON.parse(jsonString);
+
+            // If AI suggests a new client, create it in the database first
             if (parsedJson.newClientName && !parsedJson.clientId) {
                 const newClientData: Partial<Client> = {
                     companyName: parsedJson.newClientName,
-                    name: parsedJson.newClientName,
+                    name: parsedJson.newClientName, // Set both for consistency
                     status: 'Active',
                     clientType: 'business_1099'
                 };
                 const newClientRef = await addClient(TEMP_USER_ID, newClientData);
                 parsedJson.clientId = newClientRef.id;
-                fetchData();
+                // We don't need to refetch data here, the new client will be available on next page load
             }
+            
             setPrefilledData(parsedJson);
-            setAiMessage('Success! Form has been pre-filled.');
+            setAiMessage('Success! Form has been pre-filled below.');
+
         } catch (error) {
             console.error("AI Parsing Error:", error);
             setAiMessage("Error parsing AI response. Check console for details.");
@@ -99,7 +180,6 @@ function NewAppointmentPageInternal() {
         }
 
         try {
-            // ✅ THE FIX: Restored conflict checking logic
             const newStart = new Date(`${appointmentData.date}T${appointmentData.time}`);
             const newEnd = appointmentData.endTime
                 ? new Date(`${appointmentData.date}T${appointmentData.endTime}`)
@@ -152,7 +232,12 @@ function NewAppointmentPageInternal() {
                                 placeholder="Paste email or text here..."
                                 className="w-full h-40 p-3 border rounded-md bg-background"
                             ></textarea>
-                            <button onClick={handleParseWithAI} disabled={isParsing} className="w-full mt-4 bg-teal-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-teal-700 disabled:bg-gray-500">
+                            <button 
+                                onClick={handleParseWithAI} 
+                                disabled={isParsing} 
+                                className="w-full mt-4 bg-teal-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-teal-700 disabled:bg-gray-500 flex items-center justify-center gap-2"
+                            >
+                                {isParsing && <Loader2 className="h-5 w-5 animate-spin" />}
                                 {isParsing ? 'Parsing...' : 'Parse with AI'}
                             </button>
                             {aiMessage && <p className="text-sm mt-2 text-center text-muted-foreground">{aiMessage}</p>}
