@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useEffect, useMemo, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
-// ✅ 1. IMPORT NEW ICONS
-import { Pencil, ArrowLeft, Trash2, Search, PlusCircle, ChevronDown, MapPin, Video } from 'lucide-react';
-import type { Message, Appointment, Client, PersonalNetworkContact, JobFile } from '@/types/app-interfaces';
+import { useState, useEffect, useMemo } from 'react';
+// REMOVED: Unused imports like Suspense, useSearchParams, etc.
+import { Search, PlusCircle, ChevronDown, MapPin, Video } from 'lucide-react';
+import type { Appointment, Client, PersonalNetworkContact, JobFile } from '@/types/app-interfaces';
 import { getAppointments, getClients, getPersonalNetwork, getJobFiles } from '@/utils/firestoreService';
 import { format } from 'date-fns';
 import Link from 'next/link';
@@ -185,7 +184,6 @@ export default function AppointmentsPage() {
                                                 {formatTime(appt.time)}
                                                 {appt.endTime && ` - ${formatTime(appt.endTime)}`}
                                             </p>
-                                            {/* ✅ 2. NEW LOCATION DISPLAY LOGIC */}
                                             <div className="flex flex-col gap-1 pt-1">
                                                 {clientName && (
                                                     <p className="text-sm text-primary/80 font-medium">{clientName}</p>

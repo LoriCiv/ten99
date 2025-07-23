@@ -1,7 +1,6 @@
-// src/app/api/appointments/cron/route.ts
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase-admin';
-import type { Appointment } from '@/types/app-interfaces';
+// REMOVED: Unused 'Appointment' type import
 
 export async function GET() {
     const today = new Date().toISOString().split('T')[0];
