@@ -8,27 +8,19 @@ import { Save, Loader2 } from 'lucide-react';
 interface CEUFormProps {
     onSave: (data: Partial<CEU>) => Promise<void>;
     onCancel: () => void;
-    initialData?: Partial<CEU>;
+    initialData: Partial<CEU>;
     isSubmitting: boolean;
-    // ✅ 1. Add a prop to receive the available categories
     availableCategories: string[];
 }
 
 export default function CEUForm({ onSave, onCancel, initialData, isSubmitting, availableCategories }: CEUFormProps) {
-    const [formData, setFormData] = useState<Partial<CEU>>({
-        activityName: '',
-        dateCompleted: '',
-        ceuHours: 0,
-        provider: '',
-        cost: 0,
-        category: 'General Studies', // Default category
-        ...initialData
-    });
-
-    const isEditMode = !!initialData?.id;
+    const isEditMode = !!initialData.id;
+    const [formData, setFormData] = useState<Partial<CEU>>(initialData);
 
     useEffect(() => {
-        setFormData({ category: 'General Studies', ...initialData });
+        // Ensure category defaults correctly, especially for new CEUs
+        const defaultData = { category: 'General Studies', ...initialData };
+        setFormData(defaultData);
     }, [initialData]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -50,37 +42,45 @@ export default function CEUForm({ onSave, onCancel, initialData, isSubmitting, a
         <form onSubmit={handleSubmit} className="space-y-6">
             <h2 className="text-2xl font-bold text-foreground">{isEditMode ? 'Edit CEU' : 'Log New CEU'}</h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-muted-foreground">Activity Name*</label>
-                    <input name="activityName" value={formData.activityName || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" required />
+            <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-muted-foreground">Activity Name*</label>
+                <input name="activityName" value={formData.activityName || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" required />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-sm font-medium text-muted-foreground">Date Completed*</label>
+                    <input name="dateCompleted" type="date" value={formData.dateCompleted || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" required />
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-muted-foreground">CEU Hours*</label>
-                    <input type="number" step="0.1" name="ceuHours" value={formData.ceuHours ?? ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" required />
+                    <input name="ceuHours" type="number" step="0.1" value={formData.ceuHours ?? ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" required />
                 </div>
-                 <div>
-                    <label className="block text-sm font-medium text-muted-foreground">Date Completed</label>
-                    <input type="date" name="dateCompleted" value={formData.dateCompleted || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" />
-                </div>
-                <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-muted-foreground">Provider / Sponsor</label>
-                    <input name="provider" value={formData.provider || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" />
-                </div>
-                
-                {/* ✅ 2. Add the Category and Cost fields */}
-                <div>
-                    <label className="block text-sm font-medium text-muted-foreground">Category</label>
-                    <select name="category" value={formData.category || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md">
-                        {availableCategories.map(cat => (
-                            <option key={cat} value={cat}>{cat}</option>
-                        ))}
-                    </select>
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-muted-foreground">Cost ($)</label>
-                    <input type="number" step="0.01" name="cost" value={formData.cost ?? ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" />
-                </div>
+            </div>
+
+            <div>
+                <label className="block text-sm font-medium text-muted-foreground">Category</label>
+                <select name="category" value={formData.category || 'General Studies'} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md">
+                    {availableCategories.map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                </select>
+            </div>
+            
+            <div>
+                <label className="block text-sm font-medium text-muted-foreground">Provider / Sponsor (Optional)</label>
+                <input name="provider" value={formData.provider || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" />
+            </div>
+
+            {/* ✅ NEW WEBSITE FIELD */}
+            <div>
+                <label className="block text-sm font-medium text-muted-foreground">Website (Optional)</label>
+                <input name="website" type="url" value={formData.website || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" placeholder="https://example.com" />
+            </div>
+            
+            <div>
+                <label className="block text-sm font-medium text-muted-foreground">Cost ($) (Optional)</label>
+                <input name="cost" type="number" step="0.01" value={formData.cost ?? ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" />
             </div>
 
             <div className="flex justify-end gap-4 pt-4 border-t">

@@ -12,7 +12,6 @@ import {
     convertClientToContact,
     convertContactToClient
 } from '@/utils/firestoreService';
-// ✅ FIX 1: Removed the unused 'Check' icon from this import
 import { X, Edit, Trash2, Mail, FileText, Repeat, ClipboardCopy, MoreHorizontal } from 'lucide-react';
 import ClientForm from './ClientForm';
 import ContactForm from './ContactForm';
@@ -135,7 +134,6 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
         });
     };
     
-    // ✅ FIX 2 & 3: Rewrote this function to avoid unused variables
     const handleDuplicate = () => {
         if (itemType !== 'Company') return;
         const duplicateData = { ...(item as Client) };
@@ -174,6 +172,18 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
                             {itemType === 'Company' && <DetailItem label="Primary Contact" value={(item as Client).name} />}
                             
                             <div className="flex justify-end items-center gap-2 pt-4 border-t">
+                                {/* ✅ CORRECTED JOB FILE BUTTON LOGIC */}
+                                {itemType === 'Company' && (
+                                    <Button asChild variant="outline">
+                                        <Link href={jobFileLink} className="flex items-center gap-2">
+                                            <FileText size={16}/> 
+                                            {relevantJobFiles.length > 0 ? `View Files (${relevantJobFiles.length})` : 'Job Files'}
+                                        </Link>
+                                    </Button>
+                                )}
+                                <Button onClick={() => setIsEditing(true)} className="flex items-center gap-2">
+                                    <Edit size={16}/>Edit
+                                </Button>
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
                                         <Button variant="outline" size="icon">
@@ -188,23 +198,17 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
                                         <DropdownMenuItem asChild className="cursor-pointer">
                                             {emailToUse ? <Link href={`/dashboard/mailbox?to=${emailToUse}`} className="flex items-center w-full"><Mail className="mr-2 h-4 w-4" />Send Message</Link> : <span className="opacity-50 flex items-center w-full"><Mail className="mr-2 h-4 w-4" />Send Message</span>}
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem asChild className="cursor-pointer">
-                                            {relevantJobFiles.length > 0 ? <Link href={jobFileLink} className="flex items-center w-full"><FileText className="mr-2 h-4 w-4" />View Files ({relevantJobFiles.length})</Link> : <span className="opacity-50 flex items-center w-full"><FileText className="mr-2 h-4 w-4" />View Files</span>}
-                                        </DropdownMenuItem>
-                                        <DropdownMenuSeparator />
                                         <DropdownMenuItem onSelect={handleConvert} disabled={isConverting} className="cursor-pointer">
                                             <Repeat className="mr-2 h-4 w-4" />
                                             <span>{isConverting ? 'Converting...' : 'Convert'}</span>
                                         </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem onSelect={handleDelete} className="cursor-pointer text-destructive focus:text-destructive">
+                                            <Trash2 className="mr-2 h-4 w-4" />
+                                            <span>Delete</span>
+                                        </DropdownMenuItem>
                                     </DropdownMenuContent>
                                 </DropdownMenu>
-
-                                <Button variant="destructive" onClick={handleDelete} className="flex items-center gap-2">
-                                    <Trash2 size={16}/>Delete
-                                </Button>
-                                <Button onClick={() => setIsEditing(true)} className="flex items-center gap-2">
-                                    <Edit size={16}/>Edit
-                                </Button>
                             </div>
                         </div>
                     )}

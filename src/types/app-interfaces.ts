@@ -75,7 +75,8 @@ export interface JobFile {
     tags?: string[];
     startDate?: string;
     endDate?: string;
-    isPinned?: boolean;
+    isPinned?: boolean; // Kept for backwards compatibility
+    priority?: number;  // ✅ NEW: 0 = None, 1 = Medium, 2 = High
 }
 
 export interface Certification {
@@ -109,6 +110,7 @@ export interface CEU {
     provider?: string;
     cost?: number;
     category?: string;
+    website?: string;
 }
 
 export interface Invoice {
@@ -133,7 +135,7 @@ export interface Invoice {
     notes?: string;
     paymentDetails?: string;
     paymentDate?: string;
-    createdAt?: Timestamp | FieldValue; // ✅ Corrected this line
+    createdAt?: Timestamp | FieldValue;
 }
 
 export interface Expense {
@@ -162,7 +164,6 @@ export interface Message {
     createdAt: Timestamp | FieldValue;
     status?: 'new' | 'pending' | 'approved' | 'declined';
     proposedDate?: string;
-
     proposedTime?: string;
     appointmentId?: string;
 }

@@ -7,6 +7,7 @@ import { PlusCircle, Edit, Trash2, Award, BookOpen, Library, Users } from 'lucid
 import { addCertification, updateCertification, deleteCertification, addCEU, updateCEU, deleteCEU } from '@/utils/firestoreService';
 import CertificationForm from './CertificationForm';
 import CEUForm from './CEUForm';
+import CEUDetailModal from './CEUDetailModal';
 
 const getIconForType = (type: 'certification' | 'license' | 'membership') => {
     switch (type) {
@@ -34,6 +35,8 @@ export default function CertificationsPageContent({ initialCertifications, initi
     const [selectedCertForCeu, setSelectedCertForCeu] = useState<string | null>(null);
     const [editingCeu, setEditingCeu] = useState<Partial<CEU> | null>(null);
     const [ceuFilter, setCeuFilter] = useState<string>('all');
+    const [isCeuDetailModalOpen, setIsCeuDetailModalOpen] = useState(false);
+    const [selectedCeuForDetail, setSelectedCeuForDetail] = useState<CEU | null>(null);
 
     useEffect(() => { setCertifications(initialCertifications); }, [initialCertifications]);
     useEffect(() => { setCeus(initialCeus); }, [initialCeus]);
@@ -48,16 +51,7 @@ export default function CertificationsPageContent({ initialCertifications, initi
             const specialty1Progress = cert.specialtyCeusRequired ? (specialty1Completed / cert.specialtyCeusRequired) * 100 : 0;
             const specialty2Completed = cert.specialtyCeusCategory2 ? relevantCeus.filter(c => c.category === cert.specialtyCeusCategory2).reduce((sum, ceu) => sum + (ceu.ceuHours || 0), 0) : 0;
             const specialty2Progress = cert.specialtyCeusRequired2 ? (specialty2Completed / cert.specialtyCeusRequired2) * 100 : 0;
-            return { 
-                ...cert, 
-                type, 
-                ceusCompleted: totalHoursCompleted, 
-                progress,
-                specialty1Completed,
-                specialty1Progress,
-                specialty2Completed,
-                specialty2Progress
-            };
+            return { ...cert, type, ceusCompleted: totalHoursCompleted, progress, specialty1Completed, specialty1Progress, specialty2Completed, specialty2Progress };
         });
     }, [certifications, ceus]);
 
@@ -132,7 +126,17 @@ export default function CertificationsPageContent({ initialCertifications, initi
             }
         }
     };
-    
+
+    const handleOpenCeuDetailModal = (ceu: CEU) => {
+        setSelectedCeuForDetail(ceu);
+        setIsCeuDetailModalOpen(true);
+    };
+
+    const handleCloseCeuDetailModal = () => {
+        setSelectedCeuForDetail(null);
+        setIsCeuDetailModalOpen(false);
+    };
+
     const certForCeu = certifications.find(c => c.id === selectedCertForCeu);
     const availableCategories = ['General Studies'];
     if (certForCeu?.specialtyCeusCategory) { availableCategories.push(certForCeu.specialtyCeusCategory); }
@@ -141,7 +145,6 @@ export default function CertificationsPageContent({ initialCertifications, initi
     return (
         <>
             <div className="p-4 sm:p-6 lg:p-8">
-                {/* ✅ STANDARDIZED HEADER LAYOUT */}
                 <header className="mb-6">
                     <div>
                         <h1 className="text-3xl font-bold text-foreground">Credentials</h1>
@@ -193,7 +196,24 @@ export default function CertificationsPageContent({ initialCertifications, initi
                             ))}
                         </div>
                     )}
-                    {activeTab === 'ceus' && ( <div className="space-y-4"> <div className="max-w-xs"><label className="block text-sm font-medium text-muted-foreground mb-1">Filter by Certification</label><select value={ceuFilter} onChange={(e) => setCeuFilter(e.target.value)} className="w-full p-2 border rounded-md bg-background"><option value="all">Show All</option>{certifications.map(cert => (<option key={cert.id} value={cert.id!}>{cert.name}</option>))}</select></div> {filteredCeus.map(ceu => (<div key={ceu.id} className="bg-card p-3 rounded-lg border flex justify-between items-center"><div><p className="font-semibold text-foreground flex items-center gap-2"><BookOpen size={14} /> {ceu.activityName}</p><p className="text-sm text-muted-foreground pl-6">{ceu.ceuHours} hours on {ceu.dateCompleted}</p></div><div className="flex gap-2"><button onClick={() => handleOpenCeuModal(ceu.certificationId, ceu)} title="Edit CEU" className="p-2 hover:bg-muted rounded-md text-muted-foreground hover:text-primary"><Edit size={16}/></button><button onClick={() => handleDeleteCeu(ceu.certificationId, ceu.id!)} title="Delete CEU" className="p-2 hover:bg-muted rounded-md text-muted-foreground hover:text-destructive"><Trash2 size={16}/></button></div></div>))}{filteredCeus.length === 0 && (<div className="text-center py-12 text-muted-foreground"><p>No CEUs found for this filter.</p></div>)}</div>)}
+                    {activeTab === 'ceus' && ( 
+                        <div className="space-y-4"> 
+                            <div className="max-w-xs"><label className="block text-sm font-medium text-muted-foreground mb-1">Filter by Certification</label><select value={ceuFilter} onChange={(e) => setCeuFilter(e.target.value)} className="w-full p-2 border rounded-md bg-background"><option value="all">Show All</option>{certifications.map(cert => (<option key={cert.id} value={cert.id!}>{cert.name}</option>))}</select></div> 
+                            {filteredCeus.map(ceu => (
+                                <div key={ceu.id} onClick={() => handleOpenCeuDetailModal(ceu)} className="bg-card p-3 rounded-lg border flex justify-between items-center cursor-pointer hover:bg-muted">
+                                    <div>
+                                        <p className="font-semibold text-foreground flex items-center gap-2"><BookOpen size={14} /> {ceu.activityName}</p>
+                                        <p className="text-sm text-muted-foreground pl-6">{ceu.ceuHours} hours on {ceu.dateCompleted}</p>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button onClick={(e) => { e.stopPropagation(); handleOpenCeuModal(ceu.certificationId, ceu); }} title="Edit CEU" className="p-2 hover:bg-muted rounded-md text-muted-foreground hover:text-primary"><Edit size={16}/></button>
+                                        <button onClick={(e) => { e.stopPropagation(); handleDeleteCeu(ceu.certificationId, ceu.id!); }} title="Delete CEU" className="p-2 hover:bg-muted rounded-md text-muted-foreground hover:text-destructive"><Trash2 size={16}/></button>
+                                    </div>
+                                </div>
+                            ))}
+                            {filteredCeus.length === 0 && (<div className="text-center py-12 text-muted-foreground"><p>No CEUs found for this filter.</p></div>)}
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -201,6 +221,14 @@ export default function CertificationsPageContent({ initialCertifications, initi
             {isCeuModalOpen && (<div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4"><div className="bg-card rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto border p-6">
                 <CEUForm onSave={handleSaveCeu} onCancel={handleCloseCeuModal} initialData={editingCeu || {}} isSubmitting={isSubmitting} availableCategories={availableCategories} />
             </div></div>)}
+            
+            {isCeuDetailModalOpen && selectedCeuForDetail && (
+                <CEUDetailModal
+                    ceu={selectedCeuForDetail}
+                    certificationName={certifications.find(c => c.id === selectedCeuForDetail.certificationId)?.name || 'Unknown'}
+                    onClose={handleCloseCeuDetailModal}
+                />
+            )}
         </>
     );
 }

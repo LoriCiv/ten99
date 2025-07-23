@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import type { JobFile, Client } from '@/types/app-interfaces';
 import Link from 'next/link';
-import { FilePlus, Search, X, CalendarDays, Tag, Clock, CheckCircle, Star, Pin, PinOff } from 'lucide-react';
+import { FilePlus, Search, X, CalendarDays, Tag, Clock, CheckCircle, Star } from 'lucide-react';
 import { updateJobFile } from '@/utils/firestoreService';
 import { Timestamp } from 'firebase/firestore';
 
@@ -13,6 +13,29 @@ interface JobFilesPageContentProps {
     userId: string;
     initialClientFilter?: string; 
 }
+
+// ✅ UPDATED PriorityStars component to use 2 stars for 3 levels of priority
+const PriorityStars = ({ priority = 0, onClick }: { priority?: number, onClick: (e: React.MouseEvent) => void }) => {
+    const stars = [1, 2]; // We will render 2 stars
+    const priorityTooltips = ['No priority', 'Low priority', 'High priority'];
+    
+    return (
+        <button 
+            onClick={onClick} 
+            className="absolute top-2 right-2 p-1 rounded-full flex hover:bg-secondary"
+            title={`Set priority (Current: ${priorityTooltips[priority]})`}
+        >
+            {stars.map((starIndex) => (
+                <Star 
+                    key={starIndex} 
+                    size={18} 
+                    // A star is filled if the priority level is greater than or equal to its index
+                    className={`transition-colors ${priority >= starIndex ? 'text-amber-500 fill-amber-500' : 'text-muted-foreground/50'}`} 
+                />
+            ))}
+        </button>
+    );
+};
 
 export default function JobFilesPageContent({
     jobFiles,
@@ -35,9 +58,7 @@ export default function JobFilesPageContent({
     const filteredJobFiles = useMemo(() => {
         const getSortableDate = (item: JobFile): number => {
             const createdAt = item.createdAt as Timestamp;
-            if (!createdAt || typeof createdAt.toMillis !== 'function') {
-                return 0;
-            }
+            if (!createdAt || typeof createdAt.toMillis !== 'function') return 0;
             return createdAt.toMillis();
         };
 
@@ -52,24 +73,26 @@ export default function JobFilesPageContent({
                 return clientMatch && searchMatch && tagMatch;
             })
             .sort((a, b) => {
-                const aPinned = a.isPinned ? 1 : 0;
-                const bPinned = b.isPinned ? 1 : 0;
-                if (aPinned !== bPinned) {
-                    return bPinned - aPinned;
+                const aPriority = a.priority || 0;
+                const bPriority = b.priority || 0;
+                if (aPriority !== bPriority) {
+                    return bPriority - aPriority; // Sorts by priority: 2, 1, then 0
                 }
                 return getSortableDate(b) - getSortableDate(a);
             });
     }, [jobFiles, searchTerm, clientFilter, tagFilter, clients]);
 
-    const handleTogglePin = async (e: React.MouseEvent, file: JobFile) => {
+    const handleSetPriority = async (e: React.MouseEvent, file: JobFile) => {
         e.preventDefault(); 
         e.stopPropagation();
         if (!file.id) return;
         try {
-            await updateJobFile(userId, file.id, { isPinned: !file.isPinned });
+            const currentPriority = file.priority || 0;
+            const nextPriority = (currentPriority + 1) % 3; // Cycles 0 -> 1 -> 2 -> 0
+            await updateJobFile(userId, file.id, { priority: nextPriority });
         } catch (error) {
-            console.error("Error pinning file:", error);
-            alert("Failed to update pin status.");
+            console.error("Error updating priority:", error);
+            alert("Failed to update priority.");
         }
     };
 
@@ -103,9 +126,8 @@ export default function JobFilesPageContent({
 
     return (
         <div className="p-4 sm:p-6 lg:p-8">
-            {/* ✅ STANDARDIZED HEADER LAYOUT */}
             <header className="mb-6">
-                <div>
+                 <div>
                     <h1 className="text-3xl font-bold text-foreground">Job Files</h1>
                     <p className="text-muted-foreground mt-1">Organize all your project-related documents and notes.</p>
                 </div>
@@ -133,12 +155,7 @@ export default function JobFilesPageContent({
 
                     return (
                         <Link href={`/dashboard/job-files/${file.id}`} key={file.id} className="relative bg-card p-6 rounded-lg border hover:border-primary hover:shadow-lg transition-all flex flex-col justify-between min-h-[160px]">
-                            <button 
-                                onClick={(e) => handleTogglePin(e, file)} 
-                                className={`absolute top-2 right-2 p-1 rounded-full hover:bg-secondary ${file.isPinned ? 'text-primary' : 'text-muted-foreground'}`}
-                            >
-                                {file.isPinned ? <PinOff size={18} /> : <Pin size={18} />}
-                            </button>
+                            <PriorityStars priority={file.priority} onClick={(e) => handleSetPriority(e, file)} />
                             
                             <div>
                                 <h3 className="text-xl font-bold text-foreground truncate pr-8">{file.jobTitle}</h3>

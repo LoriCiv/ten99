@@ -1,7 +1,6 @@
-// src/app/api/send-invoice/route.tsx
+// src/app/api/send-invoice/route.ts
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
-// ✅ FIX: Corrected the import path to match your folder structure
 import InvoiceEmail from '@/emails/InvoiceEmail';
 import type { Invoice, Client, UserProfile } from '@/types/app-interfaces';
 
@@ -20,7 +19,8 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Recipient email is missing' }, { status: 400 });
         }
 
-        const subject = `Invoice #${invoice.invoiceNumber} from ${user.professionalTitle || 'Your Business'}`;
+        // ✅ UPDATED: Prioritizes user's name for the subject line
+        const subject = `Invoice #${invoice.invoiceNumber} from ${user.name || user.professionalTitle || 'Your Business'}`;
 
         const { data, error } = await resend.emails.send({
             from: 'invoices@ten99.app',
@@ -39,6 +39,6 @@ export async function POST(request: Request) {
     } catch (err) {
         const error = err as Error;
         console.error("API error:", error);
-        return NextResponse.json({ error: error.message || 'An internal error occurred' }, { status: 500 });
+        return NextResponse.json({ error: error.message || 'An internal error occurred' }, { status: 500 }); 
     }
 }

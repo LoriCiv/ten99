@@ -3,6 +3,9 @@ import { initializeApp, getApps } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
+// ✅ THIS IS THE NEW TEST LINE
+console.log('Storage Bucket from env:', process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET);
+
 // Your web app's Firebase configuration from your Firebase project console
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,

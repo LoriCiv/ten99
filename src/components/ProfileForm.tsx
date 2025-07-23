@@ -1,8 +1,7 @@
-// src/components/ProfileForm.tsx
 "use client";
 
 import { useState, useEffect } from 'react';
-import Image from 'next/image'; // ✅ 1. Import the Next.js Image component
+import Image from 'next/image';
 import type { UserProfile, JobHistoryEntry, EducationEntry } from '@/types/app-interfaces';
 import { uploadFile } from '@/utils/firestoreService';
 import { Save, Loader2, Plus, Trash2, User as UserIcon } from 'lucide-react';
@@ -42,7 +41,6 @@ export default function ProfileForm({ onSave, initialProfile, isSubmitting }: Pr
     
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        // ✅ 2. Changed 'let' to 'const'
         const finalProfileData = { ...formData };
 
         if (selectedFile) {
@@ -69,7 +67,6 @@ export default function ProfileForm({ onSave, initialProfile, isSubmitting }: Pr
             <div className="flex items-start gap-6">
                 <div className="relative w-24 h-24 rounded-full bg-muted flex items-center justify-center border shrink-0 overflow-hidden">
                     {formData.photoUrl ? ( 
-                        // ✅ 3. Replaced <img> with next/image <Image>
                         <Image src={formData.photoUrl} alt="Profile" layout="fill" className="object-cover" /> 
                     ) : ( 
                         <UserIcon className="w-12 h-12 text-muted-foreground" /> 
@@ -78,12 +75,19 @@ export default function ProfileForm({ onSave, initialProfile, isSubmitting }: Pr
                 <div className="flex-1 space-y-2"><label className="block text-sm font-medium text-muted-foreground">Profile Photo</label><input type="file" onChange={handleFileChange} accept="image/*" className="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"/></div>
             </div>
             <div><label className="block text-sm font-medium text-muted-foreground">Bio / Elevator Pitch</label><textarea name="bio" value={formData.bio || ''} onChange={handleInputChange} rows={3} className="w-full mt-1 p-2 bg-background border rounded-md" placeholder="A brief summary of your professional background..."></textarea></div>
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* ✅ NEW: Full Name Field */}
+                <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-muted-foreground">Full Name</label>
+                    <input name="name" value={formData.name || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" placeholder="e.g., Jane Doe"/>
+                </div>
                  <div><label className="block text-sm font-medium text-muted-foreground">Professional Title</label><input name="professionalTitle" value={formData.professionalTitle || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" /></div>
                  <div><label className="block text-sm font-medium text-muted-foreground">Phone Number</label><input type="tel" name="phone" value={formData.phone || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" /></div>
                  <div className="md:col-span-2"><label className="block text-sm font-medium text-muted-foreground">Address</label><textarea name="address" value={formData.address || ''} onChange={handleInputChange} rows={2} className="w-full mt-1 p-2 bg-background border rounded-md" placeholder="123 Main St, Anytown, USA 12345"></textarea></div>
                  <div className="flex items-center gap-2 pt-2"><input type="checkbox" name="isVirtual" id="isVirtual" checked={formData.isVirtual || false} onChange={handleInputChange} className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" /><label htmlFor="isVirtual" className="text-sm font-medium text-muted-foreground">Available for virtual work</label></div>
             </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t">
                 <div>
                     <label className="block text-sm font-medium text-muted-foreground mb-1">Skills / Specialties</label>
@@ -95,6 +99,7 @@ export default function ProfileForm({ onSave, initialProfile, isSubmitting }: Pr
                     <div className="flex flex-wrap items-center gap-2 p-2 border rounded-md bg-background min-h-[42px]">{ (formData.languages || []).map(tag => (<div key={tag} className="flex items-center gap-1 bg-secondary text-secondary-foreground text-sm font-medium px-2 py-1 rounded-full"><span>{tag}</span><button type="button" onClick={() => handleTagRemove('languages', tag)}>&times;</button></div>))}{<input type="text" value={languageInput} onChange={(e) => setLanguageInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleTagAdd('languages', languageInput, setLanguageInput))} placeholder="Add language..." className="flex-grow bg-transparent outline-none p-1"/>}</div>
                 </div>
             </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4 border-t">
                 <div>
                     <h3 className="text-lg font-semibold mb-2">Job History</h3>
