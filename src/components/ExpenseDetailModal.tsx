@@ -23,14 +23,15 @@ export default function ExpenseDetailModal({ expense, clients, onClose, onEdit, 
                         <h2 className="text-2xl font-bold text-foreground">{expense.description}</h2>
                         <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X size={24} /></button>
                     </div>
-                    <p className="text-3xl font-bold text-rose-500 mt-2">${(expense.amount || 0).toFixed(2)}</p>
+                    {/* ✅ THE FIX: Ensure the amount is always treated as a number */}
+                    <p className="text-3xl font-bold text-rose-500 mt-2">${(Number(expense.amount) || 0).toFixed(2)}</p>
                 </div>
 
                 <div className="px-6 pb-6 space-y-3 border-t pt-4">
                     <div className="flex items-center text-sm"><Calendar size={16} className="mr-3 text-primary"/>Date: <span className="font-semibold text-foreground ml-2">{expense.date}</span></div>
-                    <div className="flex items-center text-sm"><Tag size={16} className="mr-3 text-primary"/>Category: <span className="font-semibold text-foreground ml-2 capitalize">{expense.category.replace('_', ' ')}</span></div>
+                    <div className="flex items-center text-sm"><Tag size={16} className="mr-3 text-primary"/>Category: <span className="font-semibold text-foreground ml-2 capitalize">{expense.category.replace(/_/g, ' ')}</span></div>
                     {client && <div className="flex items-center text-sm"><Building size={16} className="mr-3 text-primary"/>Client: <span className="font-semibold text-foreground ml-2">{client.companyName || client.name}</span></div>}
-                    {expense.receiptUrl && 
+                    {expense.receiptUrl &&
                         <a href={expense.receiptUrl} target="_blank" rel="noopener noreferrer" className="flex items-center text-sm text-blue-500 hover:underline">
                             <Paperclip size={16} className="mr-3"/> View Attached Receipt
                         </a>

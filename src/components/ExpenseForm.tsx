@@ -1,9 +1,11 @@
+// src/components/ExpenseForm.tsx
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
 import type { Expense, Client, UserProfile } from '@/types/app-interfaces';
 import { uploadFile } from '@/utils/firestoreService';
-import { Loader2, Save, Paperclip } from 'lucide-react';
+import { Loader2, Save, Paperclip, ArrowRight } from 'lucide-react';
+import Link from 'next/link';
 
 interface ExpenseFormProps {
     onSave: (data: Partial<Expense>) => Promise<void>;
@@ -30,7 +32,6 @@ type ExpenseFormData = Omit<Partial<Expense>, 'amount'> & {
 export default function ExpenseForm({ onSave, onCancel, clients, initialData = {}, isSubmitting, userId, userProfile }: ExpenseFormProps) {
     const isEditMode = !!initialData?.id;
     
-    // State is now typed to allow string for amount, for better UX in the input field
     const [formData, setFormData] = useState<ExpenseFormData>({});
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [isParsing, setIsParsing] = useState(false);
@@ -70,7 +71,6 @@ export default function ExpenseForm({ onSave, onCancel, clients, initialData = {
             setFormData(prev => ({
                 ...prev,
                 description: parsed.description || prev.description,
-                // AI result is a number, convert to string for the form
                 amount: parsed.amount !== undefined ? String(parsed.amount) : prev.amount,
                 date: parsed.date || prev.date,
             }));
@@ -84,8 +84,6 @@ export default function ExpenseForm({ onSave, onCancel, clients, initialData = {
     }, [selectedFile]);
 
     useEffect(() => {
-        // When initial data changes, reset the form
-        // Importantly, convert the initial `amount` (number) to a string for the input
         setFormData({
             date: new Date().toISOString().split('T')[0],
             category: userProfile?.expenseCategories?.[0]?.toLowerCase().replace(/\s/g, '_') || 'other',
@@ -102,7 +100,6 @@ export default function ExpenseForm({ onSave, onCancel, clients, initialData = {
         }
     }, [selectedFile, handleParseReceipt]);
     
-    // Simplified handler: just updates the state with the raw string from the input
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
@@ -118,10 +115,8 @@ export default function ExpenseForm({ onSave, onCancel, clients, initialData = {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
-        // Final conversion and validation happens here, just before saving
         const finalData: Partial<Expense> = { 
             ...formData,
-            // Safely parse the string amount to a number, defaulting to 0 if invalid.
             amount: parseFloat(String(formData.amount)) || 0,
         };
 
@@ -140,7 +135,14 @@ export default function ExpenseForm({ onSave, onCancel, clients, initialData = {
 
     return (
         <form onSubmit={handleSubmit} className="space-y-6 bg-card p-6 rounded-lg border">
-            <h3 className="text-2xl font-bold text-foreground">{isEditMode ? 'Edit Expense' : 'Add New Expense'}</h3>
+            <div className="flex justify-between items-center">
+                 <h3 className="text-lg font-semibold">{isEditMode ? 'Edit Expense' : 'Add New Expense'}</h3>
+                 {!isEditMode && (
+                    <Link href="/dashboard/expenses" className="flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
+                        View All <ArrowRight size={14} />
+                    </Link>
+                 )}
+            </div>
             
             <div>
                 <label className="block text-sm font-medium text-muted-foreground">Scan Receipt with AI</label>
