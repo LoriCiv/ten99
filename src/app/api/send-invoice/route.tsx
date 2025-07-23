@@ -1,10 +1,12 @@
 // src/app/api/send-invoice/route.ts
 import { NextResponse } from 'next/server';
-import { Resend } from 'resend';
+import sgMail from '@sendgrid/mail';
+import { render } from '@react-email/render';
+
 import InvoiceEmail from '@/emails/InvoiceEmail';
 import type { Invoice, Client, UserProfile } from '@/types/app-interfaces';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+sgMail.setApiKey(process.env.SENDGRID_API_KEY || '');
 
 export async function POST(request: Request) {
     try {
@@ -19,26 +21,28 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Recipient email is missing' }, { status: 400 });
         }
 
-        // ✅ UPDATED: Prioritizes user's name for the subject line
         const subject = `Invoice #${invoice.invoiceNumber} from ${user.name || user.professionalTitle || 'Your Business'}`;
+        
+        // ✅ FIXED: Added 'await' to get the final HTML string
+        const emailHtml = await render(<InvoiceEmail invoice={invoice} client={client} user={user} />);
 
-        const { data, error } = await resend.emails.send({
-            from: 'invoices@ten99.app',
-            to: [recipientEmail],
+        const msg = {
+            to: recipientEmail,
+            from: {
+                email: 'invoices@ten99.app',
+                name: user.name || user.professionalTitle || 'Your Business'
+            },
             subject: subject,
-            react: <InvoiceEmail invoice={invoice} client={client} user={user} />,
-        });
+            html: emailHtml, // This is now a string, not a Promise
+        };
 
-        if (error) {
-            console.error("Resend error:", error);
-            return NextResponse.json({ error: error.message }, { status: 500 });
-        }
+        await sgMail.send(msg);
 
-        return NextResponse.json({ message: 'Email sent successfully!', data });
+        return NextResponse.json({ message: 'Email sent successfully!' });
 
     } catch (err) {
         const error = err as Error;
-        console.error("API error:", error);
-        return NextResponse.json({ error: error.message || 'An internal error occurred' }, { status: 500 }); 
+        console.error("API error sending invoice:", error);
+        return NextResponse.json({ error: 'Failed to send email.' }, { status: 500 });
     }
 }

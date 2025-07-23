@@ -1,32 +1,35 @@
-// src/app/api/send-email/route.ts
-import { Resend } from 'resend';
 import { NextResponse } from 'next/server';
+import sgMail from '@sendgrid/mail';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Initialize SendGrid with your API key
+sgMail.setApiKey(process.env.SENDGRID_API_KEY || '');
 
 export async function POST(request: Request) {
   try {
     const { to, subject, html, fromName } = await request.json();
 
-    const { data, error } = await resend.emails.send({
-      // ✅ THE FIX: Using our verified domain for the 'from' address
-      from: `${fromName} <system@ten99.app>`,
-      to: [to],
-      subject: subject,
-      html: html,
-    });
-
-    if (error) {
-      console.error("Resend error:", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!to || !subject || !html || !fromName) {
+        return NextResponse.json({ error: 'Missing required fields: to, subject, html, fromName' }, { status: 400 });
     }
 
-    return NextResponse.json({ message: 'Email sent successfully!', data });
-  } catch (error) {
-    console.error("API error:", error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-    return NextResponse.json({ error: 'An unknown error occurred.' }, { status: 500 });
+    const msg = {
+        to: to,
+        // Use a verified sender from your SendGrid account
+        from: {
+            email: 'system@ten99.app',
+            name: fromName,
+        },
+        subject: subject,
+        html: html,
+    };
+
+    await sgMail.send(msg);
+
+    return NextResponse.json({ message: 'Email sent successfully!' });
+
+  } catch (err) {
+    const error = err as Error & { response?: { body: any } };
+    console.error("API error sending email:", error.response?.body || error.message);
+    return NextResponse.json({ error: 'Failed to send email.' }, { status: 500 });
   }
 }

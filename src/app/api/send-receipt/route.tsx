@@ -1,11 +1,12 @@
-// src/app/api/send-receipt/route.tsx
+// src/app/api/send-receipt/route.ts
 import { NextResponse } from 'next/server';
-import { Resend } from 'resend';
-// ✅ THE FIX: Changed to a default import (no curly braces)
+import sgMail from '@sendgrid/mail';
+import { render } from '@react-email/render';
+
 import ReceiptEmail from '@/emails/ReceiptEmail';
 import type { Invoice, Client, UserProfile } from '@/types/app-interfaces';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+sgMail.setApiKey(process.env.SENDGRID_API_KEY || '');
 
 export async function POST(request: Request) {
     try {
@@ -21,24 +22,25 @@ export async function POST(request: Request) {
         }
 
         const subject = `Receipt for Invoice #${invoice.invoiceNumber}`;
+        const emailHtml = await render(<ReceiptEmail invoice={invoice} client={client} user={user} />);
 
-        const { data, error } = await resend.emails.send({
-            from: 'receipts@ten99.app', // Make sure this is a verified Resend domain
-            to: [recipientEmail],
+        const msg = {
+            to: recipientEmail,
+            from: {
+                email: 'receipts@ten99.app',
+                name: user.name || user.professionalTitle || 'Your Business',
+            },
             subject: subject,
-            react: <ReceiptEmail invoice={invoice} client={client} user={user} />,
-        });
+            html: emailHtml,
+        };
 
-        if (error) {
-            console.error("Resend error:", error);
-            return NextResponse.json({ error: error.message }, { status: 500 });
-        }
+        await sgMail.send(msg);
 
-        return NextResponse.json({ message: 'Receipt sent successfully!', data });
+        return NextResponse.json({ message: 'Receipt sent successfully!' });
 
     } catch (err) {
         const error = err as Error;
-        console.error("API error:", error);
-        return NextResponse.json({ error: error.message || 'An internal error occurred' }, { status: 500 });
+        console.error("API error sending receipt:", error);
+        return NextResponse.json({ error: 'Failed to send receipt.' }, { status: 500 });
     }
 }

@@ -34,9 +34,8 @@ export default function InvoiceEmail({ invoice, client, user }: InvoiceEmailProp
         <Html>
             <Head />
             <Preview>{previewText}</Preview>
-            <Body style={body}>
+            <Body style={main}> {/* ✅ Use the simple 'main' style */}
                 <Container style={container}>
-                    {/* ✅ All sections now have horizontal padding */}
                     <Section style={contentSection}>
                         {user.name && <Heading as="h1" style={h1}>{user.name}</Heading>}
                         {user.professionalTitle && <Text style={headerInfo}>{user.professionalTitle}</Text>}
@@ -107,7 +106,6 @@ export default function InvoiceEmail({ invoice, client, user }: InvoiceEmailProp
                     <Section style={footer}>
                         <Row>
                             <Column align="left" style={{ width: '50%' }}>
-                                {/* ✅ Made footer logo smaller */}
                                 <Img src={`${baseUrl}/logo.png`} width="70" alt="Ten99 Logo" />
                             </Column>
                             <Column align="right" style={{ width: '50%' }}>
@@ -124,21 +122,14 @@ export default function InvoiceEmail({ invoice, client, user }: InvoiceEmailProp
 // --- STYLES ---
 const main = { backgroundColor: '#f6f9fc', fontFamily: 'Arial, sans-serif' };
 const container = { 
-    backgroundColor: 'rgba(255, 255, 255, 0.98)', 
+    backgroundColor: '#ffffff', // ✅ Solid white background
     margin: '0 auto', 
     padding: '20px 0 48px', 
     marginBottom: '64px', 
     border: '1px solid #eee', 
     borderRadius: '5px' 
 };
-const body = {
-    ...main,
-    backgroundImage: `url(${baseUrl}/logo.png)`,
-    backgroundSize: '200px',
-    backgroundPosition: 'bottom center',
-    backgroundRepeat: 'no-repeat',
-};
-// ✅ New style for padding all content sections
+// ✅ REMOVED: The old 'body' style with the background image is gone.
 const contentSection = { padding: '0 40px' };
 const h1 = { color: '#333', fontSize: '28px', margin: '0 0 10px 0' };
 const headerInfo = { color: '#555', fontSize: '14px', lineHeight: '22px' };
@@ -151,6 +142,5 @@ const notesHeader = { fontWeight: 'bold' as const, marginBottom: '8px' };
 const notesText = { fontSize: '14px', color: '#555', whiteSpace: 'pre-line' as const };
 const footer = { padding: '20px 40px 0 40px', color: '#A9A9A9', fontSize: '12px' };
 const footerText = { textAlign: 'right' as const, lineHeight: '1' };
-// ✅ New styles for the totals section to align it correctly
 const totalsLabel = { textAlign: 'left' as const, width: '75%' };
 const totalsValue = { textAlign: 'right' as const, width: '25%' };

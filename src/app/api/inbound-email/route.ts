@@ -2,38 +2,62 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
+// ✅ Use the correct 'mailparser' library
+import { simpleParser } from 'mailparser';
 
-// ✅ FIX: Added a comment to tell the linter to ignore the unused variable.
-// We know this is temporary until we have real user accounts.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const findRecipientUserId = async (toEmail: string): Promise<string | null> => {
-    // This is hardcoded for now. In the future, this would look up the user
-    // in the database based on the inbound email address.
-    return "dev-user-1";
+    console.log(`Looking for user associated with: ${toEmail}`);
+    return "dev-user-1"; 
 };
 
 export async function POST(request: Request) {
     try {
         const formData = await request.formData();
+        
+        // --- SendGrid sends data in specific fields ---
         const from = formData.get('from') as string;
-        const recipientId = await findRecipientUserId(formData.get('to') as string);
+        const to = formData.get('to') as string;
+        const subject = formData.get('subject') as string;
+        const body = formData.get('text') as string; // Plain text version of the body
+        const email = formData.get('email') as string; // The full raw email
+        
+        if (!email) {
+            throw new Error("No raw email content found in webhook payload.");
+        }
+
+        // Parse the 'to' address to find our target user
+        const parsedToHeader = await simpleParser(to);
+        const recipientEmail = parsedToHeader.to?.value[0]?.address || '';
+        const recipientId = await findRecipientUserId(recipientEmail);
 
         if (!recipientId) {
-            return NextResponse.json({ message: 'Recipient not found.' });
+            console.log(`Recipient not found for email: ${recipientEmail}`);
+            return NextResponse.json({ message: 'Recipient not found, but acknowledged.' });
         }
         
+        // Parse the 'from' address to get sender details
+        const parsedFromHeader = await simpleParser(from);
+        const senderName = parsedFromHeader.from?.value[0]?.name || from;
+        const senderEmail = parsedFromHeader.from?.value[0]?.address || from;
+
         const newMessage = {
-            senderName: from, senderId: from, recipientId: recipientId,
-            subject: formData.get('subject') as string,
-            body: formData.get('text') as string,
-            isRead: false, createdAt: FieldValue.serverTimestamp(),
+            senderName: senderName,
+            senderId: senderEmail,
+            recipientId: recipientId,
+            subject: subject,
+            body: body,
+            isRead: false,
+            createdAt: FieldValue.serverTimestamp(),
+            status: 'new',
         };
 
         await db.collection('users').doc(recipientId).collection('messages').add(newMessage);
-        return NextResponse.json({ message: 'Email processed.' });
+        
+        console.log(`Successfully processed inbound email from ${senderEmail} to ${recipientEmail}`);
+        return NextResponse.json({ message: 'Email processed successfully.' });
 
     } catch (error) {
-        console.error("Inbound email error:", error);
+        console.error("Inbound email processing error:", error);
         return NextResponse.json({ error: 'Failed to process email.' }, { status: 500 });
     }
 }
