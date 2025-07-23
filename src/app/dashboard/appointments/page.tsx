@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
-import type { Appointment, Client, PersonalNetworkContact, JobFile } from '@/types/app-interfaces';
+import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
+// ✅ 1. IMPORT NEW ICONS
+import { Pencil, ArrowLeft, Trash2, Search, PlusCircle, ChevronDown, MapPin, Video } from 'lucide-react';
+import type { Message, Appointment, Client, PersonalNetworkContact, JobFile } from '@/types/app-interfaces';
 import { getAppointments, getClients, getPersonalNetwork, getJobFiles } from '@/utils/firestoreService';
 import { format } from 'date-fns';
-import { PlusCircle, ChevronDown, Search } from 'lucide-react';
 import Link from 'next/link';
 import AppointmentDetailModal from '@/components/AppointmentDetailModal';
 import InteractiveCalendar from '@/components/InteractiveCalendar';
@@ -20,6 +22,16 @@ const getEventStyle = (eventType?: 'job' | 'personal' | 'billing') => {
     }
 };
 
+const formatTime = (timeString?: string) => {
+    if (!timeString) return '';
+    const [hours, minutes] = timeString.split(':');
+    const hour = parseInt(hours, 10);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const formattedHour = hour % 12 || 12;
+    return `${formattedHour}:${minutes} ${ampm}`;
+};
+
+
 export default function AppointmentsPage() {
     const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
@@ -30,7 +42,6 @@ export default function AppointmentsPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    // ✅ Changed default state to false
     const [isKeyOpen, setIsKeyOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -98,7 +109,7 @@ export default function AppointmentsPage() {
 
     return (
         <>
-            <div className="p-4 sm:p-6 lg:p-8">
+            <div>
                 <header className="mb-6">
                     <div>
                         <h1 className="text-3xl font-bold text-foreground">Appointments</h1>
@@ -161,19 +172,37 @@ export default function AppointmentsPage() {
                             {appointmentsForSelectedDay.length > 0 ? (
                                 appointmentsForSelectedDay.map(appt => {
                                     const { borderColor, bgColor } = getEventStyle(appt.eventType);
+                                    const clientName = clients.find(c => c.id === appt.clientId)?.companyName || clients.find(c => c.id === appt.clientId)?.name;
+                                    
                                     return (
                                         <div
                                             key={appt.id}
                                             onClick={() => handleAppointmentClick(appt)}
-                                            className={`p-4 rounded-lg bg-card border border-l-4 ${borderColor} ${bgColor} cursor-pointer transition-all`}
+                                            className={`p-4 rounded-lg bg-card border border-l-4 ${borderColor} ${bgColor} cursor-pointer transition-all space-y-1`}
                                         >
                                             <p className="font-bold text-foreground">{appt.subject}</p>
-                                            <p className="text-sm text-muted-foreground">{appt.time}</p>
-                                            {(appt.eventType === 'job' || !appt.eventType) && (
-                                                <p className="text-sm text-primary/80 mt-1">
-                                                    {clients.find(c => c.id === appt.clientId)?.companyName || clients.find(c => c.id === appt.clientId)?.name || 'No Client'}
-                                                </p>
-                                            )}
+                                            <p className="text-sm text-muted-foreground">
+                                                {formatTime(appt.time)}
+                                                {appt.endTime && ` - ${formatTime(appt.endTime)}`}
+                                            </p>
+                                            {/* ✅ 2. NEW LOCATION DISPLAY LOGIC */}
+                                            <div className="flex flex-col gap-1 pt-1">
+                                                {clientName && (
+                                                    <p className="text-sm text-primary/80 font-medium">{clientName}</p>
+                                                )}
+                                                {appt.locationType === 'virtual' && (
+                                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                        <Video size={14} />
+                                                        <span>Virtual</span>
+                                                    </div>
+                                                )}
+                                                {appt.locationType === 'physical' && appt.city && appt.state && (
+                                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                        <MapPin size={14} />
+                                                        <span>{appt.city}, {appt.state}</span>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     );
                                 })
