@@ -1,7 +1,7 @@
+// src/app/api/send-email/route.ts
 import { NextResponse } from 'next/server';
 import sgMail from '@sendgrid/mail';
 
-// Initialize SendGrid with your API key
 sgMail.setApiKey(process.env.SENDGRID_API_KEY || '');
 
 export async function POST(request: Request) {
@@ -14,7 +14,6 @@ export async function POST(request: Request) {
 
     const msg = {
         to: to,
-        // Use a verified sender from your SendGrid account
         from: {
             email: 'system@ten99.app',
             name: fromName,
@@ -28,8 +27,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: 'Email sent successfully!' });
 
   } catch (err) {
-    const error = err as Error & { response?: { body: any } };
-    console.error("API error sending email:", error.response?.body || error.message);
-    return NextResponse.json({ error: 'Failed to send email.' }, { status: 500 });
+    // ✅ UPDATED: More specific error handling to satisfy the linter
+    console.error("API error sending email:", err);
+    const message = err instanceof Error ? err.message : 'An unknown error occurred.';
+    return NextResponse.json({ error: `Failed to send email: ${message}` }, { status: 500 });
   }
 }
