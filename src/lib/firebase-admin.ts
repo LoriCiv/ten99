@@ -1,31 +1,22 @@
+// src/lib/firebase-admin.ts
 import admin from 'firebase-admin';
+import { getApps } from 'firebase-admin/app';
 
-// Log the start of the initialization process
-console.log("Attempting to initialize Firebase Admin SDK...");
-
-// Check if the app is already initialized to prevent errors
-if (!admin.apps.length) {
-  try {
-    // Check if the service account environment variable exists
-    if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
-      throw new Error("FIREBASE_SERVICE_ACCOUNT environment variable is not set.");
+// This version reads from the separate environment variables.
+if (!getApps().length) {
+    try {
+        admin.initializeApp({
+            credential: admin.credential.cert({
+                projectId: process.env.FIREBASE_PROJECT_ID,
+                clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+                // This line correctly formats the private key for Vercel
+                privateKey: (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+            }),
+            storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+        });
+    } catch (error) {
+        console.error('Firebase Admin Initialization Error:', error);
     }
-
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-    
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-      // Add your storage bucket URL here
-      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET 
-    });
-
-    console.log("Firebase Admin SDK initialized SUCCESSFULLY.");
-  } catch (error) {
-    // Log any errors during initialization
-    console.error("Firebase Admin SDK initialization FAILED:", error);
-  }
-} else {
-  console.log("Firebase Admin SDK was already initialized.");
 }
 
 const db = admin.firestore();
