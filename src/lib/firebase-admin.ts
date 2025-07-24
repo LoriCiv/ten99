@@ -1,26 +1,35 @@
-// src/lib/firebase-admin.ts
 import admin from 'firebase-admin';
-import { getApps } from 'firebase-admin/app';
+import { getApps, getApp, initializeApp } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
+import { getAuth } from 'firebase-admin/auth';
 
-// This version reads from the separate environment variables.
+// This function decodes the Base64 key from Vercel's environment variables
+const getFirebaseCredentials = () => {
+  const encodedKey = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
+  if (!encodedKey) {
+    throw new Error('FIREBASE_SERVICE_ACCOUNT_BASE64 environment variable not set.');
+  }
+  // Decode the Base64 string into the original JSON string
+  const jsonKey = Buffer.from(encodedKey, 'base64').toString('utf-8');
+  return JSON.parse(jsonKey);
+};
+
 if (!getApps().length) {
-    try {
-        admin.initializeApp({
-            credential: admin.credential.cert({
-                projectId: process.env.FIREBASE_PROJECT_ID,
-                clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-                // This line correctly formats the private key for Vercel
-                privateKey: (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
-            }),
-            storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-        });
-    } catch (error) {
-        console.error('Firebase Admin Initialization Error:', error);
-    }
+  try {
+    initializeApp({
+      credential: admin.credential.cert(getFirebaseCredentials()),
+      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    });
+    console.log("Firebase Admin SDK initialized successfully.");
+  } catch (error: any) {
+    console.error("Firebase Admin SDK initialization error:", error.stack);
+    throw new Error("Failed to initialize Firebase Admin SDK");
+  }
 }
 
-const db = admin.firestore();
-const auth = admin.auth();
-const storage = admin.storage();
+const db = getFirestore();
+const auth = getAuth();
+const storage = getStorage();
 
 export { db, auth, storage };
