@@ -7,9 +7,9 @@ import type { UserProfile, JobPosting } from '@/types/app-interfaces';
 
 const TEMP_USER_ID = "dev-user-1";
 
-// ✅ FIX: This interface needs to be correctly defined
+// ✅ FIX: Changed how the page props are typed to avoid conflicts with Next.js
 interface PageProps {
-  params: { id: string };
+    params: { id: string };
 }
 
 const serializeData = <T extends object>(doc: T | null): T | null => {
