@@ -8,13 +8,13 @@ interface PageProps {
     params: { id: string };
 }
 
-// ✅ FIX: Changed the type of 'data' back to 'any' inside this specific function
+// ✅ FIX: Improved the typing inside this helper function
 const serializeData = <T extends object>(doc: T | null): T | null => {
     if (!doc) return null;
-    const data: { [key: string]: any } = { ...doc };
+    const data = { ...doc } as { [key: string]: any };
     for (const key in data) {
         if (data[key] instanceof Timestamp) {
-            data[key] = data[key].toDate().toISOString();
+            data[key] = (data[key] as Timestamp).toDate().toISOString();
         }
     }
     return data as T;
