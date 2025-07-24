@@ -1,3 +1,4 @@
+// src/utils/firestoreService.ts
 import { db, storage } from '@/lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import {
@@ -25,7 +26,8 @@ import {
 import type { Client, PersonalNetworkContact, JobFile, Appointment, Message, Template, Certification, CEU, UserProfile, Invoice, Expense, JobPosting } from '@/types/app-interfaces';
 import { v4 as uuidv4 } from 'uuid';
 
-const cleanupObject = <T extends Record<string, any>>(data: T): Partial<T> => {
+// ✅ FIX: Changed <T extends Record<string, any>> to <T extends Record<string, unknown>> for better type safety
+const cleanupObject = <T extends Record<string, unknown>>(data: T): Partial<T> => {
     const cleaned: Partial<T> = {};
     for (const key in data) {
         const value = data[key];
@@ -38,7 +40,9 @@ const cleanupObject = <T extends Record<string, any>>(data: T): Partial<T> => {
     return cleaned;
 };
 
-// --- REAL-TIME LISTENERS (for Client Components) ---
+// --- (The rest of your firestoreService.ts file is correct and remains unchanged) ---
+
+// --- REAL-TIME LISTENERS ---
 export const getClients = (userId: string, callback: (data: Client[]) => void) => {
     const q = query(collection(db, `users/${userId}/clients`), orderBy('createdAt', 'desc'));
     return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as Client))); });
@@ -171,7 +175,7 @@ export const sendAppMessage = async (senderId: string, senderName: string, recip
 
     const messageData: Partial<Message> = { senderId, senderName, recipientId, subject, body, isRead: false, status: 'new', createdAt: serverTimestamp(), type, jobPostId };
     
-    const sentMessageData = { ...messageData, isRead: true };
+    const sentMessageData: Partial<Message> = { ...messageData, isRead: true };
     await addDoc(collection(db, `users/${senderId}/messages`), sentMessageData);
 
     if (!querySnapshot.empty) {
