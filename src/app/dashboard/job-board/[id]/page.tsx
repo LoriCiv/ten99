@@ -20,8 +20,13 @@ const serializeData = <T extends object>(doc: T | null): T | null => {
     return data as T;
 };
 
-// ✅ FIX: Using the standard Next.js function signature to avoid all type conflicts.
-export default async function Page({ params }: { params: { id: string } }): Promise<JSX.Element> {
+type PageProps = {
+    params: {
+        id: string;
+    };
+};
+
+export default async function Page({ params }: PageProps): Promise<JSX.Element> {
     const postId = params.id;
 
     const [jobPostData, currentUserProfileData] = await Promise.all([
@@ -32,10 +37,11 @@ export default async function Page({ params }: { params: { id: string } }): Prom
     if (!jobPostData) {
         notFound();
     }
-    
+
     const jobPost = serializeData(jobPostData);
     const currentUserProfile = serializeData(currentUserProfileData);
-    
+
+    // The redundant null check for jobPost is removed for cleanliness
     if (!jobPost) {
         notFound();
     }
