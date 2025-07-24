@@ -1,12 +1,12 @@
 {
   "crons": [
     {
-      "path": "/api/invoicing/cron",
-      "schedule": "0 * * * *"
+      "path": "/api/appointments/cron",
+      "schedule": "0 5 * * *"
     },
     {
-      "path": "/api/appointments/cron",
-      "schedule": "5 * * * *"
+      "path": "/api/invoicing/cron",
+      "schedule": "0 6 * * *"
     }
   ]
 }

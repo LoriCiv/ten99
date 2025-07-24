@@ -40,7 +40,6 @@ export interface Appointment {
     createdAt?: Timestamp | FieldValue;
     eventType: 'job' | 'personal' | 'billing';
     subject: string;
-    // ✅ ADDED 'pending-confirmation' status
     status: 'pending' | 'scheduled' | 'completed' | 'canceled' | 'canceled-billable' | 'pending-confirmation';
     date: string;
     time: string;
@@ -76,8 +75,7 @@ export interface JobFile {
     tags?: string[];
     startDate?: string;
     endDate?: string;
-    isPinned?: boolean;
-    priority?: number; 
+    priority?: number;
 }
 
 export interface Certification {
@@ -163,10 +161,12 @@ export interface Message {
     body: string;
     isRead: boolean;
     createdAt: Timestamp | FieldValue;
-    status?: 'new' | 'pending' | 'approved' | 'declined';
+    status?: 'new' | 'pending' | 'approved' | 'declined' | 'offer-pending' | 'offer-rescinded' | 'offer-sent';
     proposedDate?: string;
     proposedTime?: string;
     appointmentId?: string;
+    type?: 'standard' | 'application' | 'offer';
+    jobPostId?: string;
 }
 
 export interface Template {
@@ -220,17 +220,31 @@ export interface UserProfile {
     email?: string;
     expenseCategories?: string[];
     invoiceLineItems?: InvoiceLineItemTemplate[];
-    sendOverdueReminders?: boolean; 
+    sendOverdueReminders?: boolean;
+    monthlyPostCount?: number;
+    postCountResetDate?: string;
+    // ✅ ADDED THESE LINES
+    notifyOnNewMessage?: boolean;
+    notifyOnJobMatch?: boolean;
 }
 
 export interface JobPosting {
     id?: string;
-    userId: string; 
+    userId: string;
     title: string;
     description: string;
+    jobType?: 'On-site' | 'Virtual' | 'Hybrid';
     location?: string;
+    zipCode?: string;
     rate?: string;
+    contactEmail?: string;
     requiredSkills?: string[];
     isFilled: boolean;
     createdAt?: Timestamp;
+    expiresAt?: Timestamp;
+    pendingApplicantId?: string;
+    startDate?: string;
+    endDate?: string;
+    startTime?: string;
+    endTime?: string;
 }

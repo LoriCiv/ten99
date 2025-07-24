@@ -2,10 +2,21 @@
 
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-// ✅ Import Search icon
-import { Pencil, ArrowLeft, Trash2, Search } from 'lucide-react';
-import type { Message } from '@/types/app-interfaces';
-import { getMessagesForUser, getSentMessagesForUser, sendAppMessage, updateMessage, approveMessageAndCreateAppointment, deleteMessage } from '@/utils/firestoreService';
+import { Pencil, ArrowLeft, Trash2, Search, Check, X as XIcon, Loader2, Send, RotateCcw } from 'lucide-react';
+import type { Message, JobPosting } from '@/types/app-interfaces';
+import {
+    getMessagesForUser,
+    getSentMessagesForUser,
+    sendAppMessage,
+    updateMessage,
+    deleteMessage,
+    sendJobOffer,
+    declineJobApplication,
+    rescindJobOffer,
+    acceptJobOffer,
+    declineJobOffer,
+    getJobPostings
+} from '@/utils/firestoreService';
 import ComposeMessageForm from '@/components/ComposeMessageForm';
 
 const TEMP_USER_ID = "dev-user-1";
@@ -14,34 +25,35 @@ const TEMP_USER_NAME = "Dev User";
 function MailboxPageInternal() {
     const searchParams = useSearchParams();
     const [messages, setMessages] = useState<Message[]>([]);
+    const [jobPostings, setJobPostings] = useState<JobPosting[]>([]);
     const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
     const [isComposing, setIsComposing] = useState(false);
     const [activeFolder, setActiveFolder] = useState<'inbox' | 'sent'>('inbox');
-    // ✅ State for the search term
     const [searchTerm, setSearchTerm] = useState('');
+    const [isActionLoading, setIsActionLoading] = useState(false);
     
     const initialRecipient = searchParams.get('to');
 
     useEffect(() => {
-        if (initialRecipient && !isComposing) {
-            setIsComposing(true);
-        }
+        if (initialRecipient && !isComposing) { setIsComposing(true); }
     }, [initialRecipient, isComposing]);
 
     useEffect(() => {
-        const unsub = activeFolder === 'inbox'
+        const unsubMessages = activeFolder === 'inbox'
             ? getMessagesForUser(TEMP_USER_ID, setMessages)
             : getSentMessagesForUser(TEMP_USER_ID, setMessages);
         
+        const unsubJobs = getJobPostings(setJobPostings);
+        
         setSelectedMessage(null);
-        return () => unsub();
+        return () => {
+            unsubMessages();
+            unsubJobs();
+        };
     }, [activeFolder]);
 
-    // ✅ Filter messages based on search term
     const filteredMessages = useMemo(() => {
-        if (!searchTerm) {
-            return messages;
-        }
+        if (!searchTerm) return messages;
         const lowercasedTerm = searchTerm.toLowerCase();
         return messages.filter(message => 
             message.senderName.toLowerCase().includes(lowercasedTerm) ||
@@ -77,18 +89,6 @@ function MailboxPageInternal() {
         }
     };
     
-    const handleApprove = async () => {
-        if (!selectedMessage) return;
-        try {
-            await approveMessageAndCreateAppointment(TEMP_USER_ID, selectedMessage);
-            alert("Appointment created successfully!");
-            setSelectedMessage(null);
-        } catch (error) {
-            console.error("Error approving message:", error);
-            alert(`Failed to approve: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
-    };
-
     const handleDelete = async () => {
         if (!selectedMessage || !selectedMessage.id) return;
         if (window.confirm("Are you sure you want to permanently delete this message?")) {
@@ -103,6 +103,82 @@ function MailboxPageInternal() {
         }
     };
 
+    const handleSendOffer = async () => {
+        if (!selectedMessage) return;
+        setIsActionLoading(true);
+        try {
+            await sendJobOffer(selectedMessage);
+            alert("Offer sent to the applicant!");
+        } catch (error) {
+            console.error("Error sending offer:", error);
+            alert(`Failed to send offer: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } finally {
+            setIsActionLoading(false);
+        }
+    };
+
+    const handleDeclineApplication = async () => {
+        if (!selectedMessage) return;
+        setIsActionLoading(true);
+        try {
+            await declineJobApplication(selectedMessage);
+            alert("Application declined. The applicant has been notified.");
+        } catch (error) {
+            console.error("Error declining application:", error);
+            alert("Failed to decline application.");
+        } finally {
+            setIsActionLoading(false);
+        }
+    };
+
+    const handleRescindOffer = async () => {
+        if (!selectedMessage) return;
+         if (window.confirm("Are you sure you want to rescind this offer? This will allow you to offer the job to someone else.")) {
+            setIsActionLoading(true);
+            try {
+                await rescindJobOffer(selectedMessage);
+                alert("Offer rescinded. You can now offer the job to another applicant.");
+            } catch (error) {
+                console.error("Error rescinding offer:", error);
+                alert("Failed to rescind offer.");
+            } finally {
+                setIsActionLoading(false);
+            }
+        }
+    };
+
+    const handleAcceptOffer = async () => {
+        if (!selectedMessage) return;
+        setIsActionLoading(true);
+        try {
+            await acceptJobOffer(selectedMessage);
+            alert("Offer accepted! A confirmation has been sent to the job poster and the event is on your calendar.");
+        } catch (error) {
+            console.error("Error accepting offer:", error);
+            alert(`Failed to accept offer: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } finally {
+            setIsActionLoading(false);
+        }
+    };
+    
+    const handleDeclineOffer = async () => {
+        if (!selectedMessage) return;
+        setIsActionLoading(true);
+        try {
+            await declineJobOffer(selectedMessage);
+            alert("Offer declined. The job poster has been notified.");
+        } catch (error) {
+            console.error("Error declining offer:", error);
+            alert("Failed to decline offer.");
+        } finally {
+            setIsActionLoading(false);
+        }
+    };
+
+    const relatedJobPost = selectedMessage?.jobPostId 
+        ? jobPostings.find(p => p.id === selectedMessage.jobPostId) 
+        : null;
+
     return (
         <div className="flex h-[calc(100vh-8rem)] bg-card border rounded-lg overflow-hidden">
             <div className={`w-full md:w-1/3 border-r border-border flex-col ${selectedMessage || isComposing ? 'hidden' : 'flex'} md:flex`}>
@@ -113,64 +189,79 @@ function MailboxPageInternal() {
                     </div>
                     <button onClick={handleCompose} className="p-2 rounded-full hover:bg-muted"><Pencil size={18} /></button>
                 </div>
-
-                {/* ✅ Search input for the message list */}
-                <div className="p-2 border-b">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <input
-                            type="text"
-                            placeholder="Search mail..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-9 p-2 text-sm border rounded-md bg-background"
-                        />
-                    </div>
-                </div>
-
+                <div className="p-2 border-b"><div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><input type="text" placeholder="Search mail..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-9 p-2 text-sm border rounded-md bg-background"/></div></div>
                 <ul className="overflow-y-auto">
-                    {/* ✅ Use the filteredMessages array for rendering */}
-                    {filteredMessages.map(message => (
-                        <li key={message.id} onClick={() => handleSelectMessage(message)} className={`p-4 border-b cursor-pointer ${selectedMessage?.id === message.id ? 'bg-primary/5' : 'hover:bg-muted'}`}>
-                            <p className={`font-semibold ${!message.isRead && activeFolder === 'inbox' ? 'text-primary' : ''}`}>{message.senderName}</p>
-                            <p className="text-sm truncate">{message.subject}</p>
-                        </li>
-                    ))}
+                    {filteredMessages.map(message => {
+                        const jobForThisMessage = jobPostings.find(p => p.id === message.jobPostId);
+                        const isOfferPendingForThisJob = jobForThisMessage && jobForThisMessage.pendingApplicantId && jobForThisMessage.pendingApplicantId !== message.senderId;
+                        const isDisabled = message.type === 'application' && isOfferPendingForThisJob;
+                        return (
+                             <li key={message.id} onClick={() => !isDisabled && handleSelectMessage(message)} className={`p-4 border-b ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${selectedMessage?.id === message.id ? 'bg-primary/5' : 'hover:bg-muted'}`}>
+                                <p className={`font-semibold ${!message.isRead && activeFolder === 'inbox' ? 'text-primary' : ''}`}>{message.senderName}</p>
+                                <p className="text-sm truncate">{message.subject}</p>
+                            </li>
+                        );
+                    })}
                 </ul>
             </div>
             
             <div className={`w-full md:w-2/3 p-6 overflow-y-auto ${!selectedMessage && !isComposing ? 'hidden' : 'block'} md:block`}>
                  {isComposing ? (
-                      <ComposeMessageForm onSend={handleSend} onClose={() => setIsComposing(false)} initialRecipient={initialRecipient || ''} />
+                     <ComposeMessageForm onSend={handleSend} onClose={() => setIsComposing(false)} initialRecipient={initialRecipient || ''} />
                  ) : selectedMessage ? (
-                      <div>
-                          <div className="flex justify-between items-start">
-                              <button onClick={() => setSelectedMessage(null)} className="md:hidden mb-4 flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-primary">
-                                  <ArrowLeft size={16} />
-                                  Back to {activeFolder === 'inbox' ? 'Inbox' : 'Sent'}
-                              </button>
-                              <button onClick={handleDelete} className="p-2 text-muted-foreground hover:text-destructive rounded-full hover:bg-muted ml-auto">
-                                <Trash2 size={18} />
-                                <span className="sr-only">Delete message</span>
-                              </button>
-                          </div>
-                          <h2 className="text-2xl font-bold mb-2">{selectedMessage.subject}</h2>
-                          <p className="text-sm text-muted-foreground">From: {selectedMessage.senderName} &lt;{selectedMessage.senderId}&gt;</p>
-                          <div className="mt-6 prose prose-sm max-w-none whitespace-pre-wrap">{selectedMessage.body}</div>
-                          
-                          {activeFolder === 'inbox' && selectedMessage.status === 'new' && (
-                              <div className="mt-8 pt-6 border-t space-y-4">
-                                  <h3 className="font-semibold">Actions</h3>
-                                  <div className="flex gap-2">
-                                      <button onClick={handleApprove} className="flex items-center gap-2 bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700">
-                                          Approve & Create Appointment
-                                      </button>
-                                  </div>
-                              </div>
-                          )}
-                      </div>
+                     <div>
+                         <div className="flex justify-between items-start">
+                             <button onClick={() => setSelectedMessage(null)} className="md:hidden mb-4 flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-primary"><ArrowLeft size={16} /> Back to {activeFolder === 'inbox' ? 'Inbox' : 'Sent'}</button>
+                             <button onClick={handleDelete} className="p-2 text-muted-foreground hover:text-destructive rounded-full hover:bg-muted ml-auto"><Trash2 size={18} /><span className="sr-only">Delete message</span></button>
+                         </div>
+                         <h2 className="text-2xl font-bold mb-2">{selectedMessage.subject}</h2>
+                         <p className="text-sm text-muted-foreground">From: {selectedMessage.senderName} &lt;{selectedMessage.senderId}&gt;</p>
+                         <div className="mt-6 prose prose-sm max-w-none whitespace-pre-wrap">{selectedMessage.body}</div>
+                         
+                         {activeFolder === 'inbox' && (
+                            <div className="mt-8 pt-6 border-t space-y-4">
+                                {/* Actions for Job Posters */}
+                                {selectedMessage.type === 'application' && (
+                                    <>
+                                        <h3 className="font-semibold">Application Actions</h3>
+                                        {selectedMessage.status === 'new' && !relatedJobPost?.pendingApplicantId && (
+                                            <div className="flex gap-2">
+                                                <button onClick={handleSendOffer} disabled={isActionLoading} className="flex items-center gap-2 bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700 disabled:opacity-50"><Send size={16}/> Send Offer</button>
+                                                <button onClick={handleDeclineApplication} disabled={isActionLoading} className="flex items-center gap-2 bg-rose-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-rose-700 disabled:opacity-50"><XIcon size={16}/> Decline</button>
+                                            </div>
+                                        )}
+                                        {selectedMessage.status === 'offer-pending' && (
+                                            <div className="flex items-center gap-4">
+                                                <p className="text-sm font-semibold text-blue-600">An offer is pending with this applicant.</p>
+                                                <button onClick={handleRescindOffer} disabled={isActionLoading} className="flex items-center gap-2 bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-yellow-600 disabled:opacity-50"><RotateCcw size={16}/> Rescind Offer</button>
+                                            </div>
+                                        )}
+                                        {relatedJobPost?.pendingApplicantId && relatedJobPost.pendingApplicantId !== selectedMessage.senderId && (
+                                            <p className="text-sm font-semibold text-muted-foreground">An offer is pending with another applicant for this job.</p>
+                                        )}
+                                    </>
+                                )}
+
+                                {/* Actions for Job Applicants */}
+                                {selectedMessage.type === 'offer' && selectedMessage.status === 'new' && (
+                                    <>
+                                        <h3 className="font-semibold">Job Offer Actions</h3>
+                                        <div className="flex gap-2">
+                                            <button onClick={handleAcceptOffer} disabled={isActionLoading} className="flex items-center gap-2 bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700 disabled:opacity-50"><Check size={16}/> Accept Offer</button>
+                                            <button onClick={handleDeclineOffer} disabled={isActionLoading} className="flex items-center gap-2 bg-rose-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-rose-700 disabled:opacity-50"><XIcon size={16}/> Decline Offer</button>
+                                        </div>
+                                    </>
+                                )}
+
+                                {/* Status for Already Actioned Messages */}
+                                {['approved', 'declined', 'offer-rescinded'].includes(selectedMessage.status || '') && (
+                                    <p className="text-sm font-semibold text-muted-foreground">This application has been marked as '{selectedMessage.status}'.</p>
+                                )}
+                            </div>
+                         )}
+                     </div>
                  ) : (
-                      <div className="hidden md:flex items-center justify-center h-full"><p className="text-muted-foreground">Select a message to read.</p></div>
+                     <div className="hidden md:flex items-center justify-center h-full"><p className="text-muted-foreground">Select a message to read.</p></div>
                  )}
             </div>
         </div>

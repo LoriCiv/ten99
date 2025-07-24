@@ -14,9 +14,8 @@ interface JobFilesPageContentProps {
     initialClientFilter?: string; 
 }
 
-// ✅ UPDATED PriorityStars component to use 2 stars for 3 levels of priority
 const PriorityStars = ({ priority = 0, onClick }: { priority?: number, onClick: (e: React.MouseEvent) => void }) => {
-    const stars = [1, 2]; // We will render 2 stars
+    const stars = [1, 2]; // We will render 2 stars for 3 levels of priority
     const priorityTooltips = ['No priority', 'Low priority', 'High priority'];
     
     return (
@@ -29,7 +28,6 @@ const PriorityStars = ({ priority = 0, onClick }: { priority?: number, onClick: 
                 <Star 
                     key={starIndex} 
                     size={18} 
-                    // A star is filled if the priority level is greater than or equal to its index
                     className={`transition-colors ${priority >= starIndex ? 'text-amber-500 fill-amber-500' : 'text-muted-foreground/50'}`} 
                 />
             ))}
