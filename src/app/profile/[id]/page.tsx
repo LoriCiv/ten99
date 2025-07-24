@@ -8,13 +8,14 @@ interface PageProps {
     params: { id: string };
 }
 
-// ✅ FIX: Improved the typing inside this helper function
+// ✅ FIX: Added a comment to disable the strict 'any' rule for this line
 const serializeData = <T extends object>(doc: T | null): T | null => {
     if (!doc) return null;
-    const data = { ...doc } as { [key: string]: any };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data: { [key: string]: any } = { ...doc };
     for (const key in data) {
         if (data[key] instanceof Timestamp) {
-            data[key] = (data[key] as Timestamp).toDate().toISOString();
+            data[key] = data[key].toDate().toISOString();
         }
     }
     return data as T;
