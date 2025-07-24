@@ -173,7 +173,7 @@ export const updateCEU = (userId: string, ceuData: Partial<CEU>): Promise<void> 
 export const updateUserProfile = (userId: string, profileData: Partial<UserProfile>): Promise<void> => { const docRef = doc(db, `users/${userId}/profile`, 'mainProfile'); return setDoc(docRef, profileData, { merge: true }); };
 const generateNextInvoiceNumber = async (userId: string): Promise<string> => { const metaRef = doc(db, `users/${userId}/_metadata`, 'invoiceCounter'); const year = new Date().getFullYear(); try { const newInvoiceNumber = await runTransaction(db, async (transaction) => { const metaDoc = await transaction.get(metaRef); if (!metaDoc.exists()) { transaction.set(metaRef, { lastNumber: 1, year: year }); return `${year}-001`; } const data = metaDoc.data(); if(!data) { transaction.set(metaRef, { lastNumber: 1, year: year }); return `${year}-001`; } const lastNumber = data.year === year ? data.lastNumber : 0; const nextNumber = lastNumber + 1; transaction.update(metaRef, { lastNumber: nextNumber, year: year }); return `${year}-${String(nextNumber).padStart(3, '0')}`; }); return newInvoiceNumber; } catch (error) { console.error("Transaction failed: ", error); return `${year}-${Date.now().toString().slice(-5)}`; } };
 export const getNextInvoiceNumber = async (userId: string): Promise<string> => { return generateNextInvoiceNumber(userId); };
-export const addInvoice = async (userId: string, invoiceData: Partial<Invoice>): Promise<void> => { if (!invoiceData.invoiceNumber) { invoiceData.invoiceNumber = await generateNextInvoiceNumber(userId); } const dataToSave = { ...cleanupObject(invoiceData), createdAt: serverTimestamp(), }; await addDoc(collection(db, `users/${userId}/invoices`), dataToSave); };
+export const addInvoice = async (userId: string, invoiceData: Partial<Invoice>): Promise<void> => { if (!invoiceData.invoiceNumber) { invoiceData.invoiceNumber = await getNextInvoiceNumber(userId); } const dataToSave = { ...cleanupObject(invoiceData), createdAt: serverTimestamp(), }; await addDoc(collection(db, `users/${userId}/invoices`), dataToSave); };
 export const updateInvoice = (userId: string, invoiceId: string, invoiceData: Partial<Invoice>): Promise<void> => { const docRef = doc(db, `users/${userId}/invoices`, invoiceId); return setDoc(docRef, cleanupObject(invoiceData), { merge: true }); };
 export const deleteInvoice = (userId: string, invoiceId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/invoices`, invoiceId)); };
 const calculateDurationInHours = (startTime?: string, endTime?: string): number => { if (!startTime || !endTime) return 1; const start = new Date(`1970-01-01T${startTime}`); const end = new Date(`1970-01-01T${endTime}`); const diffMs = end.getTime() - start.getTime(); if (diffMs <= 0) return 1; return parseFloat((diffMs / (1000 * 60 * 60)).toFixed(2)); };
@@ -187,24 +187,61 @@ export const getPublicCertifications = async (userId: string): Promise<Certifica
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Certification));
 };
+
+// --- PUBLIC/SHARED FILE FUNCTIONS ---
+export const createPublicJobFile = async (userId: string, jobFile: JobFile): Promise<string> => { 
+    if (!jobFile.id) throw new Error("Cannot share an unsaved job file."); 
+    const publicData = { 
+        originalUserId: userId, 
+        originalJobFileId: jobFile.id, 
+        jobTitle: jobFile.jobTitle, 
+        clientId: jobFile.clientId || '', 
+        sharedNotes: jobFile.sharedNotes || '', 
+        fileUrl: jobFile.fileUrl || '', 
+        createdAt: serverTimestamp(), 
+    }; 
+    const publicDocRef = await addDoc(collection(db, "publicJobFiles"), publicData); 
+    return publicDocRef.id; 
+};
+export const getPublicJobFile = async (publicId: string): Promise<JobFile | null> => { 
+    const docRef = doc(db, "publicJobFiles", publicId); 
+    const docSnap = await getDoc(docRef); 
+    return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as JobFile : null; 
+};
+export const getClientForJobFile = async (userId: string, clientId: string): Promise<Client | null> => { 
+    const docRef = doc(db, 'users', userId, 'clients', clientId); 
+    const docSnap = await getDoc(docRef); 
+    return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as Client : null; 
+};
+
+// --- JOB BOARD FUNCTIONS ---
+export const addJobPosting = async (userId: string, jobData: Partial<JobPosting>): Promise<DocumentReference> => {
+    const profileRef = doc(db, `users/${userId}/profile`, 'mainProfile');
+    const newPostRef = await runTransaction(db, async (transaction) => {
+        const userProfileSnap = await transaction.get(profileRef);
+        if (!userProfileSnap.exists()) { throw new Error("User profile not found."); }
+        const userProfile = userProfileSnap.data() as UserProfile;
+        const postLimit = 2;
+        const currentMonthYear = `${new Date().getFullYear()}-${new Date().getMonth()}`;
+        if (userProfile.postCountResetDate === currentMonthYear && (userProfile.monthlyPostCount || 0) >= postLimit) {
+            // throw new Error(`You have reached your monthly limit of ${postLimit} job posts.`);
+        }
+        const newCount = userProfile.postCountResetDate === currentMonthYear ? (userProfile.monthlyPostCount || 0) + 1 : 1;
+        transaction.update(profileRef, { monthlyPostCount: newCount, postCountResetDate: currentMonthYear });
+        const createdAt = serverTimestamp();
+        const thirtyDaysFromNow = new Date();
+        thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+        const dataToSave = { ...cleanupObject(jobData), userId, isFilled: false, createdAt, expiresAt: Timestamp.fromDate(thirtyDaysFromNow), contactEmail: userProfile.email || '', };
+        const newDocRef = doc(collection(db, 'jobPostings'));
+        transaction.set(newDocRef, dataToSave);
+        return newDocRef;
+    });
+    return newPostRef;
+};
 export const getJobPostingById = async (postId: string): Promise<JobPosting | null> => {
     const docRef = doc(db, "jobPostings", postId);
     const docSnap = await getDoc(docRef);
     return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as JobPosting : null;
-};
-export const addJobPosting = async (userId: string, jobData: Partial<JobPosting>): Promise<DocumentReference> => {
-    const userProfileSnap = await getDoc(doc(db, `users/${userId}/profile`, 'mainProfile'));
-    if (!userProfileSnap.exists()) { throw new Error("User profile not found."); }
-    const userProfile = userProfileSnap.data() as UserProfile;
-    const createdAt = serverTimestamp();
-    const thirtyDaysFromNow = new Date();
-    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-    const dataToSave = {
-        ...cleanupObject(jobData), userId, isFilled: false, createdAt,
-        expiresAt: Timestamp.fromDate(thirtyDaysFromNow),
-        contactEmail: userProfile.email || '',
-    };
-    return addDoc(collection(db, 'jobPostings'), dataToSave);
 };
 export const sendJobApplicationMessage = async (applicantId: string, applicantProfile: UserProfile, jobPost: JobPosting): Promise<void> => {
     if (applicantId === jobPost.userId) { throw new Error("You cannot apply to your own job posting."); }
@@ -219,22 +256,16 @@ export const sendJobApplicationMessage = async (applicantId: string, applicantPr
 };
 export const sendJobOffer = async (applicationMessage: Message): Promise<void> => {
     if (!applicationMessage.id || !applicationMessage.jobPostId) throw new Error("Message is not a valid application.");
-    
     const jobPostRef = doc(db, 'jobPostings', applicationMessage.jobPostId);
     const jobPostSnap = await getDoc(jobPostRef);
     if (!jobPostSnap.exists()) throw new Error("Job post not found.");
     const jobPost = jobPostSnap.data() as JobPosting;
-
     if (jobPost.pendingApplicantId) throw new Error("An offer is already pending for this job.");
-
     const batch = writeBatch(db);
     batch.update(jobPostRef, { pendingApplicantId: applicationMessage.senderId });
-    
     const originalMessageRef = doc(db, 'users', applicationMessage.recipientId, 'messages', applicationMessage.id);
     batch.update(originalMessageRef, { status: 'offer-pending' });
-
     await batch.commit();
-
     await sendAppMessage(
         applicationMessage.recipientId, "Job Poster", applicationMessage.senderId,
         `Job Offer for: ${jobPost.title}`,
@@ -257,24 +288,19 @@ export const acceptJobOffer = async (offerMessage: Message): Promise<void> => {
     const jobPost = await getJobPostingById(offerMessage.jobPostId);
     if (!jobPost) throw new Error("Job posting not found.");
     if (jobPost.isFilled) throw new Error("This job has already been filled.");
-
     const batch = writeBatch(db);
     const jobPostRef = doc(db, 'jobPostings', jobPost.id!);
     batch.update(jobPostRef, { isFilled: true, pendingApplicantId: '' });
-
     const offerMessageRef = doc(db, 'users', offerMessage.recipientId, 'messages', offerMessage.id);
     batch.update(offerMessageRef, { status: 'approved' });
-    
     await batch.commit();
-    
     const newAppointmentData: Partial<Appointment> = {
         subject: jobPost.title, date: new Date().toISOString().split('T')[0], time: '09:00',
         status: 'pending-confirmation', locationType: jobPost.jobType === 'Virtual' ? 'virtual' : 'physical',
-        address: jobPost.location, zip: jobPost.zipCode,
+        address: jobPost.location,
         notes: `This appointment was created from your successful application... Please confirm or update the date and time.`,
     };
     await addAppointment(offerMessage.recipientId, newAppointmentData);
-    
     await sendAppMessage(
         offerMessage.recipientId, "Ten99 System", jobPost.userId,
         `Offer Accepted: ${jobPost.title}`,
@@ -285,10 +311,8 @@ export const declineJobOffer = async (offerMessage: Message): Promise<void> => {
     if (!offerMessage.id || !offerMessage.jobPostId || offerMessage.type !== 'offer') throw new Error("Invalid offer message.");
     const jobPostRef = doc(db, 'jobPostings', offerMessage.jobPostId);
     await updateDoc(jobPostRef, { pendingApplicantId: '' });
-
     const offerMessageRef = doc(db, 'users', offerMessage.recipientId, 'messages', offerMessage.id);
     await updateDoc(offerMessageRef, { status: 'declined' });
-
     await sendAppMessage(
         offerMessage.recipientId, "Ten99 System", offerMessage.senderId,
         `Offer Declined: ${offerMessage.subject.replace('Job Offer for: ', '')}`,
@@ -297,13 +321,10 @@ export const declineJobOffer = async (offerMessage: Message): Promise<void> => {
 };
 export const rescindJobOffer = async (applicationMessage: Message): Promise<void> => {
     if (!applicationMessage.id || !applicationMessage.jobPostId) return;
-
     const jobPostRef = doc(db, 'jobPostings', applicationMessage.jobPostId);
     await updateDoc(jobPostRef, { pendingApplicantId: '' });
-
     const originalMessageRef = doc(db, 'users', applicationMessage.recipientId, 'messages', applicationMessage.id);
     await updateDoc(originalMessageRef, { status: 'offer-rescinded' });
-
     await sendAppMessage(
         applicationMessage.recipientId, "Job Poster", applicationMessage.senderId,
         `Offer Rescinded for: ${applicationMessage.subject.replace('Application for: ', '')}`,
