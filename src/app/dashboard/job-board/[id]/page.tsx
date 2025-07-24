@@ -20,7 +20,7 @@ const serializeData = <T extends object>(doc: T | null): T | null => {
     return data as T;
 };
 
-// This uses the standard Next.js function signature to avoid conflicts
+// ✅ FIX: Using the standard Next.js function signature to avoid all type conflicts.
 export default async function Page({ params }: { params: { id: string } }): Promise<JSX.Element> {
     const postId = params.id;
 
