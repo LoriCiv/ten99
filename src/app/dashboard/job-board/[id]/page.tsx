@@ -6,16 +6,15 @@ import { Timestamp } from 'firebase/firestore';
 
 const TEMP_USER_ID = "dev-user-1";
 
-// Helper function to convert Firestore Timestamps to strings
-const serializeData = (doc: any) => {
+const serializeData = <T extends object>(doc: T | null): T | null => {
     if (!doc) return null;
-    const data = { ...doc };
+    const data: { [key: string]: any } = { ...doc };
     for (const key in data) {
         if (data[key] instanceof Timestamp) {
             data[key] = data[key].toDate().toISOString();
         }
     }
-    return data;
+    return data as T;
 };
 
 export default async function JobDetailPage({ params }: { params: { id: string } }) {
@@ -29,14 +28,18 @@ export default async function JobDetailPage({ params }: { params: { id: string }
     if (!jobPostData) {
         notFound();
     }
-
-    // ✅ FIX: Serialize the data before passing it to the client component
+    
     const jobPost = serializeData(jobPostData);
     const currentUserProfile = serializeData(currentUserProfileData);
 
+    // ✅ THIS IS THE FIX: Add a final check to satisfy TypeScript
+    if (!jobPost) {
+        notFound();
+    }
+
     return (
-        <JobDetailPageContent 
-            jobPost={jobPost} 
+        <JobDetailPageContent
+            jobPost={jobPost}
             currentUserProfile={currentUserProfile}
             currentUserId={TEMP_USER_ID}
         />

@@ -1,4 +1,3 @@
-// src/utils/firestoreService.ts
 import { db, storage } from '@/lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import {
@@ -26,7 +25,6 @@ import {
 import type { Client, PersonalNetworkContact, JobFile, Appointment, Message, Template, Certification, CEU, UserProfile, Invoice, Expense, JobPosting } from '@/types/app-interfaces';
 import { v4 as uuidv4 } from 'uuid';
 
-// ✅ FIX: Changed <T extends Record<string, any>> to <T extends Record<string, unknown>> for better type safety
 const cleanupObject = <T extends Record<string, unknown>>(data: T): Partial<T> => {
     const cleaned: Partial<T> = {};
     for (const key in data) {
@@ -40,9 +38,7 @@ const cleanupObject = <T extends Record<string, unknown>>(data: T): Partial<T> =
     return cleaned;
 };
 
-// --- (The rest of your firestoreService.ts file is correct and remains unchanged) ---
-
-// --- REAL-TIME LISTENERS ---
+// --- REAL-TIME LISTENERS (for Client Components) ---
 export const getClients = (userId: string, callback: (data: Client[]) => void) => {
     const q = query(collection(db, `users/${userId}/clients`), orderBy('createdAt', 'desc'));
     return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as Client))); });
@@ -115,6 +111,12 @@ export const getTemplatesData = async (userId: string): Promise<Template[]> => {
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Template));
 };
+export const getPublicUserProfile = async (userId: string): Promise<UserProfile | null> => { const docRef = doc(db, `users/${userId}/profile`, 'mainProfile'); const docSnap = await getDoc(docRef); if (docSnap.exists()) { return { id: docSnap.id, ...docSnap.data() } as UserProfile; } return null; };
+export const getPublicCertifications = async (userId: string): Promise<Certification[]> => {
+    const q = query(collection(db, `users/${userId}/certifications`), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Certification));
+};
 
 // --- WRITE/UPDATE/DELETE FUNCTIONS ---
 export const addClient = (userId: string, clientData: Partial<Client>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/clients`), { ...cleanupObject(clientData), createdAt: serverTimestamp() }); };
@@ -140,7 +142,7 @@ export const addAppointment = async (userId: string, appointmentData: Partial<Ap
     if (appointmentData.recurrence && recurrenceEndDate && appointmentData.date) {
         const batch = writeBatch(db);
         const seriesId = uuidv4();
-        const movingDate = new Date(appointmentData.date + 'T00:00:00');
+        let movingDate = new Date(appointmentData.date + 'T00:00:00');
         const endDate = new Date(recurrenceEndDate + 'T00:00:00');
         while (movingDate <= endDate) {
             const newDocRef = doc(collection(db, `users/${userId}/appointments`));
@@ -204,12 +206,6 @@ export const createInvoiceFromAppointment = async (userId: string, appointment: 
 export const addExpense = (userId: string, expenseData: Partial<Expense>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/expenses`), { ...cleanupObject(expenseData), createdAt: serverTimestamp() }); };
 export const updateExpense = (userId: string, expenseId: string, expenseData: Partial<Expense>): Promise<void> => { return setDoc(doc(db, `users/${userId}/expenses`, expenseId), cleanupObject(expenseData), { merge: true }); };
 export const deleteExpense = (userId: string, expenseId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/expenses`, expenseId)); };
-export const getPublicUserProfile = async (userId: string): Promise<UserProfile | null> => { const docRef = doc(db, `users/${userId}/profile`, 'mainProfile'); const docSnap = await getDoc(docRef); if (docSnap.exists()) { return { id: docSnap.id, ...docSnap.data() } as UserProfile; } return null; };
-export const getPublicCertifications = async (userId: string): Promise<Certification[]> => {
-    const q = query(collection(db, `users/${userId}/certifications`), orderBy('createdAt', 'desc'));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Certification));
-};
 
 // --- PUBLIC/SHARED FILE FUNCTIONS ---
 export const createPublicJobFile = async (userId: string, jobFile: JobFile): Promise<string> => { 

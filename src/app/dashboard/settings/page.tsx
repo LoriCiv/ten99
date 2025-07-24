@@ -6,7 +6,6 @@ import { Timestamp } from 'firebase/firestore';
 
 const TEMP_USER_ID = "dev-user-1";
 
-// Helper function to safely convert Timestamps to strings
 const serializeData = <T extends object>(doc: T | null): T | null => {
     if (!doc) return null;
     const data: { [key: string]: any } = { ...doc };

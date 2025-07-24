@@ -1,3 +1,4 @@
+// src/components/ProfileForm.tsx
 "use client";
 
 import { useState } from 'react';
@@ -41,7 +42,7 @@ export default function ProfileForm({ initialProfile, onSave, isSubmitting, user
     
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        let profileDataToSave = { ...formData };
+        const profileDataToSave = { ...formData };
 
         if (selectedFile) {
             setIsUploading(true);
@@ -63,7 +64,7 @@ export default function ProfileForm({ initialProfile, onSave, isSubmitting, user
 
     return (
         <form onSubmit={handleSubmit} className="space-y-8">
-            <div className="flex justify-between items-center pb-4 border-b">
+             <div className="flex justify-between items-center pb-4 border-b">
                  <h2 className="text-xl font-semibold">Public Profile Settings</h2>
                  <Link href={`/profile/${userId}`} target="_blank" className="flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
                      View My Public Profile <ExternalLink size={14} />
@@ -108,7 +109,7 @@ export default function ProfileForm({ initialProfile, onSave, isSubmitting, user
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4 border-t">
                 <div>
                     <h3 className="text-lg font-semibold mb-2">Job History</h3>
-                    <div className="space-y-4">{ (formData.jobHistory || []).map((entry, index) => (<div key={index} className="grid grid-cols-1 gap-2 p-3 border rounded-md bg-background/50 relative"><input value={entry.title} onChange={e => handleJobHistoryChange(index, 'title', e.target.value)} placeholder="Job Title" className="w-full p-2 border rounded-md" /><input value={entry.company} onChange={e => handleJobHistoryChange(index, 'company', e.target.value)} placeholder="Company" className="w-full p-2 border rounded-md" /><input value={entry.years} onChange={e => handleJobHistoryChange(index, 'years', e.target.value)} placeholder="Years (e.g., 2020-2023)" className="w-full p-2 border rounded-md" /><button type="button" onClick={() => removeJobHistoryEntry(index)} className="absolute -top-2 -right-2 p-1 bg-destructive text-destructive-foreground rounded-full"><Trash2 size={14}/></button></div>))}<button type="button" onClick={addJobHistoryEntry} className="flex items-center gap-2 text-sm font-semibold text-primary hover:underline"><Plus size={16}/> Add Job Entry</button></div>
+                    <div className="space-y-4">{ (formData.jobHistory || []).map((entry, index) => (<div key={index} className="grid grid-cols-1 gap-2 p-3 border rounded-md bg-background/50 relative"><input value={entry.title} onChange={e => handleJobHistoryChange(index, 'title', e.target.value)} placeholder="Job Title" className="w-full p-2 border rounded-md" /><input value={entry.company} onChange={e => handleJobHistoryChange(index, 'company', e.target.value)} placeholder="Company" className="w-full mt-1 p-2 bg-background border rounded-md" /><input value={entry.years} onChange={e => handleJobHistoryChange(index, 'years', e.target.value)} placeholder="Years (e.g., 2020-2023)" className="w-full p-2 border rounded-md" /><button type="button" onClick={() => removeJobHistoryEntry(index)} className="absolute -top-2 -right-2 p-1 bg-destructive text-destructive-foreground rounded-full"><Trash2 size={14}/></button></div>))}<button type="button" onClick={addJobHistoryEntry} className="flex items-center gap-2 text-sm font-semibold text-primary hover:underline"><Plus size={16}/> Add Job Entry</button></div>
                 </div>
                 <div>
                     <h3 className="text-lg font-semibold mb-2">Education</h3>

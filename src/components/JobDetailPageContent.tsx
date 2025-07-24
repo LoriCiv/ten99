@@ -1,10 +1,11 @@
+// src/components/JobDetailPageContent.tsx
 "use client";
 
 import { useState } from 'react';
 import type { JobPosting, UserProfile } from '@/types/app-interfaces';
 import { sendJobApplicationMessage } from '@/utils/firestoreService';
 import Link from 'next/link';
-import { ArrowLeft, Briefcase, MapPin, Tag, Mail, Check, Loader2, Calendar } from 'lucide-react';
+import { ArrowLeft, Briefcase, MapPin, Tag, Check, Loader2, Calendar } from 'lucide-react';
 
 interface JobDetailPageContentProps {
     jobPost: JobPosting;

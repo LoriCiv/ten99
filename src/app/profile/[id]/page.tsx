@@ -3,8 +3,7 @@ import { getPublicUserProfile, getPublicCertifications } from '@/utils/firestore
 import { notFound } from 'next/navigation';
 import PublicProfileContent from '@/components/PublicProfileContent';
 import { Timestamp } from 'firebase/firestore';
-// ✅ THIS IS THE FIX: Import the necessary types
-import type { UserProfile, Certification } from '@/types/app-interfaces';
+import type { Certification } from '@/types/app-interfaces';
 
 interface PageProps {
     params: { id: string };

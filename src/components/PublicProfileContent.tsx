@@ -1,6 +1,7 @@
+// src/components/PublicProfileContent.tsx
 "use client";
 
-import type { UserProfile, Certification, EducationEntry, JobHistoryEntry } from '@/types/app-interfaces';
+import type { UserProfile, Certification } from '@/types/app-interfaces';
 import Image from 'next/image';
 import { User, Award, BookOpen, Briefcase, GraduationCap, Languages } from 'lucide-react';
 
