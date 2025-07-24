@@ -19,7 +19,6 @@ const serializeData = <T extends object>(doc: T | null): T | null => {
     return data as T;
 };
 
-// @ts-ignore - This comment forces the Vercel build to ignore the persistent type error.
 export default async function Page({ params }: { params: { id: string } }): Promise<JSX.Element> {
     const postId = params.id;
 
