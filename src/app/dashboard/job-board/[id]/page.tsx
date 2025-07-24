@@ -1,4 +1,3 @@
-// src/app/dashboard/job-board/[id]/page.tsx
 import { getJobPostingById, getPublicUserProfile } from '@/utils/firestoreService';
 import { notFound } from 'next/navigation';
 import JobDetailPageContent from '@/components/JobDetailPageContent';
@@ -6,6 +5,7 @@ import { Timestamp } from 'firebase/firestore';
 
 const TEMP_USER_ID = "dev-user-1";
 
+// ✅ FIX: Added a generic type to handle any kind of document
 const serializeData = <T extends object>(doc: T | null): T | null => {
     if (!doc) return null;
     const data: { [key: string]: any } = { ...doc };
@@ -31,8 +31,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
     
     const jobPost = serializeData(jobPostData);
     const currentUserProfile = serializeData(currentUserProfileData);
-
-    // ✅ THIS IS THE FIX: Add a final check to satisfy TypeScript
+    
     if (!jobPost) {
         notFound();
     }

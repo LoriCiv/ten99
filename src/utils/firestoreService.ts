@@ -118,6 +118,32 @@ export const getPublicCertifications = async (userId: string): Promise<Certifica
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Certification));
 };
 
+// --- PUBLIC/SHARED FILE FUNCTIONS ---
+export const createPublicJobFile = async (userId: string, jobFile: JobFile): Promise<string> => { 
+    if (!jobFile.id) throw new Error("Cannot share an unsaved job file."); 
+    const publicData = { 
+        originalUserId: userId, 
+        originalJobFileId: jobFile.id, 
+        jobTitle: jobFile.jobTitle, 
+        clientId: jobFile.clientId || '', 
+        sharedNotes: jobFile.sharedNotes || '', 
+        fileUrl: jobFile.fileUrl || '', 
+        createdAt: serverTimestamp(), 
+    }; 
+    const publicDocRef = await addDoc(collection(db, "publicJobFiles"), publicData); 
+    return publicDocRef.id; 
+};
+export const getPublicJobFile = async (publicId: string): Promise<JobFile | null> => { 
+    const docRef = doc(db, "publicJobFiles", publicId); 
+    const docSnap = await getDoc(docRef); 
+    return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as JobFile : null; 
+};
+export const getClientForJobFile = async (userId: string, clientId: string): Promise<Client | null> => { 
+    const docRef = doc(db, 'users', userId, 'clients', clientId); 
+    const docSnap = await getDoc(docRef); 
+    return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as Client : null; 
+};
+
 // --- WRITE/UPDATE/DELETE FUNCTIONS ---
 export const addClient = (userId: string, clientData: Partial<Client>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/clients`), { ...cleanupObject(clientData), createdAt: serverTimestamp() }); };
 export const updateClient = (userId: string, clientId: string, clientData: Partial<Client>): Promise<void> => { return setDoc(doc(db, `users/${userId}/clients`, clientId), cleanupObject(clientData), { merge: true }); };
@@ -142,6 +168,7 @@ export const addAppointment = async (userId: string, appointmentData: Partial<Ap
     if (appointmentData.recurrence && recurrenceEndDate && appointmentData.date) {
         const batch = writeBatch(db);
         const seriesId = uuidv4();
+        // eslint-disable-next-line prefer-const
         let movingDate = new Date(appointmentData.date + 'T00:00:00');
         const endDate = new Date(recurrenceEndDate + 'T00:00:00');
         while (movingDate <= endDate) {
@@ -206,32 +233,6 @@ export const createInvoiceFromAppointment = async (userId: string, appointment: 
 export const addExpense = (userId: string, expenseData: Partial<Expense>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/expenses`), { ...cleanupObject(expenseData), createdAt: serverTimestamp() }); };
 export const updateExpense = (userId: string, expenseId: string, expenseData: Partial<Expense>): Promise<void> => { return setDoc(doc(db, `users/${userId}/expenses`, expenseId), cleanupObject(expenseData), { merge: true }); };
 export const deleteExpense = (userId: string, expenseId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/expenses`, expenseId)); };
-
-// --- PUBLIC/SHARED FILE FUNCTIONS ---
-export const createPublicJobFile = async (userId: string, jobFile: JobFile): Promise<string> => { 
-    if (!jobFile.id) throw new Error("Cannot share an unsaved job file."); 
-    const publicData = { 
-        originalUserId: userId, 
-        originalJobFileId: jobFile.id, 
-        jobTitle: jobFile.jobTitle, 
-        clientId: jobFile.clientId || '', 
-        sharedNotes: jobFile.sharedNotes || '', 
-        fileUrl: jobFile.fileUrl || '', 
-        createdAt: serverTimestamp(), 
-    }; 
-    const publicDocRef = await addDoc(collection(db, "publicJobFiles"), publicData); 
-    return publicDocRef.id; 
-};
-export const getPublicJobFile = async (publicId: string): Promise<JobFile | null> => { 
-    const docRef = doc(db, "publicJobFiles", publicId); 
-    const docSnap = await getDoc(docRef); 
-    return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as JobFile : null; 
-};
-export const getClientForJobFile = async (userId: string, clientId: string): Promise<Client | null> => { 
-    const docRef = doc(db, 'users', userId, 'clients', clientId); 
-    const docSnap = await getDoc(docRef); 
-    return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as Client : null; 
-};
 
 // --- JOB BOARD FUNCTIONS ---
 export const addJobPosting = async (userId: string, jobData: Partial<JobPosting>): Promise<DocumentReference> => {
