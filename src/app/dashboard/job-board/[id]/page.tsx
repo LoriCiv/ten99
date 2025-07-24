@@ -1,4 +1,3 @@
-// src/app/dashboard/job-board/[id]/page.tsx
 import { getJobPostingById, getPublicUserProfile } from '@/utils/firestoreService';
 import { notFound } from 'next/navigation';
 import JobDetailPageContent from '@/components/JobDetailPageContent';
@@ -7,11 +6,8 @@ import type { UserProfile, JobPosting } from '@/types/app-interfaces';
 
 const TEMP_USER_ID = "dev-user-1";
 
-// ✅ FIX: Changed how the page props are typed to avoid conflicts with Next.js
-interface PageProps {
-    params: { id: string };
-}
-
+// ✅ FIX: The entire function signature below was changed to define props directly,
+// removing the conflicting 'PageProps' interface.
 const serializeData = <T extends object>(doc: T | null): T | null => {
     if (!doc) return null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -24,7 +20,7 @@ const serializeData = <T extends object>(doc: T | null): T | null => {
     return data as T;
 };
 
-export default async function JobDetailPage({ params }: PageProps) {
+export default async function JobDetailPage({ params }: { params: { id: string } }) {
     const postId = params.id;
 
     const [jobPostData, currentUserProfileData] = await Promise.all([
