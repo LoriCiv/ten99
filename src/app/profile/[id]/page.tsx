@@ -1,31 +1,29 @@
 // src/app/profile/[id]/page.tsx
 import { getPublicUserProfile, getPublicCertifications } from '@/utils/firestoreService';
-import ProfilePageContent from '@/components/ProfilePageContent';
 import { notFound } from 'next/navigation';
+import PublicProfileContent from '@/components/PublicProfileContent';
 import { Timestamp } from 'firebase/firestore';
+// ✅ THIS IS THE FIX: Import the necessary types
+import type { UserProfile, Certification } from '@/types/app-interfaces';
 
-interface ProfilePageProps {
-  params: {
-    id: string;
-  };
+interface PageProps {
+    params: { id: string };
 }
 
-// Helper function to convert Firestore Timestamps to strings
-const serializeData = (doc: any) => {
+const serializeData = <T extends object>(doc: T | null): T | null => {
     if (!doc) return null;
-    const data = { ...doc };
+    const data: { [key: string]: any } = { ...doc };
     for (const key in data) {
         if (data[key] instanceof Timestamp) {
             data[key] = data[key].toDate().toISOString();
         }
     }
-    return data;
+    return data as T;
 };
 
-
-export default async function ProfilePage({ params }: { params: { id: string } }) {
+export default async function ProfilePage({ params }: PageProps) {
     const userId = params.id;
-    
+
     const [profileData, certificationsData] = await Promise.all([
         getPublicUserProfile(userId),
         getPublicCertifications(userId)
@@ -34,15 +32,14 @@ export default async function ProfilePage({ params }: { params: { id: string } }
     if (!profileData) {
         notFound();
     }
-    
-    // ✅ FIX: Serialize the data before passing it to the client component
+
     const profile = serializeData(profileData);
-    const certifications = certificationsData.map(serializeData);
+    const certifications = certificationsData.map(cert => serializeData(cert));
 
     return (
-        <ProfilePageContent 
-            profile={profile} 
-            certifications={certifications} 
+        <PublicProfileContent
+            profile={profile}
+            certifications={certifications as Certification[]}
         />
     );
 }

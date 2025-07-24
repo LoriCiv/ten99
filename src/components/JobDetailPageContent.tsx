@@ -1,12 +1,10 @@
-// src/components/JobDetailPageContent.tsx
 "use client";
 
 import { useState } from 'react';
 import type { JobPosting, UserProfile } from '@/types/app-interfaces';
 import { sendJobApplicationMessage } from '@/utils/firestoreService';
 import Link from 'next/link';
-import { ArrowLeft, Briefcase, MapPin, Tag, Mail, Check, Loader2 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { ArrowLeft, Briefcase, MapPin, Tag, Mail, Check, Loader2, Calendar } from 'lucide-react';
 
 interface JobDetailPageContentProps {
     jobPost: JobPosting;
@@ -15,7 +13,6 @@ interface JobDetailPageContentProps {
 }
 
 export default function JobDetailPageContent({ jobPost, currentUserProfile, currentUserId }: JobDetailPageContentProps) {
-    const router = useRouter();
     const [isLoading, setIsLoading] = useState(false);
     const [isApplied, setIsApplied] = useState(false);
 
@@ -51,12 +48,12 @@ export default function JobDetailPageContent({ jobPost, currentUserProfile, curr
                         <div className="flex flex-wrap gap-x-6 gap-y-2 text-md text-muted-foreground mt-2">
                            {jobPost.rate && <span className="flex items-center gap-1.5"><Briefcase size={16} /> {jobPost.rate}</span>}
                            {jobPost.location && <span className="flex items-center gap-1.5"><MapPin size={16} /> {jobPost.location} ({jobPost.zipCode})</span>}
-                           {jobPost.contactEmail && <span className="flex items-center gap-1.5"><Mail size={16} /> {jobPost.contactEmail}</span>}
+                           {jobPost.startDate && <span className="flex items-center gap-1.5"><Calendar size={16} /> {jobPost.startDate} {jobPost.startTime || ''}</span>}
                         </div>
                     </div>
                     <div>
                         {isOwner ? (
-                             <p className="text-sm font-semibold bg-secondary text-secondary-foreground px-4 py-2 rounded-lg">This is your job post.</p>
+                            <p className="text-sm font-semibold bg-secondary text-secondary-foreground px-4 py-2 rounded-lg">This is your job post.</p>
                         ) : isApplied ? (
                             <button disabled className="bg-green-600 text-white font-semibold py-2 px-4 rounded-lg flex items-center gap-2 w-full sm:w-auto justify-center">
                                 <Check size={18} /> Applied

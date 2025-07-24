@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase-admin';
-import { FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
 import type { Appointment, Client, Invoice } from '@/types/app-interfaces';
 
+// Helper function to calculate duration (server-side version)
 const calculateDurationInHours = (startTime?: string, endTime?: string): number => {
     if (!startTime || !endTime) return 1;
     const start = new Date(`1970-01-01T${startTime}`);
@@ -12,6 +13,7 @@ const calculateDurationInHours = (startTime?: string, endTime?: string): number 
     return parseFloat((diffMs / (1000 * 60 * 60)).toFixed(2));
 };
 
+// Helper function to get next invoice number (server-side version)
 const generateNextInvoiceNumber = async (userId: string): Promise<string> => {
     const metaRef = db.doc(`users/${userId}/_metadata/invoiceCounter`);
     const year = new Date().getFullYear();
@@ -20,7 +22,6 @@ const generateNextInvoiceNumber = async (userId: string): Promise<string> => {
         const metaDoc = await transaction.get(metaRef);
         const data = metaDoc.data();
 
-        // ✅ FIX: More robust check for TypeScript
         if (!metaDoc.exists || !data) {
             transaction.set(metaRef, { lastNumber: 1, year: year });
             return `${year}-001`;
@@ -56,7 +57,6 @@ export async function GET() {
                 const clientRef = db.doc(`users/${userId}/clients/${appointment.clientId}`);
                 const clientSnap = await clientRef.get();
 
-                // ✅ FIX: Use .exists (property) instead of .exists() (function)
                 if (clientSnap.exists) {
                     const client = clientSnap.data() as Client;
                     const rate = client.rate || 0;

@@ -11,29 +11,32 @@ interface JobFilesPageContentProps {
     jobFiles: JobFile[];
     clients: Client[];
     userId: string;
-    initialClientFilter?: string; 
+    initialClientFilter?: string;
 }
 
-const PriorityStars = ({ priority = 0, onClick }: { priority?: number, onClick: (e: React.MouseEvent) => void }) => {
-    const stars = [1, 2]; // We will render 2 stars for 3 levels of priority
-    const priorityTooltips = ['No priority', 'Low priority', 'High priority'];
-    
+// Helper component for the priority stars
+const PriorityStars = ({ priority, onClick }: { priority: number, onClick: (newPriority: number) => void }) => {
     return (
-        <button 
-            onClick={onClick} 
-            className="absolute top-2 right-2 p-1 rounded-full flex hover:bg-secondary"
-            title={`Set priority (Current: ${priorityTooltips[priority]})`}
-        >
-            {stars.map((starIndex) => (
-                <Star 
-                    key={starIndex} 
-                    size={18} 
-                    className={`transition-colors ${priority >= starIndex ? 'text-amber-500 fill-amber-500' : 'text-muted-foreground/50'}`} 
-                />
+        <div className="flex" onClick={(e) => e.stopPropagation()}>
+            {[1, 2].map((starValue) => (
+                <button
+                    key={starValue}
+                    onClick={(e) => {
+                        e.preventDefault();
+                        // If you click the same star again, it unsets the priority to 0
+                        const newPriority = priority === starValue ? 0 : starValue;
+                        onClick(newPriority);
+                    }}
+                    className={`p-1 ${priority >= starValue ? 'text-yellow-400' : 'text-muted-foreground/50 hover:text-yellow-400'}`}
+                    title={`Set priority to ${starValue}`}
+                >
+                    <Star size={18} fill={priority >= starValue ? 'currentColor' : 'none'} />
+                </button>
             ))}
-        </button>
+        </div>
     );
 };
+
 
 export default function JobFilesPageContent({
     jobFiles,
@@ -47,24 +50,34 @@ export default function JobFilesPageContent({
 
     const allTags = useMemo(() => {
         const tagsSet = new Set<string>();
-        jobFiles.forEach(file => {
-            file.tags?.forEach(tag => tagsSet.add(tag));
-        });
+        // Add a safety check to ensure jobFiles is an array
+        if (Array.isArray(jobFiles)) {
+            jobFiles.forEach(file => {
+                file.tags?.forEach(tag => tagsSet.add(tag));
+            });
+        }
         return Array.from(tagsSet).sort();
     }, [jobFiles]);
 
     const filteredJobFiles = useMemo(() => {
         const getSortableDate = (item: JobFile): number => {
             const createdAt = item.createdAt as Timestamp;
-            if (!createdAt || typeof createdAt.toMillis !== 'function') return 0;
+            if (!createdAt || typeof createdAt.toMillis !== 'function') {
+                return 0;
+            }
             return createdAt.toMillis();
         };
+
+        // Add a safety check here as well
+        if (!Array.isArray(jobFiles)) {
+            return [];
+        }
 
         return jobFiles
             .filter(file => {
                 const clientMatch = !clientFilter || file.clientId === clientFilter;
                 const tagMatch = !tagFilter || (file.tags && file.tags.includes(tagFilter));
-                const searchMatch = !searchTerm || 
+                const searchMatch = !searchTerm ||
                     file.jobTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
                     (clients.find(c => c.id === file.clientId)?.companyName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                     (clients.find(c => c.id === file.clientId)?.name || '').toLowerCase().includes(searchTerm.toLowerCase());
@@ -74,26 +87,22 @@ export default function JobFilesPageContent({
                 const aPriority = a.priority || 0;
                 const bPriority = b.priority || 0;
                 if (aPriority !== bPriority) {
-                    return bPriority - aPriority; // Sorts by priority: 2, 1, then 0
+                    return bPriority - aPriority; // Higher priority first
                 }
-                return getSortableDate(b) - getSortableDate(a);
+                return getSortableDate(b) - getSortableDate(a); // Then newest first
             });
     }, [jobFiles, searchTerm, clientFilter, tagFilter, clients]);
 
-    const handleSetPriority = async (e: React.MouseEvent, file: JobFile) => {
-        e.preventDefault(); 
-        e.stopPropagation();
+    const handleSetPriority = async (file: JobFile, newPriority: number) => {
         if (!file.id) return;
         try {
-            const currentPriority = file.priority || 0;
-            const nextPriority = (currentPriority + 1) % 3; // Cycles 0 -> 1 -> 2 -> 0
-            await updateJobFile(userId, file.id, { priority: nextPriority });
+            await updateJobFile(userId, file.id, { priority: newPriority });
         } catch (error) {
-            console.error("Error updating priority:", error);
-            alert("Failed to update priority.");
+            console.error("Error setting priority:", error);
+            alert("Failed to update priority status.");
         }
     };
-
+    
     const getClientName = (clientId?: string) => {
         if (!clientId) return 'N/A';
         const client = clients.find(c => c.id === clientId);
@@ -125,7 +134,7 @@ export default function JobFilesPageContent({
     return (
         <div className="p-4 sm:p-6 lg:p-8">
             <header className="mb-6">
-                 <div>
+                <div>
                     <h1 className="text-3xl font-bold text-foreground">Job Files</h1>
                     <p className="text-muted-foreground mt-1">Organize all your project-related documents and notes.</p>
                 </div>
@@ -146,14 +155,19 @@ export default function JobFilesPageContent({
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredJobFiles.map(file => {
-                    if (!file.id) return null; 
+                    if (!file.id) return null;
                     const dateRange = formatDateRange(file.startDate, file.endDate);
                     const status = getJobStatus(file.startDate, file.endDate);
                     const StatusIcon = status.icon;
 
                     return (
                         <Link href={`/dashboard/job-files/${file.id}`} key={file.id} className="relative bg-card p-6 rounded-lg border hover:border-primary hover:shadow-lg transition-all flex flex-col justify-between min-h-[160px]">
-                            <PriorityStars priority={file.priority} onClick={(e) => handleSetPriority(e, file)} />
+                            <div className="absolute top-2 right-2">
+                                <PriorityStars 
+                                    priority={file.priority || 0} 
+                                    onClick={(newPriority) => handleSetPriority(file, newPriority)} 
+                                />
+                            </div>
                             
                             <div>
                                 <h3 className="text-xl font-bold text-foreground truncate pr-8">{file.jobTitle}</h3>

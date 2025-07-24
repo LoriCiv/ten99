@@ -38,7 +38,7 @@ const cleanupObject = <T extends Record<string, any>>(data: T): Partial<T> => {
     return cleaned;
 };
 
-// --- REAL-TIME LISTENERS ---
+// --- REAL-TIME LISTENERS (for Client Components) ---
 export const getClients = (userId: string, callback: (data: Client[]) => void) => {
     const q = query(collection(db, `users/${userId}/clients`), orderBy('createdAt', 'desc'));
     return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as Client))); });
@@ -78,7 +78,7 @@ export const getAllCEUs = (userId: string, callback: (data: CEU[]) => void) => {
         callback(ceus);
     });
 };
-export const getUserProfile = (userId: string, callback: (data: UserProfile | null) => void) => { const docRef = doc(db, `users/${userId}/profile`, 'mainProfile'); return onSnapshot(docRef, (docSnap) => { if (docSnap.exists()) { callback({ id: docSnap.id, ...docSnap.data() } as UserProfile); } else { callback({ isVirtual: false, skills: [], languages: [], jobHistory: [], education: [] }); } }); };
+export const getUserProfile = (userId: string, callback: (data: UserProfile | null) => void) => { const docRef = doc(db, `users/${userId}/profile`, 'mainProfile'); return onSnapshot(docRef, (docSnap) => { if (docSnap.exists()) { callback({ id: docSnap.id, ...docSnap.data() } as UserProfile); } else { callback(null); } }); };
 export const getInvoices = (userId: string, callback: (data: Invoice[]) => void) => { const q = query(collection(db, `users/${userId}/invoices`), orderBy('invoiceDate', 'desc')); return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Invoice))); }); };
 export const getExpenses = (userId: string, callback: (data: Expense[]) => void) => { const q = query(collection(db, `users/${userId}/expenses`), orderBy('date', 'desc')); return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Expense))); }); };
 export const getJobPostings = (callback: (data: JobPosting[]) => void) => {
@@ -91,6 +91,25 @@ export const getJobPostings = (callback: (data: JobPosting[]) => void) => {
     return onSnapshot(q, (snapshot) => {
         callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as JobPosting)))
     });
+};
+
+// --- SERVER-SIDE DATA FETCHERS ---
+export const getProfileData = async (userId: string): Promise<UserProfile | null> => {
+    const docRef = doc(db, `users/${userId}/profile`, 'mainProfile');
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() } as UserProfile;
+    }
+    return {
+        isVirtual: false, skills: [], languages: [], jobHistory: [], education: [],
+        expenseCategories: ['Travel', 'Equipment', 'Supplies', 'Professional Development', 'Other'],
+        invoiceLineItems: [],
+    };
+};
+export const getTemplatesData = async (userId: string): Promise<Template[]> => {
+    const q = query(collection(db, `users/${userId}/templates`), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Template));
 };
 
 // --- WRITE/UPDATE/DELETE FUNCTIONS ---

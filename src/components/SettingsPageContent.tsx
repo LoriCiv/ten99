@@ -9,8 +9,8 @@ import ProfileForm from './ProfileForm';
 import { PlusCircle, Edit, Trash2, Save, Loader2, ArrowUp, ArrowDown, Info } from 'lucide-react';
 import { Switch } from "@/components/ui/switch";
 
-const defaultTermsText = `This contract incorporates pre-negotiated terms and conditions governing the provision of interpretation services...`;
-const defaultPaymentText = `Payment can be made via:\n- Venmo: @YourUsername\n- Zelle: your@email.com\n\nThank you for your business!`;
+const defaultTermsText = `This contract incorporates pre-negotiated terms...`;
+const defaultPaymentText = `Payment can be made via:\n- Venmo: @YourUsername...`;
 const DEFAULT_EXPENSE_CATEGORIES = ['Travel', 'Equipment', 'Supplies', 'Professional Development', 'Other'];
 
 interface SettingsPageContentProps {
@@ -41,10 +41,10 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
         }
     }, [initialTemplates, initialProfile]);
 
-    const handleSaveSettings = async () => {
+    const handleSaveSettings = async (dataToSave: Partial<UserProfile>) => {
         setIsSubmitting(true);
         try {
-            await updateUserProfile(userId, profile);
+            await updateUserProfile(userId, dataToSave);
             alert("Settings saved successfully!");
             router.refresh();
         } catch (error) {
@@ -55,7 +55,6 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
         }
     };
     
-    // --- Template Handlers (They manage their own state) ---
     const handleOpenTemplateModal = (template: Partial<Template> | null) => { setEditingTemplate(template); setIsTemplateModalOpen(true); };
     const handleCloseTemplateModal = () => { setIsTemplateModalOpen(false); setEditingTemplate(null); };
     const handleSaveTemplate = async (data: Partial<Template>) => {
@@ -79,7 +78,6 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
         }
     };
     
-    // --- Handlers that modify the main 'profile' state ---
     const handleAddCategory = () => {
         const newCategoryInput = document.getElementById('newCategoryInput') as HTMLInputElement;
         const newCategory = newCategoryInput?.value.trim();
@@ -136,10 +134,17 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
                 </div>
 
                 <div className="mt-6">
-                    {activeTab === 'profile' && profile && (
-                        <ProfileForm profileData={profile} setProfileData={setProfile} onSave={handleSaveSettings} isSubmitting={isSubmitting} userId={userId} />
-                    )}
-
+                    {activeTab === 'profile' && profile ? (
+                        <ProfileForm
+                            initialProfile={profile}
+                            onSave={handleSaveSettings}
+                            isSubmitting={isSubmitting}
+                            userId={userId}
+                        />
+                    ) : activeTab === 'profile' ? (
+                        <div>Loading Profile...</div>
+                    ) : null}
+                    
                     {activeTab === 'notifications' && (
                         <div className="space-y-6 max-w-2xl">
                             <div>
@@ -163,7 +168,7 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
                                 </div>
                             </div>
                             <div className="flex justify-end">
-                                <button onClick={handleSaveSettings} disabled={isSubmitting} className="bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg flex items-center gap-2 disabled:opacity-50">
+                                <button onClick={() => handleSaveSettings(profile)} disabled={isSubmitting} className="bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg flex items-center gap-2 disabled:opacity-50">
                                     {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Save Notification Settings
                                 </button>
                             </div>
@@ -197,7 +202,7 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
                                  </div>
                              </div>
                              <div className="flex justify-end">
-                                 <button onClick={handleSaveSettings} disabled={isSubmitting} className="bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg flex items-center gap-2 disabled:opacity-50">
+                                 <button onClick={() => handleSaveSettings(profile)} disabled={isSubmitting} className="bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg flex items-center gap-2 disabled:opacity-50">
                                      {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Save Expense Settings
                                  </button>
                              </div>
@@ -252,7 +257,7 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
                                  </div>
                              </div>
                              <div className="flex justify-end pt-6">
-                                 <button onClick={handleSaveSettings} disabled={isSubmitting} className="bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg flex items-center gap-2 disabled:opacity-50">
+                                 <button onClick={() => handleSaveSettings(profile)} disabled={isSubmitting} className="bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg flex items-center gap-2 disabled:opacity-50">
                                      {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                                      {isSubmitting ? 'Saving...' : 'Save Invoice Settings'}
                                  </button>

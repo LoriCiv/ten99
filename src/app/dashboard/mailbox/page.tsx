@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Pencil, ArrowLeft, Trash2, Search, Check, X as XIcon, Loader2, Send, RotateCcw } from 'lucide-react';
+import { Pencil, ArrowLeft, Trash2, Search, Check, X as XIcon, Send, RotateCcw } from 'lucide-react';
 import type { Message, JobPosting } from '@/types/app-interfaces';
 import {
     getMessagesForUser,
@@ -220,7 +220,6 @@ function MailboxPageInternal() {
                          
                          {activeFolder === 'inbox' && (
                             <div className="mt-8 pt-6 border-t space-y-4">
-                                {/* Actions for Job Posters */}
                                 {selectedMessage.type === 'application' && (
                                     <>
                                         <h3 className="font-semibold">Application Actions</h3>
@@ -241,8 +240,6 @@ function MailboxPageInternal() {
                                         )}
                                     </>
                                 )}
-
-                                {/* Actions for Job Applicants */}
                                 {selectedMessage.type === 'offer' && selectedMessage.status === 'new' && (
                                     <>
                                         <h3 className="font-semibold">Job Offer Actions</h3>
@@ -252,10 +249,8 @@ function MailboxPageInternal() {
                                         </div>
                                     </>
                                 )}
-
-                                {/* Status for Already Actioned Messages */}
                                 {['approved', 'declined', 'offer-rescinded'].includes(selectedMessage.status || '') && (
-                                    <p className="text-sm font-semibold text-muted-foreground">This application has been marked as '{selectedMessage.status}'.</p>
+                                    <p className="text-sm font-semibold text-muted-foreground">This application has been marked as &apos;{selectedMessage.status}&apos;.</p>
                                 )}
                             </div>
                          )}
