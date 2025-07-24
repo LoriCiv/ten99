@@ -1,4 +1,3 @@
-// src/app/dashboard/settings/page.tsx
 import { getTemplatesData, getProfileData } from '@/utils/firestoreService';
 import SettingsPageContent from '@/components/SettingsPageContent';
 import type { Template, UserProfile } from '@/types/app-interfaces';
@@ -6,7 +5,7 @@ import { Timestamp } from 'firebase/firestore';
 
 const TEMP_USER_ID = "dev-user-1";
 
-// ✅ FIX: Added a generic type to handle any kind of document
+// ✅ FIX: Changed the type of 'data' back to 'any' inside this specific function
 const serializeData = <T extends object>(doc: T | null): T | null => {
     if (!doc) return null;
     const data: { [key: string]: any } = { ...doc };
@@ -17,7 +16,6 @@ const serializeData = <T extends object>(doc: T | null): T | null => {
     }
     return data as T;
 };
-
 
 export default async function SettingsPage() {
     const [templatesData, profileData] = await Promise.all([

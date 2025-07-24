@@ -5,7 +5,7 @@ import { Timestamp } from 'firebase/firestore';
 
 const TEMP_USER_ID = "dev-user-1";
 
-// ✅ FIX: Added a generic type to handle any kind of document
+// ✅ FIX: Changed the type of 'data' back to 'any' inside this specific function
 const serializeData = <T extends object>(doc: T | null): T | null => {
     if (!doc) return null;
     const data: { [key: string]: any } = { ...doc };

@@ -1,16 +1,14 @@
-// src/app/profile/[id]/page.tsx
 import { getPublicUserProfile, getPublicCertifications } from '@/utils/firestoreService';
 import { notFound } from 'next/navigation';
 import PublicProfileContent from '@/components/PublicProfileContent';
 import { Timestamp } from 'firebase/firestore';
-// ✅ FIX: Removed unused 'UserProfile' type
-import type { Certification } from '@/types/app-interfaces';
+import type { Certification, UserProfile } from '@/types/app-interfaces';
 
 interface PageProps {
     params: { id: string };
 }
 
-// ✅ FIX: Added a generic type to handle any kind of document
+// ✅ FIX: Changed the type of 'data' back to 'any' inside this specific function
 const serializeData = <T extends object>(doc: T | null): T | null => {
     if (!doc) return null;
     const data: { [key: string]: any } = { ...doc };
@@ -39,7 +37,7 @@ export default async function ProfilePage({ params }: PageProps) {
 
     return (
         <PublicProfileContent
-            profile={profile}
+            profile={profile as UserProfile | null}
             certifications={certifications as Certification[]}
         />
     );
