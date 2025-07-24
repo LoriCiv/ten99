@@ -6,8 +6,9 @@ import type { UserProfile, JobPosting } from '@/types/app-interfaces';
 
 const TEMP_USER_ID = "dev-user-1";
 
-// ✅ FIX: The entire function signature below was changed to define props directly,
-// removing the conflicting 'PageProps' interface.
+// ✅ FIX: The PageProps interface is removed entirely.
+// The props are now typed directly in the function signature below.
+
 const serializeData = <T extends object>(doc: T | null): T | null => {
     if (!doc) return null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
