@@ -1,3 +1,4 @@
+// src/app/dashboard/job-board/[id]/page.tsx
 import { getJobPostingById, getPublicUserProfile } from '@/utils/firestoreService';
 import { notFound } from 'next/navigation';
 import JobDetailPageContent from '@/components/JobDetailPageContent';
@@ -5,9 +6,6 @@ import { Timestamp } from 'firebase/firestore';
 import type { UserProfile, JobPosting } from '@/types/app-interfaces';
 
 const TEMP_USER_ID = "dev-user-1";
-
-// ✅ FIX: The PageProps interface is removed entirely.
-// The props are now typed directly in the function signature below.
 
 const serializeData = <T extends object>(doc: T | null): T | null => {
     if (!doc) return null;
@@ -21,7 +19,9 @@ const serializeData = <T extends object>(doc: T | null): T | null => {
     return data as T;
 };
 
-export default async function JobDetailPage({ params }: { params: { id: string } }) {
+// ✅ FIX: Renamed the function to 'Page' and used the standard inline prop definition.
+// This avoids all naming conflicts with Next.js's build system.
+export default async function Page({ params }: { params: { id: string } }) {
     const postId = params.id;
 
     const [jobPostData, currentUserProfileData] = await Promise.all([
