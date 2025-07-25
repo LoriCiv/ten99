@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { simpleParser } from 'mailparser';
 import { db } from '@/lib/firebase-admin';
 import type { UserProfile, Appointment, Message } from '@/types/app-interfaces';
-// ✅ FIX: Changed import from 'serverTimestamp' to 'FieldValue'
 import { FieldValue } from 'firebase-admin/firestore';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
@@ -29,8 +28,7 @@ export async function POST(req: Request) {
         }
         
         const parsedEmail = await simpleParser(emailBody);
-        console.log("[Step 0] Received Request from SendGrid");
-
+        
         const fromAddress = parsedEmail.from?.value[0]?.address || 'unknown';
         const toAddress = parsedEmail.to?.value[0]?.address || 'unknown';
         const subject = parsedEmail.subject || 'No Subject';
@@ -61,7 +59,7 @@ export async function POST(req: Request) {
                 time: parsedDetails.time || '12:00',
                 eventType: 'job',
                 status: 'scheduled',
-                createdAt: FieldValue.serverTimestamp(), // ✅ FIX: Used FieldValue.serverTimestamp()
+                createdAt: FieldValue.serverTimestamp(),
                 notes: `Automatically booked from forwarded email.\n\n--- Original Email ---\nFrom: ${fromAddress}\nSubject: ${subject}\n\n${body}`
             };
             await db.collection(`users/${recipientUserId}/appointments`).add(newAppointment);
@@ -75,10 +73,11 @@ export async function POST(req: Request) {
                 body: body,
                 isRead: false,
                 status: 'new',
-                createdAt: FieldValue.serverTimestamp(), // ✅ FIX: Used FieldValue.serverTimestamp()
+                createdAt: FieldValue.serverTimestamp(),
                 proposedDate: parsedDetails.date,
                 proposedTime: parsedDetails.time,
             };
+            // ✅ FIX: This line now correctly points to the 'messages' subcollection
             await db.collection(`users/${recipientUserId}/messages`).add(newMessage);
         }
 

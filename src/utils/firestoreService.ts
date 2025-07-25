@@ -428,6 +428,7 @@ export const confirmInboundOffer = async (userId: string, message: Message): Pro
             time: message.proposedTime || '09:00',
             eventType: 'job',
             status: 'scheduled',
+            createdAt: serverTimestamp(),
             notes: `Appointment confirmed from an inbound email offer.\n\n--- Original Email ---\nFrom: ${message.senderName}\n\n${message.body}`
         };
         const apptRef = await addDoc(collection(db, `users/${userId}/appointments`), newAppointment);

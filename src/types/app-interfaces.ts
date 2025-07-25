@@ -151,6 +151,7 @@ export interface Expense {
     isReadOnly?: boolean;
 }
 
+// ✅ UPDATED INTERFACE
 export interface Message {
     id?: string;
     userId?: string;
@@ -165,7 +166,7 @@ export interface Message {
     proposedDate?: string;
     proposedTime?: string;
     appointmentId?: string;
-    type?: 'standard' | 'application' | 'offer';
+    type?: 'standard' | 'application' | 'offer' | 'inbound-offer';
     jobPostId?: string;
 }
 
@@ -225,7 +226,7 @@ export interface UserProfile {
     postCountResetDate?: string;
     notifyOnNewMessage?: boolean;
     notifyOnJobMatch?: boolean;
-    defaultForwardingEmail?: string; // ✅ This line has been added
+    defaultForwardingEmail?: string;
 }
 
 export interface JobPosting {
