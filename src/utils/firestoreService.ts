@@ -205,10 +205,10 @@ export const sendAppMessage = async (senderId: string, senderName: string, recip
     const messageData: Partial<Message> = { senderId, senderName, recipientId, subject, body, isRead: false, status: 'new', createdAt: serverTimestamp(), type, jobPostId };
     
     const sentMessageData: Partial<Message> = { ...messageData, isRead: true };
-    await addDoc(collection(db, `users/${senderId}/messages`), sentMessageData);
+    await addDoc(collection(db, `users/${senderId}/messages`), cleanupObject(sentMessageData));
 
     if (!querySnapshot.empty) {
-        await addDoc(collection(db, `users/${recipientId}/messages`), messageData);
+        await addDoc(collection(db, `users/${recipientId}/messages`), cleanupObject(messageData));
     } else {
         await fetch('/api/send-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fromName: senderName, to: recipientIdOrEmail, subject, html: `<p>${body.replace(/\n/g, '<br>')}</p><p>Sent by ${senderName} via the Ten99 App.</p>` }), });
     }
@@ -350,4 +350,94 @@ export const rescindJobOffer = async (applicationMessage: Message): Promise<void
         `Offer Rescinded for: ${applicationMessage.subject.replace('Application for: ', '')}`,
         `The job offer for "${applicationMessage.subject.replace('Application for: ', '')}" has been rescinded.`
     );
+};
+
+// --- NEW MAGIC MAILBOX ACTION FUNCTIONS ---
+
+export const declineInboundOffer = async (userId: string, message: Message): Promise<void> => {
+    if (!message.id) throw new Error("Message ID is missing.");
+    const userProfileSnap = await getDoc(doc(db, `users/${userId}/profile`, 'mainProfile'));
+    if (!userProfileSnap.exists()) throw new Error("User profile not found.");
+
+    const userName = userProfileSnap.data()?.name || "The Freelancer";
+    
+    const templatesRef = collection(db, `users/${userId}/templates`);
+    const q = query(templatesRef, where("type", "==", "decline"), limit(1));
+    const templateSnapshot = await getDocs(q);
+
+    if (!templateSnapshot.empty) {
+        const template = templateSnapshot.docs[0].data() as Template;
+        await sendAppMessage(userId, userName, message.senderId, template.subject, template.body);
+    }
+    
+    await updateDoc(doc(db, `users/${userId}/messages`, message.id), { status: 'declined' });
+};
+
+export const acceptInboundOfferPending = async (userId: string, message: Message): Promise<void> => {
+    if (!message.id) throw new Error("Message ID is missing.");
+    const userProfileSnap = await getDoc(doc(db, `users/${userId}/profile`, 'mainProfile'));
+    if (!userProfileSnap.exists()) throw new Error("User profile not found.");
+
+    const userName = userProfileSnap.data()?.name || "The Freelancer";
+    
+    const appointmentDate = message.proposedDate || new Date().toISOString().split('T')[0];
+    
+    const newAppointment: Partial<Appointment> = {
+        userId,
+        subject: message.subject.replace('Job Offer: ', ''),
+        date: appointmentDate,
+        time: message.proposedTime || '09:00',
+        eventType: 'job',
+        status: 'pending-confirmation',
+        createdAt: serverTimestamp(),
+        notes: `Appointment pending confirmation from inbound email.\n\n--- Original Email ---\nFrom: ${message.senderName}\n\n${message.body}`
+    };
+    const apptRef = await addDoc(collection(db, `users/${userId}/appointments`), newAppointment);
+    
+    const templatesRef = collection(db, `users/${userId}/templates`);
+    const q = query(templatesRef, where("type", "==", "pending"), limit(1));
+    const templateSnapshot = await getDocs(q);
+
+    if (!templateSnapshot.empty) {
+        const template = templateSnapshot.docs[0].data() as Template;
+        await sendAppMessage(userId, userName, message.senderId, template.subject, template.body);
+    }
+    
+    await updateDoc(doc(db, `users/${userId}/messages`, message.id), { status: 'pending', appointmentId: apptRef.id });
+};
+
+export const confirmInboundOffer = async (userId: string, message: Message): Promise<void> => {
+    console.log("--- Starting confirmInboundOffer ---");
+    console.log("Message Data:", message);
+
+    if (!message.id) {
+        console.error("Error: Message ID is missing.");
+        throw new Error("Message ID is missing.");
+    }
+    
+    if (message.appointmentId) {
+        console.log(`Step 1: Found existing appointmentId: ${message.appointmentId}. Updating it.`);
+        await updateDoc(doc(db, `users/${userId}/appointments`, message.appointmentId), { status: 'scheduled' });
+        console.log("Step 2: Successfully updated appointment status to 'scheduled'.");
+    } else if (message.proposedDate) {
+        console.log(`Step 1: No appointmentId found. Creating new appointment with date: ${message.proposedDate}`);
+        const newAppointment: Partial<Appointment> = {
+            userId,
+            subject: message.subject.replace('Job Offer: ', ''),
+            date: message.proposedDate,
+            time: message.proposedTime || '09:00',
+            eventType: 'job',
+            status: 'scheduled',
+            notes: `Appointment confirmed from an inbound email offer.\n\n--- Original Email ---\nFrom: ${message.senderName}\n\n${message.body}`
+        };
+        const apptRef = await addDoc(collection(db, `users/${userId}/appointments`), newAppointment);
+        console.log("Successfully created new appointment in Firestore with ID:", apptRef.id);
+        await updateDoc(doc(db, `users/${userId}/messages`, message.id), { appointmentId: apptRef.id });
+    } else {
+        console.error("CRITICAL ERROR: No appointmentId and no proposedDate found on the message. Cannot create appointment.");
+    }
+    
+    await updateDoc(doc(db, `users/${userId}/messages`, message.id), { status: 'approved' });
+    console.log("Step 3: Successfully updated message status to 'approved'.");
+    console.log("--- Finished confirmInboundOffer ---");
 };

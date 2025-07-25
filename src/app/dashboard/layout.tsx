@@ -33,7 +33,7 @@ export default function DashboardLayout({
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     const navItems = [
-        { name: 'My Profile', href: '/profile/dev-user-1', icon: Users },
+        { name: 'Dashboard', href: '/dashboard', icon: ThumbsUp },
         { name: 'Job Board', href: '/dashboard/job-board', icon: Briefcase },
         { name: 'Clients & Connections', href: '/dashboard/clients', icon: Users },
         { name: 'Appointments', href: '/dashboard/appointments', icon: Calendar },
@@ -96,7 +96,6 @@ export default function DashboardLayout({
                     </Link>
                 </header>
                 
-                {/* ✅ THIS IS THE FIX */}
                 <main className="flex-1 p-4 sm:p-6 lg:p-8">
                     {children}
                 </main>

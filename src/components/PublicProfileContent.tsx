@@ -1,9 +1,8 @@
-// src/components/PublicProfileContent.tsx
 "use client";
 
 import type { UserProfile, Certification } from '@/types/app-interfaces';
 import Image from 'next/image';
-import { User, Award, BookOpen, Briefcase, GraduationCap, Languages } from 'lucide-react';
+import { User, Award, BookOpen, Briefcase, GraduationCap, Languages, ExternalLink } from 'lucide-react';
 
 interface PublicProfileContentProps {
     profile: UserProfile | null;
@@ -35,7 +34,14 @@ export default function PublicProfileContent({ profile, certifications }: Public
                 <div className="flex flex-col sm:flex-row items-center gap-6 mb-8 p-6 bg-card border rounded-lg">
                     <div className="relative w-32 h-32 rounded-full bg-muted flex items-center justify-center border shrink-0 overflow-hidden">
                         {profile.photoUrl ? (
-                            <Image src={profile.photoUrl} alt="Profile" fill style={{objectFit: 'cover'}} />
+                            // ✅ FIX: Replaced 'fill' and 'style' with 'width', 'height', and 'className'
+                            <Image 
+                                src={profile.photoUrl} 
+                                alt="Profile" 
+                                width={128} 
+                                height={128} 
+                                className="object-cover" 
+                            />
                         ) : (
                             <User className="w-16 h-16 text-muted-foreground" />
                         )}
@@ -51,9 +57,22 @@ export default function PublicProfileContent({ profile, certifications }: Public
                     {certifications && certifications.length > 0 && (
                          <SectionCard title="Credentials" icon={Award}>
                             {certifications.map(cert => cert && (
-                                <div key={cert.id}>
-                                    <p className="font-semibold">{cert.name}</p>
-                                    <p className="text-sm text-muted-foreground">{cert.issuingOrganization}</p>
+                                <div key={cert.id} className="flex justify-between items-center">
+                                    <div>
+                                        <p className="font-semibold">{cert.name}</p>
+                                        <p className="text-sm text-muted-foreground">{cert.issuingOrganization}</p>
+                                    </div>
+                                    {cert.credentialUrl && (
+                                        <a
+                                            href={cert.credentialUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center gap-2 text-sm font-semibold bg-secondary text-secondary-foreground px-3 py-1.5 rounded-lg hover:bg-secondary/80 transition-colors"
+                                        >
+                                            <ExternalLink size={14} />
+                                            <span>View</span>
+                                        </a>
+                                    )}
                                 </div>
                             ))}
                         </SectionCard>

@@ -223,9 +223,9 @@ export interface UserProfile {
     sendOverdueReminders?: boolean;
     monthlyPostCount?: number;
     postCountResetDate?: string;
-    // ✅ ADDED THESE LINES
     notifyOnNewMessage?: boolean;
     notifyOnJobMatch?: boolean;
+    defaultForwardingEmail?: string; // ✅ This line has been added
 }
 
 export interface JobPosting {

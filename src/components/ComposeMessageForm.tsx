@@ -1,14 +1,12 @@
-// src/components/ComposeMessageForm.tsx
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Send } from 'lucide-react';
+import { Send, Loader2 } from 'lucide-react';
 
 interface ComposeMessageFormProps {
     onSend: (to: string, subject: string, body: string) => Promise<boolean>;
     onClose: () => void;
     initialRecipient?: string;
-    // ✅ 1. Add the new props to accept a subject and body
     initialSubject?: string;
     initialBody?: string;
 }
@@ -20,85 +18,78 @@ export default function ComposeMessageForm({
     initialSubject = '', 
     initialBody = '' 
 }: ComposeMessageFormProps) {
-    const [to, setTo] = useState(initialRecipient);
-    // ✅ 2. Use the new props to set the initial state
-    const [subject, setSubject] = useState(initialSubject);
-    const [body, setBody] = useState(initialBody);
+    const [recipient, setRecipient] = useState('');
+    const [subject, setSubject] = useState('');
+    const [body, setBody] = useState('');
     const [isSending, setIsSending] = useState(false);
 
     useEffect(() => {
-        // This ensures the form updates if a new initial state is passed
-        setTo(initialRecipient);
+        setRecipient(initialRecipient);
         setSubject(initialSubject);
         setBody(initialBody);
     }, [initialRecipient, initialSubject, initialBody]);
 
-    const handleSend = async () => {
-        if (!to || !subject) {
-            alert('A recipient and subject are required.');
-            return;
-        }
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
         setIsSending(true);
-        const success = await onSend(to, subject, body);
-        if (!success) {
+        const success = await onSend(recipient, subject, body);
+        if (success) {
+            // The parent component will handle closing on success
+        } else {
+            // If sending fails, allow the user to try again
             setIsSending(false);
         }
     };
 
     return (
-        <div>
-            <h2 className="text-2xl font-bold mb-6">New Message</h2>
-            <div className="space-y-4">
+        <form onSubmit={handleSubmit} className="flex flex-col h-full">
+            <div className="p-4 border-b">
+                <h2 className="text-lg font-semibold">Compose Message</h2>
+            </div>
+            <div className="p-4 space-y-4 flex-grow">
                 <div>
-                    <label className="block text-sm font-medium text-muted-foreground">To:</label>
-                    <input 
-                        type="email" 
-                        placeholder="recipient@example.com" 
-                        value={to}
-                        onChange={(e) => setTo(e.target.value)}
-                        className="w-full mt-1 p-2 border rounded-md bg-background"
+                    <label htmlFor="recipient" className="block text-sm font-medium text-muted-foreground">To:</label>
+                    <input
+                        type="email"
+                        id="recipient"
+                        value={recipient}
+                        onChange={(e) => setRecipient(e.target.value)}
+                        className="w-full mt-1 p-2 bg-background border rounded-md"
                         required
                     />
                 </div>
                 <div>
-                    <label className="block text-sm font-medium text-muted-foreground">Subject:</label>
-                    <input 
-                        type="text" 
-                        placeholder="Message subject" 
+                    <label htmlFor="subject" className="block text-sm font-medium text-muted-foreground">Subject:</label>
+                    <input
+                        type="text"
+                        id="subject"
                         value={subject}
                         onChange={(e) => setSubject(e.target.value)}
-                        className="w-full mt-1 p-2 border rounded-md bg-background"
+                        className="w-full mt-1 p-2 bg-background border rounded-md"
                         required
                     />
                 </div>
                 <div>
-                    <label className="block text-sm font-medium text-muted-foreground">Message:</label>
-                    <textarea 
-                        className="w-full h-60 mt-1 p-2 border rounded-md bg-background"
-                        placeholder="Type your message here..."
+                    <label htmlFor="body" className="block text-sm font-medium text-muted-foreground">Body:</label>
+                    <textarea
+                        id="body"
                         value={body}
                         onChange={(e) => setBody(e.target.value)}
-                    ></textarea>
+                        rows={10}
+                        className="w-full mt-1 p-2 bg-background border rounded-md"
+                        required
+                    />
                 </div>
             </div>
-            <div className="mt-6 flex items-center justify-end space-x-3">
-                <button 
-                    type="button"
-                    onClick={onClose} 
-                    className="bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-secondary/80"
-                >
+            <div className="p-4 border-t flex justify-end gap-4">
+                <button type="button" onClick={onClose} className="bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-secondary/80">
                     Cancel
                 </button>
-                <button 
-                    type="button"
-                    onClick={handleSend}
-                    disabled={isSending}
-                    className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90 disabled:opacity-50"
-                >
-                    <Send size={16} />
+                <button type="submit" disabled={isSending} className="bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg flex items-center gap-2 disabled:opacity-50 w-32 justify-center">
+                    {isSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
                     {isSending ? 'Sending...' : 'Send'}
                 </button>
             </div>
-        </div>
+        </form>
     );
 }

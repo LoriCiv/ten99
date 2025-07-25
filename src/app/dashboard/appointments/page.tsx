@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-// REMOVED: Unused imports like Suspense, useSearchParams, etc.
-import { Search, PlusCircle, ChevronDown, MapPin, Video } from 'lucide-react';
+import { Search, PlusCircle, ChevronDown, MapPin, Video, CheckCircle, Clock, AlertTriangle, XCircle, Calendar, HelpCircle } from 'lucide-react';
 import type { Appointment, Client, PersonalNetworkContact, JobFile } from '@/types/app-interfaces';
 import { getAppointments, getClients, getPersonalNetwork, getJobFiles } from '@/utils/firestoreService';
 import { format } from 'date-fns';
@@ -12,13 +11,14 @@ import InteractiveCalendar from '@/components/InteractiveCalendar';
 
 const TEMP_USER_ID = "dev-user-1";
 
-const getEventStyle = (eventType?: 'job' | 'personal' | 'billing') => {
-    switch (eventType) {
-        case 'job': return { borderColor: 'border-l-green-500', bgColor: 'hover:bg-green-500/10' };
-        case 'personal': return { borderColor: 'border-l-blue-500', bgColor: 'hover:bg-blue-500/10' };
-        case 'billing': return { borderColor: 'border-l-yellow-500', bgColor: 'hover:bg-yellow-500/10' };
-        default: return { borderColor: 'border-l-gray-500', bgColor: 'hover:bg-gray-500/10' };
-    }
+// ✅ This object now controls all styling and info for different statuses
+const statusInfo: { [key: string]: { borderColor: string, bgColor: string, icon: React.ElementType, keyColor: string, label: string } } = {
+    'scheduled': { borderColor: 'border-l-blue-500', bgColor: 'hover:bg-blue-500/10', icon: Calendar, keyColor: 'bg-blue-400', label: 'Scheduled' },
+    'pending': { borderColor: 'border-l-yellow-500', bgColor: 'hover:bg-yellow-500/10', icon: Clock, keyColor: 'bg-yellow-400', label: 'Pending' },
+    'completed': { borderColor: 'border-l-green-500', bgColor: 'hover:bg-green-500/10', icon: CheckCircle, keyColor: 'bg-green-400', label: 'Completed' },
+    'canceled': { borderColor: 'border-l-gray-400', bgColor: 'hover:bg-gray-500/10', icon: XCircle, keyColor: 'bg-gray-400', label: 'Canceled' },
+    'canceled-billable': { borderColor: 'border-l-red-500', bgColor: 'hover:bg-red-500/10', icon: AlertTriangle, keyColor: 'bg-red-400', label: 'Canceled (Billable)' },
+    'pending-confirmation': { borderColor: 'border-l-orange-500', bgColor: 'hover:bg-orange-500/10', icon: HelpCircle, keyColor: 'bg-orange-400', label: 'Pending Confirmation' }
 };
 
 const formatTime = (timeString?: string) => {
@@ -41,7 +41,7 @@ export default function AppointmentsPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isKeyOpen, setIsKeyOpen] = useState(false);
+    const [isKeyOpen, setIsKeyOpen] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
@@ -156,10 +156,12 @@ export default function AppointmentsPage() {
                                 <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isKeyOpen ? 'rotate-180' : ''}`} />
                             </button>
                             {isKeyOpen && (
-                                <div className="pt-2 space-y-2 animate-in fade-in-0">
-                                    <div className="flex items-center gap-2 text-sm"><div className="w-3 h-3 rounded-full bg-green-400 border"></div> Job / Appointment</div>
-                                    <div className="flex items-center gap-2 text-sm"><div className="w-3 h-3 rounded-full bg-blue-400 border"></div> Personal Event</div>
-                                    <div className="flex items-center gap-2 text-sm"><div className="w-3 h-3 rounded-full bg-yellow-400 border"></div> Billing Reminder</div>
+                                <div className="pt-2 mt-2 border-t space-y-2 animate-in fade-in-0">
+                                    {Object.values(statusInfo).map((status) => (
+                                        <div key={status.label} className="flex items-center gap-2 text-sm">
+                                            <div className={`w-3 h-3 rounded-full ${status.keyColor} border`}></div> {status.label}
+                                        </div>
+                                    ))}
                                 </div>
                             )}
                         </div>
@@ -170,7 +172,7 @@ export default function AppointmentsPage() {
                         <div className="space-y-3 h-[60vh] overflow-y-auto pr-2">
                             {appointmentsForSelectedDay.length > 0 ? (
                                 appointmentsForSelectedDay.map(appt => {
-                                    const { borderColor, bgColor } = getEventStyle(appt.eventType);
+                                    const { borderColor, bgColor, icon: StatusIcon } = statusInfo[appt.status] || { borderColor: 'border-l-gray-500', bgColor: 'hover:bg-gray-500/10', icon: HelpCircle };
                                     const clientName = clients.find(c => c.id === appt.clientId)?.companyName || clients.find(c => c.id === appt.clientId)?.name;
                                     
                                     return (
@@ -179,7 +181,10 @@ export default function AppointmentsPage() {
                                             onClick={() => handleAppointmentClick(appt)}
                                             className={`p-4 rounded-lg bg-card border border-l-4 ${borderColor} ${bgColor} cursor-pointer transition-all space-y-1`}
                                         >
-                                            <p className="font-bold text-foreground">{appt.subject}</p>
+                                            <div className="flex justify-between items-start">
+                                                <p className="font-bold text-foreground">{appt.subject}</p>
+                                                <StatusIcon className="h-4 w-4 text-muted-foreground" />
+                                            </div>
                                             <p className="text-sm text-muted-foreground">
                                                 {formatTime(appt.time)}
                                                 {appt.endTime && ` - ${formatTime(appt.endTime)}`}
@@ -212,7 +217,7 @@ export default function AppointmentsPage() {
                 </div>
             </div>
 
-            {isModalOpen && (
+            {isModalOpen && selectedAppointment && (
                 <AppointmentDetailModal
                     appointment={selectedAppointment}
                     clients={clients}

@@ -4,11 +4,6 @@ import PublicProfileContent from '@/components/PublicProfileContent';
 import { Timestamp } from 'firebase/firestore';
 import type { Certification, UserProfile } from '@/types/app-interfaces';
 
-interface PageProps {
-    params: { id: string };
-}
-
-// ✅ FIX: Added a comment to disable the strict 'any' rule for this line
 const serializeData = <T extends object>(doc: T | null): T | null => {
     if (!doc) return null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -21,7 +16,9 @@ const serializeData = <T extends object>(doc: T | null): T | null => {
     return data as T;
 };
 
-export default async function ProfilePage({ params }: PageProps) {
+// ✅ FIX: The function signature is updated to the standard Next.js format,
+// which resolves the error.
+export default async function ProfilePage({ params }: { params: { id: string } }) {
     const userId = params.id;
 
     const [profileData, certificationsData] = await Promise.all([
