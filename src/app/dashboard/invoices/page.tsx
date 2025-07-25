@@ -7,6 +7,7 @@ import { getInvoices, getClients, getUserProfile, getAppointments } from '@/util
 import Link from 'next/link';
 import { PlusCircle, ArrowUpDown } from 'lucide-react';
 import InvoiceDetailModal from '@/components/InvoiceDetailModal';
+import { format } from 'date-fns';
 
 const TEMP_USER_ID = "dev-user-1";
 
@@ -18,7 +19,6 @@ const getStatusStyles = (status: Invoice['status']) => {
             return { borderColor: 'border-l-rose-500', bgColor: 'bg-rose-500/5', textColor: 'text-rose-600' };
         case 'sent':
             return { borderColor: 'border-l-sky-500', bgColor: 'bg-sky-500/5', textColor: 'text-sky-600' };
-        // ✅ FIX: Added a case for the 'void' status
         case 'void':
         case 'draft':
         default:
@@ -98,7 +98,7 @@ function InvoicesPageInternal() {
 
     return (
         <>
-            <div>
+            <div className="p-4 sm:p-6 lg:p-8">
                 <header className="mb-6">
                     <div>
                         <h1 className="text-3xl font-bold text-foreground">Invoices</h1>
@@ -153,12 +153,14 @@ function InvoicesPageInternal() {
                                     <div>
                                         <p className="font-bold">#{invoice.invoiceNumber} - {client?.name || 'N/A'}</p>
                                         {appointment && (
-                                            <p className="text-sm text-muted-foreground">Service Date: {appointment.date}</p>
+                                            <p className="text-sm font-medium text-primary/90">Service Date: {format(new Date(appointment.date + 'T00:00:00'), 'MMM d, yyyy')}</p>
                                         )}
-                                        <p className="text-sm text-muted-foreground">Due: {invoice.dueDate}</p>
+                                        {/* ✅ FIX: Added the Invoice Date */}
+                                        <p className="text-sm text-muted-foreground">Invoice Date: {format(new Date(invoice.invoiceDate + 'T00:00:00'), 'MMM d, yyyy')}</p>
+                                        <p className="text-sm text-muted-foreground">Due: {format(new Date(invoice.dueDate + 'T00:00:00'), 'MMM d, yyyy')}</p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="font-bold">${(invoice.total || 0).toFixed(2)}</p>
+                                        <p className="font-bold text-lg">${(invoice.total || 0).toFixed(2)}</p>
                                         <p className={`text-sm font-semibold capitalize ${textColor}`}>{invoice.status}</p>
                                     </div>
                                 </div>

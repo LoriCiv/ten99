@@ -257,7 +257,7 @@ function MailboxPageInternal() {
                                         </div>
                                     </>
                                 )}
-                                {['approved', 'declined', 'offer-rescinded'].includes(selectedMessage.status || '') && (
+                                {['approved', 'declined', 'offer-rescinded', 'pending'].includes(selectedMessage.status || '') && (
                                     <p className="text-sm font-semibold text-muted-foreground mt-4">This conversation has been actioned. Status: &apos;{selectedMessage.status}&apos;.</p>
                                 )}
                             </div>

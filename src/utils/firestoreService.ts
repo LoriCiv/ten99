@@ -20,7 +20,8 @@ import {
     runTransaction,
     DocumentReference,
     QueryDocumentSnapshot,
-    collectionGroup
+    collectionGroup,
+    increment
 } from 'firebase/firestore';
 import type { Client, PersonalNetworkContact, JobFile, Appointment, Message, Template, Certification, CEU, UserProfile, Invoice, Expense, JobPosting } from '@/types/app-interfaces';
 import { v4 as uuidv4 } from 'uuid';
@@ -90,6 +91,36 @@ export const getJobPostings = (callback: (data: JobPosting[]) => void) => {
     );
     return onSnapshot(q, (snapshot) => {
         callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as JobPosting)))
+    });
+};
+export const getRecentInvoices = (userId: string, callback: (data: Invoice[]) => void) => {
+    const q = query(
+        collection(db, `users/${userId}/invoices`),
+        orderBy('createdAt', 'desc'),
+        limit(5)
+    );
+    return onSnapshot(q, (snapshot) => {
+        callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Invoice)));
+    });
+};
+export const getRecentJobFiles = (userId: string, callback: (data: JobFile[]) => void) => {
+    const q = query(
+        collection(db, `users/${userId}/jobFiles`),
+        orderBy('createdAt', 'desc'),
+        limit(5)
+    );
+    return onSnapshot(q, (snapshot) => {
+        callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as JobFile)));
+    });
+};
+export const getPriorityJobFiles = (userId: string, callback: (data: JobFile[]) => void) => {
+    const q = query(
+        collection(db, `users/${userId}/jobFiles`),
+        where('priority', '==', 2),
+        orderBy('createdAt', 'desc')
+    );
+    return onSnapshot(q, (snapshot) => {
+        callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as JobFile)));
     });
 };
 
@@ -168,7 +199,6 @@ export const addAppointment = async (userId: string, appointmentData: Partial<Ap
     if (appointmentData.recurrence && recurrenceEndDate && appointmentData.date) {
         const batch = writeBatch(db);
         const seriesId = uuidv4();
-        // ✅ FIX: Added this comment to disable the incorrect linter error on the next line
         // eslint-disable-next-line prefer-const
         let movingDate = new Date(appointmentData.date + 'T00:00:00');
         const endDate = new Date(recurrenceEndDate + 'T00:00:00');
@@ -360,6 +390,13 @@ export const rescindJobOffer = async (applicationMessage: Message): Promise<void
         `Offer Rescinded for: ${applicationMessage.subject.replace('Application for: ', '')}`,
         `The job offer for "${applicationMessage.subject.replace('Application for: ', '')}" has been rescinded.`
     );
+};
+export const reportJobPost = async (postId: string): Promise<void> => {
+    if (!postId) return;
+    const jobRef = doc(db, 'jobPostings', postId);
+    await updateDoc(jobRef, {
+        reportCount: increment(1)
+    });
 };
 
 // --- MAGIC MAILBOX ACTION FUNCTIONS ---

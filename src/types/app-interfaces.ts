@@ -249,3 +249,27 @@ export interface JobPosting {
     startTime?: string;
     endTime?: string;
 }
+
+// src/types/app-interfaces.ts
+
+export interface JobPosting {
+    id?: string;
+    userId: string;
+    title: string;
+    description: string;
+    jobType?: 'On-site' | 'Virtual' | 'Hybrid';
+    location?: string;
+    zipCode?: string;
+    rate?: string;
+    contactEmail?: string;
+    requiredSkills?: string[];
+    isFilled: boolean;
+    createdAt?: Timestamp;
+    expiresAt?: Timestamp;
+    pendingApplicantId?: string;
+    startDate?: string;
+    endDate?: string;
+    startTime?: string;
+    endTime?: string;
+    reportCount?: number; // ✅ Add this line
+}

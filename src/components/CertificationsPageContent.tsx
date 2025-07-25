@@ -101,7 +101,7 @@ export default function CertificationsPageContent({ initialCertifications, initi
         setIsSubmitting(true);
         try {
             if (editingCeu?.id) {
-                await updateCEU(userId, selectedCertForCeu, editingCeu.id, data);
+                await updateCEU(userId, { ...data, id: editingCeu.id });
                 alert("CEU updated!");
             } else {
                 await addCEU(userId, selectedCertForCeu, data);
@@ -114,10 +114,10 @@ export default function CertificationsPageContent({ initialCertifications, initi
             alert("Failed to save CEU.");
         } finally { setIsSubmitting(false); }
     };
-    const handleDeleteCeu = async (certId: string, ceuId: string) => {
+    const handleDeleteCeu = async (ceuId: string) => {
         if (window.confirm("Delete this CEU entry?")) {
             try {
-                await deleteCEU(userId, certId, ceuId);
+                await deleteCEU(userId, ceuId);
                 alert("CEU deleted.");
                 router.refresh();
             } catch (error) {
@@ -176,18 +176,18 @@ export default function CertificationsPageContent({ initialCertifications, initi
                                         <div className="mt-3 space-y-2">
                                             <div>
                                                 <div className="flex justify-between items-baseline mb-1"><span className="text-sm font-medium">Total CEUs</span><span className="text-sm text-muted-foreground">{cert.ceusCompleted.toFixed(1)} / {cert.totalCeusRequired.toFixed(1)} hours</span></div>
-                                                <div className="w-full bg-background rounded-full h-2.5 border"><div className="bg-primary h-2.5 rounded-full" style={{ width: `${cert.progress}%` }}></div></div>
+                                                <div className="w-full bg-background rounded-full h-2.5 border"><div className="bg-primary h-2.5 rounded-full" style={{ width: `${cert.progress}%` } as React.CSSProperties}></div></div>
                                             </div>
                                             {cert.specialtyCeusCategory && cert.specialtyCeusRequired && (
                                                 <div>
                                                     <div className="flex justify-between items-baseline mb-1"><span className="text-xs font-medium">{cert.specialtyCeusCategory}</span><span className="text-xs text-muted-foreground">{cert.specialty1Completed.toFixed(1)} / {cert.specialtyCeusRequired.toFixed(1)} hours</span></div>
-                                                    <div className="w-full bg-background rounded-full h-2 border"><div className="bg-teal-500 h-2 rounded-full" style={{ width: `${cert.specialty1Progress}%` }}></div></div>
+                                                    <div className="w-full bg-background rounded-full h-2 border"><div className="bg-teal-500 h-2 rounded-full" style={{ width: `${cert.specialty1Progress}%` } as React.CSSProperties}></div></div>
                                                 </div>
                                             )}
                                             {cert.specialtyCeusCategory2 && cert.specialtyCeusRequired2 && (
                                                 <div>
                                                     <div className="flex justify-between items-baseline mb-1"><span className="text-xs font-medium">{cert.specialtyCeusCategory2}</span><span className="text-xs text-muted-foreground">{cert.specialty2Completed.toFixed(1)} / {cert.specialtyCeusRequired2.toFixed(1)} hours</span></div>
-                                                    <div className="w-full bg-background rounded-full h-2 border"><div className="bg-indigo-500 h-2 rounded-full" style={{ width: `${cert.specialty2Progress}%` }}></div></div>
+                                                    <div className="w-full bg-background rounded-full h-2 border"><div className="bg-indigo-500 h-2 rounded-full" style={{ width: `${cert.specialty2Progress}%` } as React.CSSProperties}></div></div>
                                                 </div>
                                             )}
                                         </div>
@@ -207,7 +207,7 @@ export default function CertificationsPageContent({ initialCertifications, initi
                                     </div>
                                     <div className="flex gap-2">
                                         <button onClick={(e) => { e.stopPropagation(); handleOpenCeuModal(ceu.certificationId, ceu); }} title="Edit CEU" className="p-2 hover:bg-muted rounded-md text-muted-foreground hover:text-primary"><Edit size={16}/></button>
-                                        <button onClick={(e) => { e.stopPropagation(); handleDeleteCeu(ceu.certificationId, ceu.id!); }} title="Delete CEU" className="p-2 hover:bg-muted rounded-md text-muted-foreground hover:text-destructive"><Trash2 size={16}/></button>
+                                        <button onClick={(e) => { e.stopPropagation(); handleDeleteCeu(ceu.id!); }} title="Delete CEU" className="p-2 hover:bg-muted rounded-md text-muted-foreground hover:text-destructive"><Trash2 size={16}/></button>
                                     </div>
                                 </div>
                             ))}

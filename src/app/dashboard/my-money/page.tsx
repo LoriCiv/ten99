@@ -14,7 +14,6 @@ import ExpensePieChart from '@/components/ExpensePieChart';
 
 const TEMP_USER_ID = "dev-user-1";
 
-// Define filing statuses for clarity
 type FilingStatus = 'single' | 'married_jointly' | 'married_separately' | 'head_of_household';
 
 const StatCard = ({ title, value, icon: Icon, note, theme = 'primary' }: { title: string; value: string; icon: React.ElementType; note?: string; theme?: 'primary' | 'green' | 'red' | 'yellow' }) => {
@@ -52,7 +51,6 @@ export default function MyMoneyPage() {
     const [isSubmittingTax, setIsSubmittingTax] = useState(false);
     const [isSubmittingExpense, setIsSubmittingExpense] = useState(false);
     
-    // State for the simplified tax calculator
     const [stateRate, setStateRate] = useState<number | ''>('');
     const [filingStatus, setFilingStatus] = useState<FilingStatus>('single');
     const [dependents, setDependents] = useState<number | ''>(0);
@@ -78,25 +76,11 @@ export default function MyMoneyPage() {
     const allExpenses = useMemo(() => {
         const certExpenses: Expense[] = (certifications || [])
             .filter(cert => cert.renewalCost && cert.renewalCost > 0)
-            .map(cert => ({
-                id: `cert-${cert.id}`,
-                description: `Renewal for ${cert.name}`,
-                amount: cert.renewalCost!,
-                date: cert.issueDate || new Date().toISOString().split('T')[0],
-                category: 'professional_development',
-                isReadOnly: true,
-            }));
+            .map(cert => ({ id: `cert-${cert.id}`, description: `Renewal for ${cert.name}`, amount: cert.renewalCost!, date: cert.issueDate || new Date().toISOString().split('T')[0], category: 'professional_development', isReadOnly: true, }));
 
         const ceuExpenses: Expense[] = (allCeus || [])
             .filter(ceu => ceu.cost && ceu.cost > 0)
-            .map(ceu => ({
-                id: `ceu-${ceu.id}`,
-                description: `CEU: ${ceu.activityName}`,
-                amount: ceu.cost!,
-                date: ceu.dateCompleted,
-                category: 'professional_development',
-                isReadOnly: true,
-            }));
+            .map(ceu => ({ id: `ceu-${ceu.id}`, description: `CEU: ${ceu.activityName}`, amount: ceu.cost!, date: ceu.dateCompleted, category: 'professional_development', isReadOnly: true, }));
             
         return [...manualExpenses, ...certExpenses, ...ceuExpenses];
     }, [manualExpenses, certifications, allCeus]);
@@ -106,40 +90,48 @@ export default function MyMoneyPage() {
         const currentYear = new Date().getFullYear();
         const ytdIncome = invoices.filter(inv => inv.status === 'paid' && new Date(inv.invoiceDate).getFullYear() === currentYear).reduce((sum, inv) => sum + (inv.total || 0), 0);
         const totalYtdExpenses = allExpenses.filter(exp => new Date(exp.date).getFullYear() === currentYear).reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
-        const ytdCredentialCosts = totalYtdExpenses - manualExpenses.filter(exp => new Date(exp.date).getFullYear() === currentYear).reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
+        const ytdManualExpensesValue = manualExpenses.filter(exp => new Date(exp.date).getFullYear() === currentYear).reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
+        const ytdCredentialCosts = totalYtdExpenses - ytdManualExpensesValue;
         
         return { ytdIncome, ytdExpenses: totalYtdExpenses, ytdCredentialCosts, netIncome: ytdIncome - totalYtdExpenses };
     }, [invoices, allExpenses, manualExpenses]);
     
+    // ✅ FIX: The entire tax calculation logic has been rebuilt for accuracy
     const taxStats = useMemo(() => {
-        // Based on 2025 estimated tax rules for simplicity
-        const standardDeductions: Record<FilingStatus, number> = {
-            single: 14600,
-            married_jointly: 29200,
-            married_separately: 14600,
-            head_of_household: 21900,
-        };
-        
         const ytdIncome = stats.ytdIncome || 0;
         const totalExpenses = stats.ytdExpenses || 0;
-        
-        // Self-Employment Tax Calculation
-        const netEarningsFromSE = (ytdIncome - totalExpenses) * 0.9235;
-        const selfEmploymentTax = Math.max(0, netEarningsFromSE) * 0.153;
 
-        // Income Tax Calculation
+        const standardDeductions: Record<FilingStatus, number> = { single: 14600, married_jointly: 29200, married_separately: 14600, head_of_household: 21900, };
+        
+        // Simplified 2025 brackets
+        const federalBrackets: Record<FilingStatus, { rate: number; threshold: number; base: number }[]> = {
+            single: [ { rate: 0.24, threshold: 94300, base: 15735 }, { rate: 0.22, threshold: 47150, base: 5426 }, { rate: 0.12, threshold: 11600, base: 1160 }, { rate: 0.10, threshold: 0, base: 0 } ],
+            married_jointly: [ { rate: 0.24, threshold: 190750, base: 22439 }, { rate: 0.22, threshold: 94300, base: 10852 }, { rate: 0.12, threshold: 23200, base: 2320 }, { rate: 0.10, threshold: 0, base: 0 } ],
+            married_separately: [ { rate: 0.24, threshold: 95375, base: 11219.5 }, { rate: 0.22, threshold: 47150, base: 5426 }, { rate: 0.12, threshold: 11600, base: 1160 }, { rate: 0.10, threshold: 0, base: 0 } ],
+            head_of_household: [ { rate: 0.24, threshold: 95350, base: 11215 }, { rate: 0.22, threshold: 63000, base: 7278 }, { rate: 0.12, threshold: 16550, base: 1655 }, { rate: 0.10, threshold: 0, base: 0 } ],
+        };
+
+        const netProfit = ytdIncome - totalExpenses;
+        if (netProfit <= 0) return { totalTaxOwed: 0, quarterlyPayment: 0 };
+
+        const netEarningsFromSE = netProfit * 0.9235;
+        const selfEmploymentTax = netEarningsFromSE * 0.153;
+
+        const adjustedGrossIncome = netProfit - (selfEmploymentTax / 2);
         const standardDeduction = standardDeductions[filingStatus];
-        const childTaxCredit = (Number(dependents) || 0) * 2000;
-        const adjustedGrossIncome = ytdIncome - totalExpenses - (selfEmploymentTax / 2);
         const taxableIncome = Math.max(0, adjustedGrossIncome - standardDeduction);
         
-        // Simplified Federal Tax Brackets (Single Filer for this example)
         let federalTax = 0;
-        if (taxableIncome > 47150) { federalTax = (taxableIncome - 47150) * 0.22 + 5184; } 
-        else if (taxableIncome > 11600) { federalTax = (taxableIncome - 11600) * 0.12 + 1160; } 
-        else { federalTax = taxableIncome * 0.10; }
+        const brackets = federalBrackets[filingStatus];
+        for (const bracket of brackets) {
+            if (taxableIncome > bracket.threshold) {
+                federalTax = (taxableIncome - bracket.threshold) * bracket.rate + bracket.base;
+                break;
+            }
+        }
 
         const stateTax = taxableIncome * ((Number(stateRate) || 0) / 100);
+        const childTaxCredit = (Number(dependents) || 0) * 2000;
         
         const totalTaxOwed = Math.max(0, selfEmploymentTax + federalTax + stateTax - childTaxCredit);
         const quarterlyPayment = totalTaxOwed / 4;
@@ -186,10 +178,10 @@ export default function MyMoneyPage() {
                 </header>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <StatCard title="YTD Income (Paid)" value={`$${Number(stats.ytdIncome || 0).toFixed(2)}`} icon={DollarSign} theme="green" />
-                    <StatCard title="YTD Expenses" value={`$${Number(stats.ytdExpenses || 0).toFixed(2)}`} icon={FileText} theme="red" />
-                    <StatCard title="Credential Costs" value={`$${Number(stats.ytdCredentialCosts || 0).toFixed(2)}`} icon={Award} theme="yellow" />
-                    <StatCard title="Net Income" value={`$${Number(stats.netIncome || 0).toFixed(2)}`} icon={Landmark} theme="primary" />
+                    <StatCard title="YTD Income (Paid)" value={`$${stats.ytdIncome.toFixed(2)}`} icon={DollarSign} theme="green" />
+                    <StatCard title="YTD Expenses" value={`$${stats.ytdExpenses.toFixed(2)}`} icon={FileText} theme="red" />
+                    <StatCard title="Credential Costs" value={`$${stats.ytdCredentialCosts.toFixed(2)}`} icon={Award} theme="yellow" />
+                    <StatCard title="Net Income" value={`$${stats.netIncome.toFixed(2)}`} icon={Landmark} theme="primary" />
                 </div>
                 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -208,11 +200,11 @@ export default function MyMoneyPage() {
                              <div className="my-4 space-y-2">
                                 <div className="text-right">
                                     <p className="text-sm text-muted-foreground">Estimated Quarterly Payment</p>
-                                    <p className="text-3xl font-bold text-primary">${Number(taxStats.quarterlyPayment || 0).toFixed(2)}</p>
+                                    <p className="text-3xl font-bold text-primary">${taxStats.quarterlyPayment.toFixed(2)}</p>
                                 </div>
                                 <div className="text-right">
                                     <p className="text-xs text-muted-foreground">Total Owed (YTD)</p>
-                                    <p className="text-lg font-semibold">${Number(taxStats.totalTaxOwed || 0).toFixed(2)}</p>
+                                    <p className="text-lg font-semibold">${taxStats.totalTaxOwed.toFixed(2)}</p>
                                 </div>
                              </div>
                              <div className="space-y-4 pt-4 border-t">
@@ -232,16 +224,7 @@ export default function MyMoneyPage() {
                                 <div>
                                     <div className="flex justify-between items-center mb-1">
                                         <label htmlFor="stateRate" className="block text-sm font-medium">Your State Income Tax Rate (%)</label>
-                                        {/* ✅ THIS IS THE FIX */}
-                                        <a 
-                                            href="https://www.irs.gov/tax-professionals/government-sites" 
-                                            target="_blank" 
-                                            rel="noopener noreferrer"
-                                            className="text-xs text-muted-foreground hover:text-primary underline flex items-center gap-1"
-                                        >
-                                            <Info size={12} />
-                                            Look up rate
-                                        </a>
+                                        <a href="https://www.irs.gov/tax-professionals/government-sites" target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-primary underline flex items-center gap-1"><Info size={12} />Look up rate</a>
                                     </div>
                                     <input id="stateRate" type="number" value={stateRate} onChange={(e) => setStateRate(e.target.value === '' ? '' : Number(e.target.value))} className="w-full p-2 bg-background border rounded-md" placeholder="e.g., 5" />
                                 </div>
@@ -249,6 +232,7 @@ export default function MyMoneyPage() {
                                     {isSubmittingTax ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                                     {isSubmittingTax ? 'Saving...' : 'Save Rate'}
                                 </button>
+                                <p className="text-xs text-muted-foreground text-center pt-2">This is a simplified estimate for informational purposes only. Consult a tax professional for advice.</p>
                              </div>
                         </div>
                     </div>
@@ -273,23 +257,23 @@ export default function MyMoneyPage() {
                         </div>
                         <div className="bg-card p-6 rounded-lg border">
                              <div className="flex justify-between items-center mb-4">
-                                 <h3 className="text-lg font-semibold">Expense Breakdown</h3>
-                                 <Link href="/dashboard/expenses" className="flex items-center gap-1 text-sm font-semibold text-primary hover:underline">View All <ArrowRight size={14} /></Link>
+                                <h3 className="text-lg font-semibold">Expense Breakdown</h3>
+                                <Link href="/dashboard/expenses" className="flex items-center gap-1 text-sm font-semibold text-primary hover:underline">View All <ArrowRight size={14} /></Link>
                              </div>
                              <div className="w-full h-[300px]">
-                                 <ExpensePieChart expenses={allExpenses} />
+                                <ExpensePieChart expenses={allExpenses} />
                              </div>
                         </div>
                         <div className="bg-gradient-to-br from-primary/20 to-card p-6 rounded-lg border border-primary/30">
                              <div className="flex justify-between items-center mb-4">
-                                 <div>
-                                     <h3 className="text-lg font-semibold flex items-center gap-2">
-                                         <Zap size={20} className="text-primary"/> 
-                                         Introducing Ten Sum
-                                     </h3>
-                                     <p className="text-sm text-muted-foreground mt-1">Go beyond tracking. Start planning.</p>
-                                 </div>
-                                 <span className="text-xs font-semibold bg-primary text-primary-foreground px-2 py-1 rounded-full">COMING SOON</span>
+                                  <div>
+                                       <h3 className="text-lg font-semibold flex items-center gap-2">
+                                           <Zap size={20} className="text-primary"/> 
+                                           Introducing Ten Sum
+                                       </h3>
+                                       <p className="text-sm text-muted-foreground mt-1">Go beyond tracking. Start planning.</p>
+                                  </div>
+                                  <span className="text-xs font-semibold bg-primary text-primary-foreground px-2 py-1 rounded-full">COMING SOON</span>
                              </div>
                              <p className="text-sm mb-4">
                                  A new financial planning app designed for freelancers. Connect your Ten99 data to plan for sick days, get AI alerts on late payments, and automate your savings goals.

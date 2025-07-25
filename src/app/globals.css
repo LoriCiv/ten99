@@ -74,3 +74,20 @@ input:-webkit-autofill:active {
     /* A long transition can also help delay the style override */
     transition: background-color 5000s ease-in-out 0s;
 }
+/* ... (keep your existing global styles) */
+
+/* Custom Styles for the Interactive Calendar */
+.rdp-day_job:not(.rdp-day_outside) {
+  border-bottom: 3px solid #3b82f6; /* blue */
+}
+.rdp-day_personal:not(.rdp-day_outside) {
+  border-bottom: 3px solid #8b5cf6; /* purple */
+}
+.rdp-day_billing:not(.rdp-day_outside) {
+  border-bottom: 3px solid #10b981; /* green */
+}
+.rdp-day_selected {
+    background-color: hsl(var(--primary)) !important;
+    color: hsl(var(--primary-foreground)) !important;
+    border-radius: 9999px;
+}

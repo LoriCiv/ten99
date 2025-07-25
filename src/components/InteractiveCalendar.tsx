@@ -1,4 +1,3 @@
-// src/components/InteractiveCalendar.tsx
 "use client";
 
 import React from 'react';
@@ -35,10 +34,11 @@ export default function InteractiveCalendar({
     billing: billingDays,
   };
 
-  const modifiersStyles = {
-    job: { borderBottom: '4px solid #22c55e' },
-    personal: { borderBottom: '4px solid #3b82f6' },
-    billing: { borderBottom: '4px solid #eab308' },
+  const modifiersClassNames = {
+    job: 'job-day',
+    personal: 'personal-day',
+    billing: 'billing-day',
+    selected: 'selected-day',
   };
 
   const handleExport = () => {
@@ -98,8 +98,7 @@ export default function InteractiveCalendar({
         onMonthChange={onMonthChange}
         showOutsideDays
         modifiers={modifiers}
-        modifiersStyles={modifiersStyles}
-        // Removed the props that were causing errors
+        modifiersClassNames={modifiersClassNames}
       />
       <div className="w-full flex justify-between items-center mt-4 pt-4 border-t border-border/50 px-4 pb-2">
         <button onClick={handleGoToToday} className="flex items-center gap-2 font-semibold text-muted-foreground hover:text-primary transition-colors"><LocateFixed size={16} /> Go to Today</button>

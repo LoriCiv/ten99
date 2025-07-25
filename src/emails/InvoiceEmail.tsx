@@ -22,7 +22,7 @@ export interface InvoiceEmailProps {
     user: UserProfile;
 }
 
-const baseUrl = 'https://www.ten99.app';
+const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
 
 export default function InvoiceEmail({ invoice, client, user }: InvoiceEmailProps) {
     const previewText = `Invoice #${invoice.invoiceNumber} from ${user.name || user.professionalTitle || 'Your Business'}`;
@@ -34,82 +34,84 @@ export default function InvoiceEmail({ invoice, client, user }: InvoiceEmailProp
         <Html>
             <Head />
             <Preview>{previewText}</Preview>
-            <Body style={main}> {/* ✅ Use the simple 'main' style */}
-                <Container style={container}>
-                    <Section style={contentSection}>
-                        {user.name && <Heading as="h1" style={h1}>{user.name}</Heading>}
-                        {user.professionalTitle && <Text style={headerInfo}>{user.professionalTitle}</Text>}
-                        {user.address && <Text style={headerInfo}>{user.address.replace(/\n/g, ', ')}</Text>}
-                        <Text style={headerInfo}>
+            <Body className="bg-gray-100 font-sans">
+                <Container className="bg-white mx-auto my-16 p-10 border rounded-lg max-w-2xl">
+                    <Section className="pb-4 border-b">
+                        {user.name && <Heading as="h1" className="text-2xl font-bold m-0">{user.name}</Heading>}
+                        {user.professionalTitle && <Text className="text-gray-600 text-sm m-0 mt-1">{user.professionalTitle}</Text>}
+                        {user.address && <Text className="text-gray-600 text-sm m-0">{user.address.replace(/\n/g, ', ')}</Text>}
+                        <Text className="text-gray-600 text-sm m-0">
                             {user.phone && <span>{user.phone}</span>}
                             {user.phone && user.email && <span> | </span>}
                             {user.email && <span>{user.email}</span>}
                         </Text>
                     </Section>
                     
-                    <Section style={contentSection}>
+                    <Section className="py-6">
                         <Row>
                             <Column>
-                                <Text style={label}>BILLED TO</Text>
-                                <Text style={value}>{client.companyName || client.name}</Text>
+                                <Text className="text-xs uppercase text-gray-500 font-bold m-0">BILLED TO</Text>
+                                <Text className="text-base font-medium m-0">{client.companyName || client.name}</Text>
                             </Column>
-                            <Column style={{ textAlign: 'right' }}>
-                                <Text style={label}>INVOICE #</Text>
-                                <Text style={value}>{invoice.invoiceNumber}</Text>
-                                <Text style={label}>DUE DATE</Text>
-                                <Text style={value}>{invoice.dueDate}</Text>
+                            <Column className="text-right">
+                                <Text className="text-xs uppercase text-gray-500 font-bold m-0">INVOICE #</Text>
+                                <Text className="text-base font-medium m-0">{invoice.invoiceNumber}</Text>
+                                <Text className="text-xs uppercase text-gray-500 font-bold m-0 mt-2">DUE DATE</Text>
+                                <Text className="text-base font-medium m-0">{invoice.dueDate}</Text>
                             </Column>
                         </Row>
                     </Section>
 
-                    <Hr style={hr} />
+                    <Hr className="border-gray-300 my-4" />
 
-                    <Section style={contentSection}>
-                        <Row style={tableHeader}>
-                            <Column><strong>ITEM</strong></Column>
-                            <Column style={{ textAlign: 'right' }}><strong>TOTAL</strong></Column>
+                    <Section>
+                        <Row className="text-gray-500 text-xs font-bold uppercase">
+                            <Column>Item</Column>
+                            <Column className="text-right">Total</Column>
                         </Row>
                         {invoice.lineItems?.map((item, index) => (
-                             <Row key={index} style={tableRow}>
+                             <Row key={index} className="py-2 border-b border-gray-200">
                                  <Column>{item.description}</Column>
-                                 <Column style={{ textAlign: 'right' }}>${(item.total || 0).toFixed(2)}</Column>
-                            </Row>
+                                 <Column className="text-right">${(item.total || 0).toFixed(2)}</Column>
+                             </Row>
                         ))}
                     </Section>
 
-                    <Hr style={hr} />
+                    <Hr className="border-gray-300 my-4" />
 
-                    <Section style={contentSection}>
+                    <Section>
                          <Row>
-                            <Column style={totalsLabel}>Subtotal</Column>
-                            <Column style={totalsValue}>${subtotal.toFixed(2)}</Column>
+                            <Column className="w-3/4 text-right"><Text className="m-0">Subtotal</Text></Column>
+                            <Column className="w-1/4 text-right"><Text className="m-0">${subtotal.toFixed(2)}</Text></Column>
                         </Row>
                          <Row>
-                            <Column style={totalsLabel}>Tax</Column>
-                            <Column style={totalsValue}>${tax.toFixed(2)}</Column>
+                            <Column className="w-3/4 text-right"><Text className="m-0">Tax</Text></Column>
+                            <Column className="w-1/4 text-right"><Text className="m-0">${tax.toFixed(2)}</Text></Column>
                         </Row>
-                        <Row>
-                            <Column style={totalsLabel}><strong>Amount Due</strong></Column>
-                            <Column style={totalsValue}><strong>${total.toFixed(2)}</strong></Column>
+                         <Row>
+                            <Column className="w-3/4 text-right"><Text className="m-0 font-bold">Amount Due</Text></Column>
+                            <Column className="w-1/4 text-right"><Text className="m-0 font-bold">${total.toFixed(2)}</Text></Column>
                         </Row>
                     </Section>
 
-                    <Hr style={hr} />
+                    <Hr className="border-gray-300 my-4" />
 
-                    <Section style={contentSection}>
-                        <Text style={notesHeader}>Payment Details</Text>
-                        <Text style={notesText}>{invoice.paymentDetails || user.defaultPaymentDetails || 'Payment details not provided.'}</Text>
+                    <Section>
+                        <Text className="font-bold mb-2">Payment Details</Text>
+                        <Text className="text-sm text-gray-600 whitespace-pre-line">
+                            {invoice.paymentDetails || user.defaultPaymentDetails || 'Payment details not provided.'}
+                        </Text>
                     </Section>
                     
-                    <Hr style={hr} />
+                    <Hr className="border-gray-300 my-4" />
                     
-                    <Section style={footer}>
+                    <Section className="pt-4">
                         <Row>
-                            <Column align="left" style={{ width: '50%' }}>
+                            <Column className="w-1/2">
                                 <Img src={`${baseUrl}/logo.png`} width="70" alt="Ten99 Logo" />
                             </Column>
-                            <Column align="right" style={{ width: '50%' }}>
-                                <Text style={footerText}>Powered by TenFlow.app</Text>
+                            <Column className="w-1/2 text-right">
+                                <Text className="text-xs text-gray-500">Powered by Ten99</Text>
                             </Column>
                         </Row>
                     </Section>
@@ -118,29 +120,3 @@ export default function InvoiceEmail({ invoice, client, user }: InvoiceEmailProp
         </Html>
     );
 };
-
-// --- STYLES ---
-const main = { backgroundColor: '#f6f9fc', fontFamily: 'Arial, sans-serif' };
-const container = { 
-    backgroundColor: '#ffffff', // ✅ Solid white background
-    margin: '0 auto', 
-    padding: '20px 0 48px', 
-    marginBottom: '64px', 
-    border: '1px solid #eee', 
-    borderRadius: '5px' 
-};
-// ✅ REMOVED: The old 'body' style with the background image is gone.
-const contentSection = { padding: '0 40px' };
-const h1 = { color: '#333', fontSize: '28px', margin: '0 0 10px 0' };
-const headerInfo = { color: '#555', fontSize: '14px', lineHeight: '22px' };
-const hr = { borderColor: '#e6ebf1', margin: '20px 0' };
-const label = { color: '#888', fontSize: '12px', textTransform: 'uppercase' as const };
-const value = { color: '#333', fontSize: '16px', fontWeight: 'bold' };
-const tableHeader = { color: '#888', fontSize: '12px' };
-const tableRow = { paddingTop: '8px', paddingBottom: '8px' };
-const notesHeader = { fontWeight: 'bold' as const, marginBottom: '8px' };
-const notesText = { fontSize: '14px', color: '#555', whiteSpace: 'pre-line' as const };
-const footer = { padding: '20px 40px 0 40px', color: '#A9A9A9', fontSize: '12px' };
-const footerText = { textAlign: 'right' as const, lineHeight: '1' };
-const totalsLabel = { textAlign: 'left' as const, width: '75%' };
-const totalsValue = { textAlign: 'right' as const, width: '25%' };
