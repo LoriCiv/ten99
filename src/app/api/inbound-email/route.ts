@@ -19,7 +19,6 @@ const extractJson = (text: string): unknown => {
     return null;
 };
 
-// ✅ FIX: Defined a specific type for the AI's response to avoid using 'any'
 type AiResponse = {
     senderName: string;
     subject: string;
@@ -30,16 +29,6 @@ type AiResponse = {
 };
 
 export async function POST(request: NextRequest) {
-    console.log("--- NEW INBOUND REQUEST RECEIVED ---");
-    try {
-        const contentType = request.headers.get('content-type');
-        console.log(`Content-Type Header: ${contentType}`);
-        const rawBody = await request.clone().text();
-        console.log("Raw Request Body:", rawBody.substring(0, 500) + '...');
-    } catch (e) {
-        console.error("Error logging request details:", e);
-    }
-    
     const TEMP_USER_ID = "dev-user-1";
 
     if (!process.env.GEMINI_API_KEY) {
@@ -54,8 +43,6 @@ export async function POST(request: NextRequest) {
             subject: formData.get('subject') as string || '',
             text: formData.get('text') as string || '',
         };
-        
-        console.log("[Step 1] Successfully Parsed Incoming Email Form Data.");
 
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
@@ -86,8 +73,6 @@ ${emailData.text}`;
             throw new Error("AI parsing failed to produce valid JSON.");
         }
 
-        console.log("[Step 2] AI has successfully parsed the email content.");
-
         const messageData: Partial<Message> = {
             senderId: emailData.from,
             senderName: parsedContent.senderName || emailData.from,
@@ -102,7 +87,6 @@ ${emailData.text}`;
         };
 
         const messageId = await addMessage(TEMP_USER_ID, messageData);
-        console.log(`[Step 3] Message ${messageId} created in Firestore.`);
         
         if (parsedContent.isAppointmentRequest && messageData.proposedDate && messageData.proposedTime) {
             const appointmentData: Partial<Appointment> = {
@@ -119,7 +103,6 @@ ${emailData.text}`;
 
             if (appointmentId) {
                 await updateMessage(TEMP_USER_ID, messageId, { appointmentId: appointmentId });
-                console.log(`[Step 4] Placeholder appointment ${appointmentId} created and linked.`);
             }
         }
 
