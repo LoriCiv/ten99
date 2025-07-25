@@ -1,7 +1,7 @@
 // src/app/page.tsx
 import Link from 'next/link';
-// ✅ FIX: Removed unused 'BarChart2' icon
-import { ThumbsUp, Calendar, Users, FileText } from 'lucide-react';
+import Image from 'next/image'; // ✅ 1. Import the Image component
+import { Calendar, Users, FileText } from 'lucide-react';
 
 const FeatureCard = ({ icon: Icon, title, children }: { icon: React.ElementType, title: string, children: React.ReactNode }) => (
     <div className="bg-card p-6 rounded-lg border">
@@ -17,7 +17,8 @@ export default function WelcomePage() {
       {/* Header */}
       <header className="container mx-auto px-6 py-4 flex justify-between items-center">
         <div className="flex items-center gap-2">
-            <ThumbsUp className="h-8 w-8 text-primary" />
+            {/* ✅ 2. Replaced the icon with your logo */}
+            <Image src="/logo.png" alt="Ten99 Logo" width={32} height={32} />
             <h1 className="text-2xl font-bold">Ten99</h1>
         </div>
         <Link href="/dashboard" className="bg-primary text-primary-foreground font-semibold py-2 px-5 rounded-lg hover:bg-primary/90 transition-colors">
