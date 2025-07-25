@@ -8,8 +8,8 @@ import {
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { Message, Appointment } from '@/types/app-interfaces';
 
-const extractJson = (text: string): any | null => {
-    // ... (rest of the function is the same)
+// ✅ FIX: Changed the return type from 'any' to 'unknown' to satisfy the linter rule.
+const extractJson = (text: string): unknown => {
     const match = text.match(/```json\n([\s\S]*?)\n```/);
     if (match && match[1]) {
         try { return JSON.parse(match[1]); }
@@ -21,14 +21,12 @@ const extractJson = (text: string): any | null => {
 };
 
 export async function POST(request: NextRequest) {
-    // ✅ ADDED EXTRA LOGGING TO DEBUG THE INCOMING REQUEST
     console.log("--- NEW INBOUND REQUEST RECEIVED ---");
     try {
         const contentType = request.headers.get('content-type');
         console.log(`Content-Type Header: ${contentType}`);
-        // Log the raw body to see exactly what SendGrid is sending
         const rawBody = await request.clone().text();
-        console.log("Raw Request Body:", rawBody.substring(0, 500) + '...'); // Log first 500 chars
+        console.log("Raw Request Body:", rawBody.substring(0, 500) + '...');
     } catch (e) {
         console.error("Error logging request details:", e);
     }
@@ -53,11 +51,27 @@ export async function POST(request: NextRequest) {
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 
-        const prompt = `Analyze the email...`; // Prompt is the same
+        const prompt = `Analyze the email below. Determine if it's an appointment request. Extract the sender's name, a subject, the full body, a proposed date (YYYY-MM-DD), and time (HH:MM 24-hour).
+Respond ONLY with a valid JSON object:
+{
+  "senderName": "John Doe",
+  "subject": "Meeting Request",
+  "body": "...",
+  "isAppointmentRequest": true,
+  "proposedDate": "2025-08-15",
+  "proposedTime": "14:30"
+}
+If it is not an appointment request, set "isAppointmentRequest" to false.
+
+Email Content:
+From: ${emailData.from}
+Subject: ${emailData.subject}
+
+${emailData.text}`;
 
         const result = await model.generateContent(prompt);
         const responseText = result.response.text();
-        const parsedContent = extractJson(responseText);
+        const parsedContent = extractJson(responseText) as { [key: string]: any };
 
         if (!parsedContent) {
             throw new Error("AI parsing failed to produce valid JSON.");
