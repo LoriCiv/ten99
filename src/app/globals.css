@@ -57,3 +57,20 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* In src/app/globals.css */
+
+/* Fix for Chrome browser autofill styles in dark mode */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+    /* This forces the text color to match your theme's text color */
+    -webkit-text-fill-color: hsl(var(--foreground)) !important;
+    
+    /* This is a trick to override the background color */
+    -webkit-box-shadow: 0 0 0px 1000px hsl(var(--background)) inset !important;
+
+    /* A long transition can also help delay the style override */
+    transition: background-color 5000s ease-in-out 0s;
+}

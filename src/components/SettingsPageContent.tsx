@@ -23,7 +23,7 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
     const router = useRouter();
     const [templates, setTemplates] = useState<Template[]>(initialTemplates);
     const [profile, setProfile] = useState<Partial<UserProfile>>(initialProfile || {});
-    const [activeTab, setActiveTab] = useState<'profile' | 'notifications' | 'expenses' | 'invoicing' | 'templates'>('profile');
+    const [activeTab, setActiveTab] = useState<'profile' | 'notifications' | 'expenses' | 'invoicing' | 'inbox'>('profile');
     const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
     const [editingTemplate, setEditingTemplate] = useState<Partial<Template> | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -129,7 +129,7 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
                         <button onClick={() => setActiveTab('notifications')} className={`${activeTab === 'notifications' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'} whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm`}>Notifications</button>
                         <button onClick={() => setActiveTab('expenses')} className={`${activeTab === 'expenses' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'} whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm`}>Expenses</button>
                         <button onClick={() => setActiveTab('invoicing')} className={`${activeTab === 'invoicing' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'} whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm`}>Invoice Settings</button>
-                        <button onClick={() => setActiveTab('templates')} className={`${activeTab === 'templates' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'} whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm`}>Message Templates</button>
+                        <button onClick={() => setActiveTab('inbox')} className={`${activeTab === 'inbox' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'} whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm`}>Inbox</button>
                     </nav>
                 </div>
 
@@ -177,106 +177,143 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
                     
                     {activeTab === 'expenses' && (
                          <div className="space-y-6 max-w-2xl">
-                             <div>
-                                 <h2 className="text-xl font-semibold">Expense Categories</h2>
-                                 <p className="text-muted-foreground text-sm mt-1">Add, remove, or re-order your custom expense categories.</p>
-                             </div>
-                             <div className="bg-card p-6 rounded-lg border">
-                                 <div className="space-y-2">
-                                     {(profile.expenseCategories || DEFAULT_EXPENSE_CATEGORIES).map((category, index) => (
-                                         <div key={category} className="flex justify-between items-center bg-background p-2 rounded-md group">
-                                             <span>{category}</span>
-                                             <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                 <button onClick={() => handleMoveCategory(index, 'up')} disabled={index === 0} className="p-1 rounded-full text-muted-foreground hover:text-primary disabled:opacity-20 disabled:cursor-not-allowed"><ArrowUp size={16} /></button>
-                                                 <button onClick={() => handleMoveCategory(index, 'down')} disabled={index === (profile.expenseCategories || []).length - 1} className="p-1 rounded-full text-muted-foreground hover:text-primary disabled:opacity-20 disabled:cursor-not-allowed"><ArrowDown size={16} /></button>
-                                                 {!DEFAULT_EXPENSE_CATEGORIES.includes(category) && (
-                                                     <button onClick={() => handleDeleteCategory(category)} className="p-1 rounded-full text-muted-foreground hover:text-destructive ml-2"><Trash2 size={16} /></button>
-                                                 )}
+                              <div>
+                                   <h2 className="text-xl font-semibold">Expense Categories</h2>
+                                   <p className="text-muted-foreground text-sm mt-1">Add, remove, or re-order your custom expense categories.</p>
+                              </div>
+                              <div className="bg-card p-6 rounded-lg border">
+                                   <div className="space-y-2">
+                                        {(profile.expenseCategories || DEFAULT_EXPENSE_CATEGORIES).map((category, index) => (
+                                             <div key={category} className="flex justify-between items-center bg-background p-2 rounded-md group">
+                                                 <span>{category}</span>
+                                                 <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                      <button onClick={() => handleMoveCategory(index, 'up')} disabled={index === 0} className="p-1 rounded-full text-muted-foreground hover:text-primary disabled:opacity-20 disabled:cursor-not-allowed"><ArrowUp size={16} /></button>
+                                                      <button onClick={() => handleMoveCategory(index, 'down')} disabled={index === (profile.expenseCategories || []).length - 1} className="p-1 rounded-full text-muted-foreground hover:text-primary disabled:opacity-20 disabled:cursor-not-allowed"><ArrowDown size={16} /></button>
+                                                      {!DEFAULT_EXPENSE_CATEGORIES.includes(category) && (
+                                                           <button onClick={() => handleDeleteCategory(category)} className="p-1 rounded-full text-muted-foreground hover:text-destructive ml-2"><Trash2 size={16} /></button>
+                                                      )}
+                                                 </div>
                                              </div>
-                                         </div>
-                                     ))}
-                                 </div>
-                                 <div className="mt-4 pt-4 border-t flex gap-2">
-                                     <input id="newCategoryInput" type="text" className="w-full p-2 bg-background border rounded-md" placeholder="Add new category name"/>
-                                     <button onClick={handleAddCategory} className="bg-secondary text-secondary-foreground font-semibold p-2 rounded-lg hover:bg-secondary/80"><PlusCircle size={20} /></button>
-                                 </div>
-                             </div>
-                             <div className="flex justify-end">
-                                 <button onClick={() => handleSaveSettings(profile)} disabled={isSubmitting} className="bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg flex items-center gap-2 disabled:opacity-50">
-                                     {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Save Expense Settings
-                                 </button>
-                             </div>
+                                        ))}
+                                   </div>
+                                   <div className="mt-4 pt-4 border-t flex gap-2">
+                                        <input id="newCategoryInput" type="text" className="w-full p-2 bg-background border rounded-md" placeholder="Add new category name"/>
+                                        <button onClick={handleAddCategory} className="bg-secondary text-secondary-foreground font-semibold p-2 rounded-lg hover:bg-secondary/80"><PlusCircle size={20} /></button>
+                                   </div>
+                              </div>
+                              <div className="flex justify-end">
+                                   <button onClick={() => handleSaveSettings(profile)} disabled={isSubmitting} className="bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg flex items-center gap-2 disabled:opacity-50">
+                                        {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Save Expense Settings
+                                   </button>
+                              </div>
                          </div>
                     )}
                     
                     {activeTab === 'invoicing' && (
                          <div className="space-y-8 max-w-4xl">
-                             <div>
-                                 <h2 className="text-xl font-semibold">Invoice Defaults</h2>
-                                 <p className="text-muted-foreground text-sm mt-1">Set defaults that will appear on every new invoice.</p>
-                             </div>
-                             <div className="space-y-4">
-                                 <div>
-                                     <div className="flex justify-between items-center"><label htmlFor="defaultTaxRate" className="block text-sm font-medium text-muted-foreground">Default Tax Rate (%)</label><a href="https://www.avalara.com/taxrates/en/state-rates.html" target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-primary underline flex items-center gap-1"><Info size={12} />Look up sales tax rates</a></div>
-                                     <input id="defaultTaxRate" type="number" value={profile.defaultTaxRate || ''} onChange={(e) => setProfile(p => ({ ...p, defaultTaxRate: e.target.value === '' ? undefined : Number(e.target.value) }))} className="w-full mt-1 p-2 bg-background border rounded-md" placeholder="e.g., 7.25" step="0.01"/>
-                                 </div>
-                                 <div className="flex items-center gap-3 pt-2">
-                                     <input type="checkbox" id="sendOverdueReminders" name="sendOverdueReminders" checked={profile.sendOverdueReminders || false} onChange={(e) => setProfile(p => ({ ...p, sendOverdueReminders: e.target.checked }))} className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
-                                     <label htmlFor="sendOverdueReminders" className="text-sm font-medium text-muted-foreground">Automatically send reminders for overdue invoices</label>
-                                 </div>
-                                 <div>
-                                     <label className="block text-sm font-medium text-muted-foreground">Default Notes / Terms & Conditions</label>
-                                     <textarea value={profile.defaultInvoiceNotes || ''} onChange={(e) => setProfile(p => ({...p, defaultInvoiceNotes: e.target.value}))} rows={5} className="w-full mt-1 p-2 bg-background border rounded-md"></textarea>
-                                 </div>
-                                 <div>
-                                     <label className="block text-sm font-medium text-muted-foreground">Default Payment Details</label>
-                                     <textarea value={profile.defaultPaymentDetails || ''} onChange={(e) => setProfile(p => ({...p, defaultPaymentDetails: e.target.value}))} rows={4} className="w-full mt-1 p-2 bg-background border rounded-md"></textarea>
-                                 </div>
-                             </div>
-                             <div className="pt-8 border-t">
-                                 <h2 className="text-xl font-semibold">Reusable Line Items</h2>
-                                 <p className="text-muted-foreground text-sm mt-1">Create a list of common services to quickly add them to new invoices.</p>
-                             </div>
-                             <div className="bg-card p-6 rounded-lg border">
-                                 <div className="space-y-2">
-                                     {(profile.invoiceLineItems || []).map(item => (
-                                         <div key={item.id} className="flex justify-between items-center bg-background p-2 rounded-md">
-                                             <div className="flex items-center gap-3">
-                                                 <input type="checkbox" checked={!!item.isTaxable} onChange={() => handleToggleLineItemTaxable(item.id)} className="cursor-pointer h-4 w-4" />
-                                                 <div><span>{item.description}</span><p className="text-xs text-muted-foreground">({item.isTaxable ? 'Taxable' : 'Non-Taxable'})</p></div>
+                              <div>
+                                   <h2 className="text-xl font-semibold">Invoice Defaults</h2>
+                                   <p className="text-muted-foreground text-sm mt-1">Set defaults that will appear on every new invoice.</p>
+                              </div>
+                              <div className="space-y-4">
+                                   <div>
+                                        <div className="flex justify-between items-center"><label htmlFor="defaultTaxRate" className="block text-sm font-medium text-muted-foreground">Default Tax Rate (%)</label><a href="https://www.avalara.com/taxrates/en/state-rates.html" target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-primary underline flex items-center gap-1"><Info size={12} />Look up sales tax rates</a></div>
+                                        <input id="defaultTaxRate" type="number" value={profile.defaultTaxRate || ''} onChange={(e) => setProfile(p => ({ ...p, defaultTaxRate: e.target.value === '' ? undefined : Number(e.target.value) }))} className="w-full mt-1 p-2 bg-background border rounded-md" placeholder="e.g., 7.25" step="0.01"/>
+                                   </div>
+                                   <div className="flex items-center gap-3 pt-2">
+                                        <input type="checkbox" id="sendOverdueReminders" name="sendOverdueReminders" checked={profile.sendOverdueReminders || false} onChange={(e) => setProfile(p => ({ ...p, sendOverdueReminders: e.target.checked }))} className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
+                                        <label htmlFor="sendOverdueReminders" className="text-sm font-medium text-muted-foreground">Automatically send reminders for overdue invoices</label>
+                                   </div>
+                                   <div>
+                                        <label className="block text-sm font-medium text-muted-foreground">Default Notes / Terms & Conditions</label>
+                                        <textarea value={profile.defaultInvoiceNotes || ''} onChange={(e) => setProfile(p => ({...p, defaultInvoiceNotes: e.target.value}))} rows={5} className="w-full mt-1 p-2 bg-background border rounded-md"></textarea>
+                                   </div>
+                                   <div>
+                                        <label className="block text-sm font-medium text-muted-foreground">Default Payment Details</label>
+                                        <textarea value={profile.defaultPaymentDetails || ''} onChange={(e) => setProfile(p => ({...p, defaultPaymentDetails: e.target.value}))} rows={4} className="w-full mt-1 p-2 bg-background border rounded-md"></textarea>
+                                   </div>
+                              </div>
+                              <div className="pt-8 border-t">
+                                   <h2 className="text-xl font-semibold">Reusable Line Items</h2>
+                                   <p className="text-muted-foreground text-sm mt-1">Create a list of common services to quickly add them to new invoices.</p>
+                              </div>
+                              <div className="bg-card p-6 rounded-lg border">
+                                   <div className="space-y-2">
+                                        {(profile.invoiceLineItems || []).map(item => (
+                                             <div key={item.id} className="flex justify-between items-center bg-background p-2 rounded-md">
+                                                 <div className="flex items-center gap-3">
+                                                      <input type="checkbox" checked={!!item.isTaxable} onChange={() => handleToggleLineItemTaxable(item.id)} className="cursor-pointer h-4 w-4" />
+                                                      <div><span>{item.description}</span><p className="text-xs text-muted-foreground">({item.isTaxable ? 'Taxable' : 'Non-Taxable'})</p></div>
+                                                 </div>
+                                                 <div className="flex items-center gap-2"><span className="font-mono text-sm">${item.unitPrice.toFixed(2)}</span><button onClick={() => handleDeleteLineItem(item.id)} className="text-muted-foreground hover:text-destructive p-1 rounded-full"><Trash2 size={16} /></button></div>
                                              </div>
-                                             <div className="flex items-center gap-2"><span className="font-mono text-sm">${item.unitPrice.toFixed(2)}</span><button onClick={() => handleDeleteLineItem(item.id)} className="text-muted-foreground hover:text-destructive p-1 rounded-full"><Trash2 size={16} /></button></div>
-                                         </div>
-                                     ))}
-                                 </div>
-                                 <div className="mt-4 pt-4 border-t grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
-                                     <input id="newItemDesc" type="text" className="md:col-span-2 w-full p-2 bg-background border rounded-md" placeholder="New item description..."/>
-                                     <input id="newItemPrice" type="number" className="w-full p-2 bg-background border rounded-md" placeholder="Price"/>
-                                     <div className="flex items-center gap-2"><input id="newItemIsTaxable" type="checkbox" defaultChecked className="h-4 w-4"/><label htmlFor="newItemIsTaxable" className="text-sm">Taxable</label></div>
-                                     <button onClick={handleAddLineItem} className="md:col-span-4 w-full mt-2 bg-secondary text-secondary-foreground font-semibold p-2 rounded-lg hover:bg-secondary/80 flex items-center justify-center gap-2"><PlusCircle size={20} /> Add Item</button>
-                                 </div>
-                             </div>
-                             <div className="flex justify-end pt-6">
-                                 <button onClick={() => handleSaveSettings(profile)} disabled={isSubmitting} className="bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg flex items-center gap-2 disabled:opacity-50">
-                                     {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                                     {isSubmitting ? 'Saving...' : 'Save Invoice Settings'}
-                                 </button>
-                             </div>
+                                        ))}
+                                   </div>
+                                   <div className="mt-4 pt-4 border-t grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
+                                        <input id="newItemDesc" type="text" className="md:col-span-2 w-full p-2 bg-background border rounded-md" placeholder="New item description..."/>
+                                        <input id="newItemPrice" type="number" className="w-full p-2 bg-background border rounded-md" placeholder="Price"/>
+                                        <div className="flex items-center gap-2"><input id="newItemIsTaxable" type="checkbox" defaultChecked className="h-4 w-4"/><label htmlFor="newItemIsTaxable" className="text-sm">Taxable</label></div>
+                                        <button onClick={handleAddLineItem} className="md:col-span-4 w-full mt-2 bg-secondary text-secondary-foreground font-semibold p-2 rounded-lg hover:bg-secondary/80 flex items-center justify-center gap-2"><PlusCircle size={20} /> Add Item</button>
+                                   </div>
+                              </div>
+                              <div className="flex justify-end pt-6">
+                                   <button onClick={() => handleSaveSettings(profile)} disabled={isSubmitting} className="bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg flex items-center gap-2 disabled:opacity-50">
+                                        {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                                        {isSubmitting ? 'Saving...' : 'Save Invoice Settings'}
+                                   </button>
+                              </div>
                          </div>
                     )}
 
-                    {activeTab === 'templates' && (
-                         <div>
-                             <div className="flex justify-end mb-4"><button onClick={() => handleOpenTemplateModal(null)} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90"><PlusCircle size={20} /> Add Template</button></div>
-                             <div className="space-y-3">
-                                  {templates.map(template => (
-                                      <div key={template.id} className="bg-card p-4 rounded-lg border flex justify-between items-center">
-                                          <div><p className="font-bold text-foreground">{template.name}</p><p className="text-sm text-muted-foreground truncate">{template.subject}</p></div>
-                                          <div className="flex gap-2"><button onClick={() => handleOpenTemplateModal(template)} className="p-2 hover:bg-muted rounded-md text-muted-foreground hover:text-primary"><Edit size={16}/></button><button onClick={() => handleDeleteTemplate(template.id!)} className="p-2 hover:bg-muted rounded-md text-muted-foreground hover:text-destructive"><Trash2 size={16}/></button></div>
-                                      </div>
-                                  ))}
-                             </div>
-                         </div>
+                    {activeTab === 'inbox' && (
+                         <div className="space-y-8 max-w-4xl">
+                            <div>
+                                <h2 className="text-xl font-semibold">Inbox Automation</h2>
+                                <p className="text-muted-foreground text-sm mt-1">Configure settings to automate your inbound requests.</p>
+                            </div>
+                            <div className="bg-card p-6 rounded-lg border">
+                                 <div>
+                                    <label htmlFor="defaultForwardingEmail" className="block text-sm font-medium">Default Forwarding Email</label>
+                                    <input 
+                                        id="defaultForwardingEmail"
+                                        type="email" 
+                                        value={profile.defaultForwardingEmail || ''} 
+                                        onChange={(e) => setProfile(p => ({ ...p, defaultForwardingEmail: e.target.value }))}
+                                        className="w-full mt-1 p-2 bg-background border rounded-md"
+                                        placeholder="e.g., yourname.forward@example.com"
+                                    />
+                                    <p className="text-xs text-muted-foreground mt-2">
+                                        Emails received from this address will be automatically confirmed on your calendar. If a double booking is detected, you&apos;ll receive a warning message in your inbox instead.
+                                    </p>
+                                </div>
+                                <div className="flex justify-end mt-4">
+                                     <button onClick={() => handleSaveSettings(profile)} disabled={isSubmitting} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90 disabled:opacity-50">
+                                        {isSubmitting ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>}
+                                        Save Automation Settings
+                                    </button>
+                                </div>
+                            </div>
+
+                            <hr className="my-8" />
+
+                            <div>
+                                <div className="flex justify-between items-center mb-4">
+                                    <div>
+                                        <h2 className="text-xl font-semibold">Message Templates</h2>
+                                        <p className="text-muted-foreground text-sm mt-1">Create reusable replies for your inbox.</p>
+                                    </div>
+                                    <button onClick={() => handleOpenTemplateModal(null)} className="flex items-center gap-2 bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-secondary/90"><PlusCircle size={20} /> Add Template</button>
+                                </div>
+                                <div className="space-y-3">
+                                     {templates.map(template => (
+                                         <div key={template.id} className="bg-card p-4 rounded-lg border flex justify-between items-center">
+                                             <div><p className="font-bold text-foreground">{template.name}</p><p className="text-sm text-muted-foreground truncate">{template.subject}</p></div>
+                                             <div className="flex gap-2"><button onClick={() => handleOpenTemplateModal(template)} className="p-2 hover:bg-muted rounded-md text-muted-foreground hover:text-primary"><Edit size={16}/></button><button onClick={() => handleDeleteTemplate(template.id!)} className="p-2 hover:bg-muted rounded-md text-muted-foreground hover:text-destructive"><Trash2 size={16}/></button></div>
+                                         </div>
+                                     ))}
+                                </div>
+                            </div>
+                        </div>
                     )}
                 </div>
             </div>

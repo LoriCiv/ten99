@@ -1,12 +1,16 @@
-// src/app/dashboard/layout.tsx
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react'; // ✅ 1. Import hooks
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ThumbsUp, Users, Calendar, FileText, Mail, Settings, Receipt, Award, DollarSign, Menu, X, Briefcase } from 'lucide-react';
+import { getMessagesForUser } from '@/utils/firestoreService'; // ✅ 2. Import function to get messages
+import type { Message } from '@/types/app-interfaces'; // ✅ 3. Import the Message type
 
-const NavLink = ({ href, icon: Icon, children }: { href: string, icon: React.ElementType, children: React.ReactNode }) => {
+const TEMP_USER_ID = "dev-user-1";
+
+// ✅ 4. Update NavLink to accept and display a count
+const NavLink = ({ href, icon: Icon, children, count }: { href: string, icon: React.ElementType, children: React.ReactNode, count?: number }) => {
     const pathname = usePathname();
     const isActive = href === '/dashboard' ? pathname === href : pathname.startsWith(href);
 
@@ -20,7 +24,12 @@ const NavLink = ({ href, icon: Icon, children }: { href: string, icon: React.Ele
             }`}
         >
             <Icon className="h-5 w-5" />
-            {children}
+            <span>{children}</span>
+            {count !== undefined && count > 0 && (
+                <span className="ml-auto bg-rose-500 text-white text-xs font-semibold w-5 h-5 flex items-center justify-center rounded-full">
+                    {count}
+                </span>
+            )}
         </Link>
     );
 };
@@ -31,12 +40,25 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  // Close mobile menu on route change
+  // ✅ 5. Add state to hold messages and calculate unread count
+  const [messages, setMessages] = useState<Message[]>([]);
+  const unreadCount = useMemo(() => messages.filter(m => !m.isRead).length, [messages]);
+  
   const pathname = usePathname();
+  
   useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [pathname]);
+
+  // ✅ 6. Add effect to listen for messages in real-time
+  useEffect(() => {
+    const unsubscribe = getMessagesForUser(TEMP_USER_ID, (fetchedMessages) => {
+        // We only need inbox messages for the count
+        setMessages(fetchedMessages);
+    });
+
+    return () => unsubscribe(); // Clean up the listener when the component unmounts
+  }, []);
 
 
   const navItems = [
@@ -55,7 +77,13 @@ export default function DashboardLayout({
   const navigationMenu = (
       <nav className="flex flex-col gap-1">
           {navItems.map((item) => (
-              <NavLink key={item.name} href={item.href} icon={item.icon}>
+              <NavLink 
+                key={item.name} 
+                href={item.href} 
+                icon={item.icon}
+                // ✅ 7. Pass the unread count ONLY to the Mailbox link
+                count={item.name === 'Mailbox' ? unreadCount : undefined}
+              >
                   {item.name}
               </NavLink>
           ))}
@@ -95,7 +123,6 @@ export default function DashboardLayout({
         )}
 
         <div className="flex flex-col flex-1">
-            {/* ✅ FIX: Hamburger button is now on the LEFT for a more intuitive UX */}
             <header className="lg:hidden sticky top-0 z-40 flex h-16 items-center gap-4 border-b bg-background px-4">
                 <button 
                     onClick={() => setIsMobileMenuOpen(true)}
@@ -104,10 +131,8 @@ export default function DashboardLayout({
                     <Menu className="h-6 w-6"/>
                     <span className="sr-only">Open Menu</span>
                 </button>
-                {/* You can add a page title here later if you want */}
             </header>
             
-            {/* ✅ FIX: Added padding to the main content area to ensure the border is always visible */}
             <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
                 {children}
             </main>
