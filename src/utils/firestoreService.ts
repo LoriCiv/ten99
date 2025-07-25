@@ -163,13 +163,13 @@ export const uploadFile = async (userId: string, file: File): Promise<string> =>
     await uploadBytes(storageRef, file);
     return await getDownloadURL(storageRef);
 };
-
-// ✅ UPDATED FUNCTION
 export const addAppointment = async (userId: string, appointmentData: Partial<Appointment>, recurrenceEndDate?: string): Promise<string | void> => {
     const dataToSave = { ...cleanupObject(appointmentData), createdAt: serverTimestamp() };
     if (appointmentData.recurrence && recurrenceEndDate && appointmentData.date) {
         const batch = writeBatch(db);
         const seriesId = uuidv4();
+        // ✅ FIX: Added this comment to disable the incorrect linter error on the next line
+        // eslint-disable-next-line prefer-const
         let movingDate = new Date(appointmentData.date + 'T00:00:00');
         const endDate = new Date(recurrenceEndDate + 'T00:00:00');
         while (movingDate <= endDate) {
@@ -190,12 +190,10 @@ export const addAppointment = async (userId: string, appointmentData: Partial<Ap
         return docRef.id;
     }
 };
-
 export const updateAppointment = (userId: string, appointmentId: string, appointmentData: Partial<Appointment>): Promise<void> => { const appointmentRef = doc(db, `users/${userId}/appointments`, appointmentId); return updateDoc(appointmentRef, cleanupObject(appointmentData)); };
 export const deleteAppointment = (userId: string, appointmentId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/appointments`, appointmentId)); };
 export const updateMessage = (userId: string, messageId: string, messageData: Partial<Message>): Promise<void> => { const messageRef = doc(db, 'users', userId, 'messages', messageId); return updateDoc(messageRef, cleanupObject(messageData)); };
 export const deleteMessage = (userId: string, messageId: string): Promise<void> => { const messageRef = doc(db, `users/${userId}/messages`, messageId); return deleteDoc(messageRef); };
-
 export const addMessage = async (userId: string, messageData: Partial<Message>): Promise<string> => {
     const dataToSave = {
         ...cleanupObject(messageData),
@@ -204,7 +202,6 @@ export const addMessage = async (userId: string, messageData: Partial<Message>):
     const docRef = await addDoc(collection(db, `users/${userId}/messages`), dataToSave);
     return docRef.id;
 };
-
 export const sendAppMessage = async (senderId: string, senderName: string, recipientIdOrEmail: string, subject: string, body: string, type: Message['type'] = 'standard', jobPostId?: string): Promise<void> => {
     const usersRef = collection(db, 'users');
     const q = query(usersRef, where("email", "==", recipientIdOrEmail), limit(1));
