@@ -1,9 +1,9 @@
 // src/app/dashboard/mailbox/page.tsx
 "use client";
 
-import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useState, useEffect, useMemo, Suspense, ElementType } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { ArrowLeft, Trash2, Search, Check, X as XIcon, Send, RotateCcw, Clock, CalendarCheck, CornerDownLeft, Pencil, Inbox, PackageOpen, Loader2 } from 'lucide-react';
+import { ArrowLeft, Trash2, Search, Check, X as XIcon, Send, RotateCcw, Clock, CalendarCheck, CornerDownLeft, Pencil, PackageOpen, Loader2 } from 'lucide-react';
 import type { Message, JobPosting } from '@/types/app-interfaces';
 import {
     getMessagesForUser,
@@ -25,11 +25,9 @@ import ComposeMessageForm from '@/components/ComposeMessageForm';
 import { Timestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
 
-
 const TEMP_USER_ID = "dev-user-1";
 const TEMP_USER_NAME = "Dev User";
 
-// ✅ REPAIRED & COMPLETED COMPONENT
 function MailboxPageInternal() {
     const searchParams = useSearchParams();
     const [messages, setMessages] = useState<Message[]>([]);
@@ -55,7 +53,6 @@ function MailboxPageInternal() {
             ? getMessagesForUser(TEMP_USER_ID, setMessages)
             : getSentMessagesForUser(TEMP_USER_ID, setMessages);
         
-        // Only need to get job postings once
         const unsubJobs = getJobPostings(setJobPostings);
         
         setSelectedMessage(null);
@@ -133,22 +130,17 @@ function MailboxPageInternal() {
         }
     };
 
-    const handleAction = async (action: Function, newStatus: Message['status'], successMessage: string) => {
-        if (!selectedMessage || !selectedMessage.id) return;
+    const performAction = async (actionLogic: () => Promise<void>, newStatus: Message['status'], successMessage: string) => {
+        if (!selectedMessage?.id) return;
         const originalMessageId = selectedMessage.id;
-
+        
         setIsActionLoading(true);
         try {
-            await action(TEMP_USER_ID, selectedMessage);
-            
+            await actionLogic();
             alert(successMessage);
-
-            const updatedMessages = messages.map(m => 
-                m.id === originalMessageId ? { ...m, status: newStatus } : m
-            );
+            const updatedMessages = messages.map(m => m.id === originalMessageId ? { ...m, status: newStatus } : m);
             setMessages(updatedMessages);
             setSelectedMessage(prev => prev ? { ...prev, status: newStatus } : null);
-
         } catch (error) {
             console.error("Mailbox action failed:", error);
             alert(`Action failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -156,8 +148,16 @@ function MailboxPageInternal() {
             setIsActionLoading(false);
         }
     };
+
+    interface ActionButtonProps {
+        onClick: () => void;
+        disabled: boolean;
+        icon: ElementType;
+        text: string;
+        variant?: 'primary' | 'secondary' | 'success' | 'danger' | 'warning';
+    }
     
-    const ActionButton = ({ onClick, disabled, icon: Icon, text, variant = 'primary' }: any) => {
+    const ActionButton = ({ onClick, disabled, icon: Icon, text, variant = 'primary' }: ActionButtonProps) => {
         const variants: Record<string, string> = {
             primary: 'bg-primary text-primary-foreground hover:bg-primary/90',
             secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
@@ -177,7 +177,6 @@ function MailboxPageInternal() {
 
     return (
         <div className="flex h-[calc(100vh-8rem)] bg-card border rounded-lg overflow-hidden">
-            {/* ✅ FILLED IN: Message List Panel */}
             <div className={`w-full md:w-1/3 border-r border-border flex flex-col ${selectedMessage || isComposing ? 'hidden md:flex' : 'flex'}`}>
                 <div className="p-4 border-b shrink-0">
                     <div className="flex items-center justify-between">
@@ -208,7 +207,6 @@ function MailboxPageInternal() {
                 </div>
             </div>
             
-            {/* ✅ FILLED IN: Message Detail/Compose Panel */}
             <div className={`w-full md:w-2/3 flex flex-col ${!selectedMessage && !isComposing ? 'hidden md:flex' : 'flex'}`}>
                 {isComposing ? (
                     <ComposeMessageForm 
@@ -237,7 +235,6 @@ function MailboxPageInternal() {
                         <div className="p-6 overflow-y-auto flex-grow">
                             <p className="text-base whitespace-pre-wrap">{selectedMessage.body}</p>
 
-                            {/* ✅ STYLED AND REPAIRED: Action Buttons Section */}
                             {activeFolder === 'inbox' && (
                                 <div className="mt-8 pt-6 border-t space-y-4">
                                     { (selectedMessage.type === 'application' || selectedMessage.type === 'offer') && (
@@ -247,8 +244,9 @@ function MailboxPageInternal() {
                                                 {selectedMessage.type === 'application' && selectedMessage.status === 'new' && !relatedJobPost?.isFilled && (
                                                     !relatedJobPost?.pendingApplicantId ? (
                                                         <>
-                                                            <ActionButton onClick={() => handleAction(sendJobOffer, 'offer-pending', 'Offer sent!')} disabled={isActionLoading} icon={Send} text="Send Offer" variant="primary" />
-                                                            <ActionButton onClick={() => handleAction(declineJobApplication, 'declined', 'Application declined.')} disabled={isActionLoading} icon={XIcon} text="Decline" variant="danger"/>
+                                                            {/* ✅ FIX: Changed sendJobOffer to only pass one argument */}
+                                                            <ActionButton onClick={() => performAction(() => sendJobOffer(selectedMessage), 'offer-pending', 'Offer sent!')} disabled={isActionLoading} icon={Send} text="Send Offer" variant="primary" />
+                                                            <ActionButton onClick={() => performAction(() => declineJobApplication(selectedMessage), 'declined', 'Application declined.')} disabled={isActionLoading} icon={XIcon} text="Decline" variant="danger"/>
                                                         </>
                                                     ) : relatedJobPost.pendingApplicantId === selectedMessage.senderId ? (
                                                         <p className="text-sm text-amber-600">You have a pending offer with this applicant.</p>
@@ -257,12 +255,12 @@ function MailboxPageInternal() {
                                                     )
                                                 )}
                                                 {selectedMessage.type === 'application' && selectedMessage.status === 'offer-pending' && (
-                                                    <ActionButton onClick={() => handleAction(rescindJobOffer, 'new', 'Offer rescinded.')} disabled={isActionLoading} icon={RotateCcw} text="Rescind Offer" variant="warning"/>
+                                                    <ActionButton onClick={() => performAction(() => rescindJobOffer(selectedMessage), 'new', 'Offer rescinded.')} disabled={isActionLoading} icon={RotateCcw} text="Rescind Offer" variant="warning"/>
                                                 )}
                                                 {selectedMessage.type === 'offer' && selectedMessage.status === 'new' && (
                                                     <>
-                                                        <ActionButton onClick={() => handleAction(acceptJobOffer, 'approved', 'Offer Accepted!')} disabled={isActionLoading} icon={Check} text="Accept Offer" variant="success" />
-                                                        <ActionButton onClick={() => handleAction(declineJobOffer, 'declined', 'Offer Declined.')} disabled={isActionLoading} icon={XIcon} text="Decline Offer" variant="danger"/>
+                                                        <ActionButton onClick={() => performAction(() => acceptJobOffer(selectedMessage), 'approved', 'Offer Accepted!')} disabled={isActionLoading} icon={Check} text="Accept Offer" variant="success" />
+                                                        <ActionButton onClick={() => performAction(() => declineJobOffer(selectedMessage), 'declined', 'Offer Declined.')} disabled={isActionLoading} icon={XIcon} text="Decline Offer" variant="danger"/>
                                                     </>
                                                 )}
                                             </div>
@@ -275,20 +273,20 @@ function MailboxPageInternal() {
                                             <div className="flex flex-wrap gap-2">
                                                 {selectedMessage.status === 'new' && (
                                                     <>
-                                                        <ActionButton onClick={() => handleAction(confirmInboundOffer, 'approved', 'Appointment Confirmed!')} disabled={isActionLoading} icon={CalendarCheck} text="Confirm & Book" variant="success"/>
-                                                        <ActionButton onClick={() => handleAction(acceptInboundOfferPending, 'pending', 'Replied to Sender.')} disabled={isActionLoading} icon={Clock} text="Accept Pending" variant="warning"/>
-                                                        <ActionButton onClick={() => handleAction(declineInboundOffer, 'declined', 'Declined & Replied.')} disabled={isActionLoading} icon={XIcon} text="Decline" variant="danger"/>
+                                                        <ActionButton onClick={() => performAction(() => confirmInboundOffer(TEMP_USER_ID, selectedMessage), 'approved', 'Appointment Confirmed!')} disabled={isActionLoading} icon={CalendarCheck} text="Confirm & Book" variant="success"/>
+                                                        <ActionButton onClick={() => performAction(() => acceptInboundOfferPending(TEMP_USER_ID, selectedMessage), 'pending', 'Replied to Sender.')} disabled={isActionLoading} icon={Clock} text="Accept Pending" variant="warning"/>
+                                                        <ActionButton onClick={() => performAction(() => declineInboundOffer(TEMP_USER_ID, selectedMessage), 'declined', 'Declined & Replied.')} disabled={isActionLoading} icon={XIcon} text="Decline" variant="danger"/>
                                                     </>
                                                 )}
                                                 {selectedMessage.status === 'pending' && (
-                                                    <ActionButton onClick={() => handleAction(confirmInboundOffer, 'approved', 'Appointment Confirmed!')} disabled={isActionLoading} icon={CalendarCheck} text="Confirm & Book" variant="success"/>
+                                                    <ActionButton onClick={() => performAction(() => confirmInboundOffer(TEMP_USER_ID, selectedMessage), 'approved', 'Appointment Confirmed!')} disabled={isActionLoading} icon={CalendarCheck} text="Confirm & Book" variant="success"/>
                                                 )}
                                             </div>
                                         </>
                                     )}
                                     
                                     {['approved', 'declined', 'offer-rescinded'].includes(selectedMessage.status || '') && (
-                                        <p className="text-sm font-semibold text-muted-foreground mt-4">This conversation has been actioned. Status: '{selectedMessage.status}'.</p>
+                                        <p className="text-sm font-semibold text-muted-foreground mt-4">This conversation has been actioned. Status: &apos;{selectedMessage.status}&apos;.</p>
                                     )}
                                 </div>
                             )}
