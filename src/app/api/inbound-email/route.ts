@@ -8,7 +8,6 @@ import {
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { Message, Appointment } from '@/types/app-interfaces';
 
-// ✅ FIX: Changed the return type from 'any' to 'unknown' to satisfy the linter rule.
 const extractJson = (text: string): unknown => {
     const match = text.match(/```json\n([\s\S]*?)\n```/);
     if (match && match[1]) {
@@ -18,6 +17,16 @@ const extractJson = (text: string): unknown => {
     try { return JSON.parse(text); }
     catch(e) { console.error("Failed to parse the entire text as JSON:", e); }
     return null;
+};
+
+// ✅ FIX: Defined a specific type for the AI's response to avoid using 'any'
+type AiResponse = {
+    senderName: string;
+    subject: string;
+    body: string;
+    isAppointmentRequest: boolean;
+    proposedDate?: string;
+    proposedTime?: string;
 };
 
 export async function POST(request: NextRequest) {
@@ -71,7 +80,7 @@ ${emailData.text}`;
 
         const result = await model.generateContent(prompt);
         const responseText = result.response.text();
-        const parsedContent = extractJson(responseText) as { [key: string]: any };
+        const parsedContent = extractJson(responseText) as AiResponse;
 
         if (!parsedContent) {
             throw new Error("AI parsing failed to produce valid JSON.");
