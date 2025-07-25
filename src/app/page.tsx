@@ -1,6 +1,7 @@
 // src/app/page.tsx
 import Link from 'next/link';
-import { ThumbsUp, Calendar, Users, FileText, BarChart2 } from 'lucide-react';
+// ✅ FIX: Removed unused 'BarChart2' icon
+import { ThumbsUp, Calendar, Users, FileText } from 'lucide-react';
 
 const FeatureCard = ({ icon: Icon, title, children }: { icon: React.ElementType, title: string, children: React.ReactNode }) => (
     <div className="bg-card p-6 rounded-lg border">

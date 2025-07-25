@@ -3,7 +3,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { getAppointments, getRecentInvoices, getUserProfile, getMessagesForUser, getJobPostings, getPriorityJobFiles } from '@/utils/firestoreService';
 import type { Appointment, Invoice, JobFile, UserProfile, Message, JobPosting } from '@/types/app-interfaces';
 import Link from 'next/link';
-import { Calendar, FileText, DollarSign, ArrowRight, ThumbsUp, Mail, Inbox, AlertCircle, X } from 'lucide-react';
+// ✅ FIX: Removed unused 'ThumbsUp' and 'Mail' icons
+import { Calendar, FileText, DollarSign, ArrowRight, Inbox, AlertCircle, X } from 'lucide-react';
 import { format } from 'date-fns';
 
 const TEMP_USER_ID = "dev-user-1";
