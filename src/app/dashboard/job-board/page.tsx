@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import type { JobPosting, UserProfile } from '@/types/app-interfaces';
 import { getJobPostings, getUserProfile, reportJobPost } from '@/utils/firestoreService';
 import Link from 'next/link';
-import { PlusCircle, Search, Briefcase, MapPin, Tag, Flag } from 'lucide-react';
+import { PlusCircle, Search, Briefcase, MapPin, Tag, Flag, Info, Building } from 'lucide-react';
 import { Switch } from "@/components/ui/switch";
 
 const TEMP_USER_ID = "dev-user-1";
@@ -145,6 +145,14 @@ export default function JobBoardPage() {
                 </div>
             </div>
 
+            <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg flex items-center gap-3">
+                <Info size={20} className="text-blue-600 shrink-0" />
+                <p className="text-sm text-blue-800">
+                    See an inappropriate post? Click the flag icon (<Flag size={14} className="inline-block" />) to report it. 
+                    For other support, please email <a href="mailto:support@ten99.app" className="font-semibold underline">support@ten99.app</a>.
+                </p>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredJobs.map(post => (
                     <Link href={`/dashboard/job-board/${post.id}`} key={post.id} className="block h-full">
@@ -158,6 +166,26 @@ export default function JobBoardPage() {
                     <p className="text-sm">Try adjusting your filters or check back later.</p>
                 </div>
             )}
+
+            {/* ✅ NEW "COMING SOON" SECTION */}
+            <div className="mt-12 bg-gradient-to-br from-primary/20 to-card p-6 rounded-lg border border-primary/30">
+                 <div className="flex justify-between items-center mb-4">
+                      <div>
+                           <h3 className="text-lg font-semibold flex items-center gap-2">
+                               <Building size={20} className="text-primary"/> 
+                               Introducing Ten25
+                           </h3>
+                           <p className="text-sm text-muted-foreground mt-1">The Command Center for Agencies.</p>
+                      </div>
+                      <span className="text-xs font-semibold bg-primary text-primary-foreground px-2 py-1 rounded-full">COMING SOON</span>
+                 </div>
+                 <p className="text-sm mb-4">
+                    The agency-side platform to post jobs, manage talent, track appointments, and handle payments in one integrated dashboard.
+                 </p>
+                 <button disabled className="w-full bg-primary/50 text-primary-foreground font-semibold py-2 px-4 rounded-lg cursor-not-allowed">
+                     Learn More
+                 </button>
+            </div>
         </div>
     );
 }

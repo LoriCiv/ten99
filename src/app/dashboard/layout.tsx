@@ -1,15 +1,15 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react'; // ✅ 1. Import hooks
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ThumbsUp, Users, Calendar, FileText, Mail, Settings, Receipt, Award, DollarSign, Menu, X, Briefcase } from 'lucide-react';
-import { getMessagesForUser } from '@/utils/firestoreService'; // ✅ 2. Import function to get messages
-import type { Message } from '@/types/app-interfaces'; // ✅ 3. Import the Message type
+import { getMessagesForUser } from '@/utils/firestoreService';
+import type { Message } from '@/types/app-interfaces';
+import Image from 'next/image';
 
 const TEMP_USER_ID = "dev-user-1";
 
-// ✅ 4. Update NavLink to accept and display a count
 const NavLink = ({ href, icon: Icon, children, count }: { href: string, icon: React.ElementType, children: React.ReactNode, count?: number }) => {
     const pathname = usePathname();
     const isActive = href === '/dashboard' ? pathname === href : pathname.startsWith(href);
@@ -40,7 +40,6 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  // ✅ 5. Add state to hold messages and calculate unread count
   const [messages, setMessages] = useState<Message[]>([]);
   const unreadCount = useMemo(() => messages.filter(m => !m.isRead).length, [messages]);
   
@@ -50,14 +49,12 @@ export default function DashboardLayout({
     setIsMobileMenuOpen(false);
   }, [pathname]);
 
-  // ✅ 6. Add effect to listen for messages in real-time
   useEffect(() => {
     const unsubscribe = getMessagesForUser(TEMP_USER_ID, (fetchedMessages) => {
-        // We only need inbox messages for the count
         setMessages(fetchedMessages);
     });
 
-    return () => unsubscribe(); // Clean up the listener when the component unmounts
+    return () => unsubscribe();
   }, []);
 
 
@@ -81,7 +78,6 @@ export default function DashboardLayout({
                 key={item.name} 
                 href={item.href} 
                 icon={item.icon}
-                // ✅ 7. Pass the unread count ONLY to the Mailbox link
                 count={item.name === 'Mailbox' ? unreadCount : undefined}
               >
                   {item.name}
@@ -95,7 +91,7 @@ export default function DashboardLayout({
         {/* Desktop Sidebar */}
         <aside className="hidden lg:flex w-64 flex-shrink-0 border-r bg-card p-4 flex-col">
             <Link href="/dashboard" className="flex items-center gap-2 mb-8 pl-3">
-                <ThumbsUp className="h-7 w-7 text-primary" />
+                <Image src="/logo.png" alt="Ten99 Logo" width={28} height={28} />
                 <h1 className="text-2xl font-bold">Ten99</h1>
             </Link>
             {navigationMenu}
@@ -110,7 +106,7 @@ export default function DashboardLayout({
                 >
                     <div className="flex items-center justify-between mb-8 pl-3">
                         <Link href="/dashboard" className="flex items-center gap-2">
-                            <ThumbsUp className="h-7 w-7 text-primary" />
+                            <Image src="/logo.png" alt="Ten99 Logo" width={28} height={28} />
                             <h1 className="text-2xl font-bold">Ten99</h1>
                         </Link>
                         <button onClick={() => setIsMobileMenuOpen(false)} className="p-1">
@@ -123,7 +119,9 @@ export default function DashboardLayout({
         )}
 
         <div className="flex flex-col flex-1">
-            <header className="lg:hidden sticky top-0 z-40 flex h-16 items-center gap-4 border-b bg-background px-4">
+            {/* ✅ UPDATED Mobile Header */}
+            <header className="lg:hidden sticky top-0 z-40 flex h-16 items-center justify-between gap-4 border-b bg-background px-4">
+                {/* Hamburger Button (Left) */}
                 <button 
                     onClick={() => setIsMobileMenuOpen(true)}
                     className="p-2 -ml-2"
@@ -131,6 +129,12 @@ export default function DashboardLayout({
                     <Menu className="h-6 w-6"/>
                     <span className="sr-only">Open Menu</span>
                 </button>
+                
+                {/* Logo Link (Center/Right) */}
+                <Link href="/dashboard" className="flex items-center gap-2">
+                     <Image src="/logo.png" alt="Ten99 Logo" width={28} height={28} />
+                     <h1 className="text-xl font-bold">Ten99</h1>
+                </Link>
             </header>
             
             <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
