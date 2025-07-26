@@ -10,6 +10,16 @@ import Modal from '@/components/Modal';
 import ExpenseForm from '@/components/ExpenseForm';
 import clsx from 'clsx';
 
+// ✅ FIX: Added the missing formatTime helper function
+const formatTime = (timeString?: string) => {
+    if (!timeString) return '';
+    const [hours, minutes] = timeString.split(':');
+    const hour = parseInt(hours, 10);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const formattedHour = hour % 12 || 12;
+    return `${formattedHour}:${minutes} ${ampm}`;
+};
+
 const statusColors: { [key: string]: string } = {
     'scheduled': 'border-blue-500',
     'pending': 'border-yellow-500',
@@ -39,15 +49,6 @@ const ActionCard = ({ title, children, icon: Icon, link }: { title: string, chil
 );
 
 const AgendaItem = ({ appointment, jobFile }: { appointment: Appointment, jobFile: JobFile | undefined }) => {
-    const formatTime = (timeString?: string) => {
-        if (!timeString) return '';
-        const [hours, minutes] = timeString.split(':');
-        const hour = parseInt(hours, 10);
-        const ampm = hour >= 12 ? 'PM' : 'AM';
-        const formattedHour = hour % 12 || 12;
-        return `${formattedHour}:${minutes} ${ampm}`;
-    };
-
     const jobFileLink = jobFile 
         ? `/dashboard/job-files/${jobFile.id}`
         : `/dashboard/job-files/new?appointmentId=${appointment.id}&clientId=${appointment.clientId || ''}&subject=${encodeURIComponent(appointment.subject || '')}`;
@@ -117,7 +118,7 @@ export default function DashboardPageContent({ userId }: DashboardPageContentPro
 
     const weekView = useMemo(() => {
         const today = new Date();
-        const weekStart = startOfWeek(today, { weekStartsOn: 0 });
+        const weekStart = startOfWeek(today, { weekStartsOn: 0 }); // Sunday start
         const weekEnd = endOfWeek(today, { weekStartsOn: 0 });
         const days = eachDayOfInterval({ start: weekStart, end: weekEnd });
 
@@ -237,7 +238,7 @@ export default function DashboardPageContent({ userId }: DashboardPageContentPro
                     <div className="bg-blue-500/10 border border-blue-500/20 text-blue-700 dark:text-blue-400 p-4 rounded-lg flex items-center gap-3">
                         <Bell className="h-5 w-5" />
                         <span className="text-sm font-semibold">
-                            Next Up: {nextAppointment.subject} on {format(new Date(nextAppointment.date + 'T00:00:00'), 'eeee')} at {nextAppointment.time}
+                            Next Up: {nextAppointment.subject} on {format(new Date(nextAppointment.date + 'T00:00:00'), 'eeee')} at {formatTime(nextAppointment.time)}
                         </span>
                     </div>
                 )}
@@ -265,9 +266,8 @@ export default function DashboardPageContent({ userId }: DashboardPageContentPro
                 <div className="bg-card p-6 rounded-lg border">
                     <div className="flex flex-wrap gap-4 justify-between items-center mb-4">
                         <h3 className="text-lg font-semibold text-foreground">Today&apos;s Agenda ({format(new Date(), 'eeee, MMM d')})</h3>
-                        {/* ✅ THIS IS THE NEW SECTION WITH BOTH LINKS */}
                         <div className="flex items-center gap-4">
-                             <Link href="/dashboard/appointments/new" className="flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline">
+                            <Link href="/dashboard/appointments/new" className="flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline">
                                 <PlusCircle size={14} /> New Appointment
                             </Link>
                             <Link href="/dashboard/appointments" className="flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
@@ -313,37 +313,37 @@ export default function DashboardPageContent({ userId }: DashboardPageContentPro
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <ActionCard title="Inbox Summary" icon={Inbox} link="/dashboard/mailbox">
-                           <div className="space-y-2">
-                                <div className="flex items-center justify-between text-sm">
-                                    <span className="text-muted-foreground">Unread Messages:</span>
-                                    <span className="font-bold text-foreground">{inboxStats.unreadCount}</span>
-                                </div>
-                                <div className="flex items-center justify-between text-sm">
-                                    <span className="text-muted-foreground">Pending Requests:</span>
-                                    <span className="font-bold text-foreground">{inboxStats.pendingRequests.length}</span>
-                                </div>
-                           </div>
-                           <Link href="/dashboard/mailbox" className="w-full mt-4 inline-flex items-center justify-center bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-secondary/80 text-sm">
-                                Go to Inbox
-                           </Link>
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between text-sm">
+                                <span className="text-muted-foreground">Unread Messages:</span>
+                                <span className="font-bold text-foreground">{inboxStats.unreadCount}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-sm">
+                                <span className="text-muted-foreground">Pending Requests:</span>
+                                <span className="font-bold text-foreground">{inboxStats.pendingRequests.length}</span>
+                            </div>
+                        </div>
+                        <Link href="/dashboard/mailbox" className="w-full mt-4 inline-flex items-center justify-center bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-secondary/80 text-sm">
+                            Go to Inbox
+                        </Link>
                     </ActionCard>
 
                     <ActionCard title="Quick Actions" icon={PlusCircle}>
-                           <p className="text-sm text-muted-foreground mb-4">Quickly add common items.</p>
-                           <button onClick={() => setIsExpenseModalOpen(true)} className="w-full bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-secondary/80 text-sm">
-                                Add New Expense
-                           </button>
+                        <p className="text-sm text-muted-foreground mb-4">Quickly add common items.</p>
+                        <button onClick={() => setIsExpenseModalOpen(true)} className="w-full bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-secondary/80 text-sm">
+                            Add New Expense
+                        </button>
                     </ActionCard>
 
                     <ActionCard title="Starred Job Files" icon={FileText} link="/dashboard/job-files">
-                           {priorityJobFiles.length > 0 ? priorityJobFiles.slice(0, 3).map(job => (
-                               <div key={job.id} className="text-sm p-2 rounded-md hover:bg-muted">
-                                   <p className="font-semibold truncate">{job.jobTitle}</p>
-                               </div>
-                           )) : <p className="text-sm text-muted-foreground p-2">No 2-star job files.</p>}
-                           <Link href="/dashboard/job-files" className="w-full mt-4 inline-flex items-center justify-center bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-secondary/80 text-sm">
-                                View All Job Files
-                           </Link>
+                        {priorityJobFiles.length > 0 ? priorityJobFiles.slice(0, 3).map(job => (
+                            <div key={job.id} className="text-sm p-2 rounded-md hover:bg-muted">
+                                <p className="font-semibold truncate">{job.jobTitle}</p>
+                            </div>
+                        )) : <p className="text-sm text-muted-foreground p-2">No 2-star job files.</p>}
+                        <Link href="/dashboard/job-files" className="w-full mt-4 inline-flex items-center justify-center bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-secondary/80 text-sm">
+                            View All Job Files
+                        </Link>
                     </ActionCard>
                 </div>
             </div>

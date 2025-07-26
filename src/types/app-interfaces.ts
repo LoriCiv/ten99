@@ -79,19 +79,21 @@ export interface Appointment {
 export interface JobFile {
     id?: string;
     userId?: string;
-    originalUserId?: string;
     createdAt?: Timestamp | FieldValue;
     updatedAt?: Timestamp;
     jobTitle: string;
-    fileUrl?: string;
-    sharedNotes?: string;
-    privateNotes?: string;
     appointmentId?: string;
     clientId?: string;
     tags?: string[];
     startDate?: string;
     endDate?: string;
     priority?: number;
+    publicId?: string;
+    isShared?: boolean;
+    status?: 'upcoming' | 'in-progress' | 'completed' | 'on-hold';
+    sharedNotes?: string;
+    privateNotes?: string;
+    attachments?: { name: string; url: string; }[];
 }
 
 export interface Certification {
@@ -237,7 +239,6 @@ export interface UserProfile {
     notifyOnNewMessage?: boolean;
     notifyOnJobMatch?: boolean;
     defaultForwardingEmail?: string;
-    // ✅ This field was missing
     inboundEmailAddress?: string;
 }
 
@@ -254,8 +255,8 @@ export interface JobPosting {
     contactEmail?: string;
     requiredSkills?: string[];
     isFilled: boolean;
-    createdAt?: Timestamp;
-    expiresAt?: Timestamp;
+    createdAt?: any;
+    expiresAt?: any;
     pendingApplicantId?: string;
     startDate?: string;
     endDate?: string;

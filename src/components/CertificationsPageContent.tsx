@@ -4,10 +4,11 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Certification, CEU } from '@/types/app-interfaces';
 import { PlusCircle, Edit, Trash2, Award, BookOpen, Library, Users } from 'lucide-react';
-import { getCertifications, getAllCEUs, addCertification, updateCertification, deleteCertification, addCEU, updateCEU, deleteCEU } from '@/utils/firestoreService';
+import { addCertification, updateCertification, deleteCertification, addCEU, updateCEU, deleteCEU } from '@/utils/firestoreService';
 import CertificationForm from './CertificationForm';
 import CEUForm from './CEUForm';
 import CEUDetailModal from './CEUDetailModal';
+import Modal from './Modal';
 
 const getIconForType = (type: 'certification' | 'license' | 'membership') => {
     switch (type) {
@@ -18,14 +19,15 @@ const getIconForType = (type: 'certification' | 'license' | 'membership') => {
 };
 
 interface CertificationsPageContentProps {
+    initialCertifications: Certification[];
+    initialCeus: CEU[];
     userId: string;
 }
 
-export default function CertificationsPageContent({ userId }: CertificationsPageContentProps) {
+export default function CertificationsPageContent({ initialCertifications, initialCeus, userId }: CertificationsPageContentProps) {
     const router = useRouter();
-    const [certifications, setCertifications] = useState<Certification[]>([]);
-    const [ceus, setCeus] = useState<CEU[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const [certifications, setCertifications] = useState<Certification[]>(initialCertifications);
+    const [ceus, setCeus] = useState<CEU[]>(initialCeus);
     const [activeTab, setActiveTab] = useState<'certs' | 'ceus'>('certs');
     const [isCertModalOpen, setIsCertModalOpen] = useState(false);
     const [editingCert, setEditingCert] = useState<Partial<Certification> | null>(null);
@@ -37,19 +39,10 @@ export default function CertificationsPageContent({ userId }: CertificationsPage
     const [isCeuDetailModalOpen, setIsCeuDetailModalOpen] = useState(false);
     const [selectedCeuForDetail, setSelectedCeuForDetail] = useState<CEU | null>(null);
 
-    useEffect(() => {
-        setIsLoading(true);
-        const unsubCerts = getCertifications(userId, setCertifications);
-        const unsubCEUs = getAllCEUs(userId, (ceus) => {
-            setCeus(ceus);
-            setIsLoading(false);
-        });
-
-        return () => {
-            unsubCerts();
-            unsubCEUs();
-        };
-    }, [userId]);
+    useEffect(() => { 
+        setCertifications(initialCertifications); 
+        setCeus(initialCeus);
+    }, [initialCertifications, initialCeus]);
 
     const certificationsWithCeus = useMemo(() => {
         return certifications.map(cert => {
@@ -75,7 +68,7 @@ export default function CertificationsPageContent({ userId }: CertificationsPage
     const handleSaveCertification = async (data: Partial<Certification>) => {
         setIsSubmitting(true);
         try {
-            if (editingCert?.id) { await updateCertification(userId, editingCert.id, data); alert("Credential updated!"); } 
+            if (editingCert?.id) { await updateCertification(userId, editingCert.id, data); alert("Credential updated!"); }
             else { await addCertification(userId, data); alert("Credential added!"); }
             handleCloseCertModal();
             router.refresh();
@@ -96,13 +89,13 @@ export default function CertificationsPageContent({ userId }: CertificationsPage
             }
         }
     };
-    const handleOpenCeuModal = (certId: string, ceu: Partial<CEU> | null) => { 
+    const handleOpenCeuModal = (certId: string, ceu: Partial<CEU> | null) => {
         setSelectedCertForCeu(certId);
         setEditingCeu(ceu);
         setIsCeuModalOpen(true);
     };
-    const handleCloseCeuModal = () => { 
-        setIsCeuModalOpen(false); 
+    const handleCloseCeuModal = () => {
+        setIsCeuModalOpen(false);
         setSelectedCertForCeu(null);
         setEditingCeu(null);
     };
@@ -152,10 +145,6 @@ export default function CertificationsPageContent({ userId }: CertificationsPage
     if (certForCeu?.specialtyCeusCategory) { availableCategories.push(certForCeu.specialtyCeusCategory); }
     if (certForCeu?.specialtyCeusCategory2) { availableCategories.push(certForCeu.specialtyCeusCategory2); }
 
-    if (isLoading) {
-        return <div className="p-8 text-center text-muted-foreground">Loading credentials...</div>;
-    }
-
     return (
         <>
             <div className="p-4 sm:p-6 lg:p-8">
@@ -165,9 +154,9 @@ export default function CertificationsPageContent({ userId }: CertificationsPage
                         <p className="text-muted-foreground mt-1">Manage your licenses, certifications, and memberships.</p>
                     </div>
                     <div className="mt-4 flex justify-end">
-                         <button onClick={() => handleOpenCertModal(null)} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90">
-                             <PlusCircle size={20} /> Add Credential
-                         </button>
+                        <button onClick={() => handleOpenCertModal(null)} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90">
+                            <PlusCircle size={20} /> Add Credential
+                        </button>
                     </div>
                 </header>
 
@@ -210,9 +199,9 @@ export default function CertificationsPageContent({ userId }: CertificationsPage
                             ))}
                         </div>
                     )}
-                    {activeTab === 'ceus' && ( 
-                        <div className="space-y-4"> 
-                            <div className="max-w-xs"><label className="block text-sm font-medium text-muted-foreground mb-1">Filter by Certification</label><select value={ceuFilter} onChange={(e) => setCeuFilter(e.target.value)} className="w-full p-2 border rounded-md bg-background"><option value="all">Show All</option>{certifications.map(cert => (<option key={cert.id} value={cert.id!}>{cert.name}</option>))}</select></div> 
+                    {activeTab === 'ceus' && (
+                        <div className="space-y-4">
+                            <div className="max-w-xs"><label className="block text-sm font-medium text-muted-foreground mb-1">Filter by Certification</label><select value={ceuFilter} onChange={(e) => setCeuFilter(e.target.value)} className="w-full p-2 border rounded-md bg-background"><option value="all">Show All</option>{certifications.map(cert => (<option key={cert.id} value={cert.id!}>{cert.name}</option>))}</select></div>
                             {filteredCeus.map(ceu => (
                                 <div key={ceu.id} onClick={() => handleOpenCeuDetailModal(ceu)} className="bg-card p-3 rounded-lg border flex justify-between items-center cursor-pointer hover:bg-muted">
                                     <div>
@@ -231,10 +220,8 @@ export default function CertificationsPageContent({ userId }: CertificationsPage
                 </div>
             </div>
 
-            {isCertModalOpen && (<div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4"><div className="bg-card rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border p-6"><CertificationForm onSave={handleSaveCertification} onCancel={handleCloseCertModal} initialData={editingCert || {}} isSubmitting={isSubmitting}/></div></div>)}
-            {isCeuModalOpen && (<div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4"><div className="bg-card rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto border p-6">
-                <CEUForm onSave={handleSaveCeu} onCancel={handleCloseCeuModal} initialData={editingCeu || {}} isSubmitting={isSubmitting} availableCategories={availableCategories} />
-            </div></div>)}
+            <Modal isOpen={isCertModalOpen} onClose={handleCloseCertModal}><CertificationForm onSave={handleSaveCertification} onCancel={handleCloseCertModal} initialData={editingCert || {}} isSubmitting={isSubmitting}/></Modal>
+            <Modal isOpen={isCeuModalOpen} onClose={handleCloseCeuModal} className="max-w-lg"><CEUForm onSave={handleSaveCeu} onCancel={handleCloseCeuModal} initialData={editingCeu || {}} isSubmitting={isSubmitting} availableCategories={availableCategories} /></Modal>
             
             {isCeuDetailModalOpen && selectedCeuForDetail && (
                 <CEUDetailModal

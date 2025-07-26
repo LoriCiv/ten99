@@ -35,7 +35,7 @@ interface InvoicesPageContentProps {
     userId: string;
 }
 
-function InvoicesPageContentInternal({ userId }: InvoicesPageContentProps) {
+function InvoicesPageInternal({ userId }: InvoicesPageContentProps) {
     const searchParams = useSearchParams();
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
@@ -64,7 +64,7 @@ function InvoicesPageContentInternal({ userId }: InvoicesPageContentProps) {
             unsubClients();
             unsubProfile();
         };
-    }, [userId, initialFilter]);
+    }, [initialFilter, userId]);
 
     const processedInvoices = useMemo(() => {
         return invoices
@@ -143,9 +143,9 @@ function InvoicesPageContentInternal({ userId }: InvoicesPageContentProps) {
                             const client = clients.find(c => c.id === invoice.clientId);
                             const { borderColor, bgColor, textColor } = getStatusStyles(invoice.status);
                             return (
-                                <div 
-                                    key={invoice.id} 
-                                    onClick={() => setSelectedInvoice(invoice)} 
+                                <div
+                                    key={invoice.id}
+                                    onClick={() => setSelectedInvoice(invoice)}
                                     className={`bg-card p-4 rounded-lg border border-l-4 ${borderColor} ${bgColor} flex justify-between items-center cursor-pointer hover:shadow-md transition-shadow`}
                                 >
                                     <div>
@@ -176,17 +176,17 @@ function InvoicesPageContentInternal({ userId }: InvoicesPageContentProps) {
                     userProfile={userProfile}
                     onClose={() => setSelectedInvoice(null)}
                     onSave={() => setSelectedInvoice(null)}
-                    userId={userId} // ✅ Pass the userId to the modal
+                    userId={userId}
                 />
             )}
         </>
     );
 }
 
-export default function InvoicesPageContent({ userId }: { userId: string }) {
+export default function InvoicesPageContent({ userId }: InvoicesPageContentProps) {
     return (
-        <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading...</div>}>
-            <InvoicesPageContentInternal userId={userId} />
+        <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading Invoices...</div>}>
+            <InvoicesPageInternal userId={userId} />
         </Suspense>
     );
 }

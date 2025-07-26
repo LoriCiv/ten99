@@ -1,6 +1,7 @@
 import ExpensesPageContent from '@/components/ExpensesPageContent';
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from 'next/navigation';
+import { Suspense } from 'react';
 
 export default async function ExpensesPage() {
   const { userId } = await auth();
@@ -9,6 +10,9 @@ export default async function ExpensesPage() {
     redirect('/sign-in');
   }
 
-  // This now only passes the userId prop, which is what the content component expects.
-  return <ExpensesPageContent userId={userId} />;
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading Expenses...</div>}>
+        <ExpensesPageContent userId={userId} />
+    </Suspense>
+  );
 }

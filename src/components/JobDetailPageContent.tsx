@@ -1,136 +1,81 @@
 "use client";
 
-import { useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
-import type { JobFile, Client, PersonalNetworkContact, Appointment } from '@/types/app-interfaces';
-import { updateJobFile, deleteJobFile, uploadFile } from '@/utils/firestoreService';
+import { useState } from 'react';
+import type { JobPosting, UserProfile } from '@/types/app-interfaces';
+import { sendJobApplicationMessage } from '@/utils/firestoreService';
 import Link from 'next/link';
-import { ArrowLeft, Edit, Trash2, Download } from 'lucide-react';
-import JobFileForm from './JobFileForm';
-import Modal from './Modal';
+import { ArrowLeft, Briefcase, MapPin, Send, Loader2, CheckCircle } from 'lucide-react';
+import { format } from 'date-fns';
 
-interface JobFileDetailPageContentProps {
-    initialJobFile: JobFile;
-    initialClients: Client[];
-    initialContacts: PersonalNetworkContact[];
-    initialAppointments: Appointment[];
-    userId: string;
+interface JobDetailPageContentProps {
+    jobPost: JobPosting;
+    currentUserProfile: UserProfile | null;
+    currentUserId: string;
 }
 
-export default function JobFileDetailPageContent({
-    initialJobFile,
-    initialClients,
-    initialContacts,
-    initialAppointments,
-    userId
-}: JobFileDetailPageContentProps) {
-    const router = useRouter();
-    const [jobFile, setJobFile] = useState(initialJobFile);
-    const [isEditing, setIsEditing] = useState(false);
-    const [isSubmitting, setIsSubmitting] = useState(false);
+export default function JobDetailPageContent({ jobPost, currentUserProfile, currentUserId }: JobDetailPageContentProps) {
+    const [isApplying, setIsApplying] = useState(false);
+    const [hasApplied, setHasApplied] = useState(false);
 
-    const client = useMemo(() => initialClients.find(c => c.id === jobFile.clientId), [initialClients, jobFile.clientId]);
-    const appointment = useMemo(() => initialAppointments.find(a => a.id === jobFile.appointmentId), [initialAppointments, jobFile.appointmentId]);
-
-    const handleSave = async (data: Partial<JobFile>, fileToUpload: File | null) => {
-        if (!jobFile.id) return;
-        setIsSubmitting(true);
-        let updatedData = { ...data };
-
+    const handleApply = async () => {
+        if (!currentUserProfile || !jobPost) return;
+        setIsApplying(true);
         try {
-            if (fileToUpload) {
-                const downloadURL = await uploadFile(userId, fileToUpload);
-                updatedData.fileUrl = downloadURL;
-            }
-            await updateJobFile(userId, jobFile.id, updatedData);
-            setJobFile(prev => ({ ...prev, ...updatedData }));
-            setIsEditing(false);
-            alert("Job File updated successfully!");
+            await sendJobApplicationMessage(currentUserId, currentUserProfile, jobPost);
+            setHasApplied(true);
         } catch (error) {
-            console.error("Error saving job file:", error);
-            alert("Failed to save job file.");
+            console.error("Failed to apply:", error);
+            alert(`Error applying for job: ${error instanceof Error ? error.message : "Unknown error"}`);
         } finally {
-            setIsSubmitting(false);
+            setIsApplying(false);
         }
     };
     
-    const handleDelete = async () => {
-        if (!jobFile.id) return;
-        if (window.confirm("Are you sure you want to delete this job file? This cannot be undone.")) {
-            try {
-                await deleteJobFile(userId, jobFile.id);
-                alert("Job File deleted.");
-                router.push('/dashboard/job-files');
-            } catch (error) {
-                console.error("Error deleting job file:", error);
-                alert("Failed to delete job file.");
-            }
-        }
-    };
+    const canApply = currentUserId !== jobPost.userId;
 
     return (
-        <>
-            <div className="p-4 sm:p-6 lg:p-8">
-                <Link href="/dashboard/job-files" className="inline-flex items-center text-sm font-semibold text-muted-foreground hover:text-primary mb-6">
-                    <ArrowLeft className="w-4 h-4 mr-2" />
-                    Back to Job Files
-                </Link>
+        <div className="p-4 sm:p-6 lg:p-8">
+            <Link href="/dashboard/job-board" className="inline-flex items-center text-sm font-semibold text-muted-foreground hover:text-primary mb-6">
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Job Board
+            </Link>
 
-                <div className="bg-card p-6 rounded-lg border">
-                    <div className="flex justify-between items-start mb-4 pb-4 border-b">
-                        <div>
-                            <h1 className="text-3xl font-bold text-foreground">{jobFile.jobTitle}</h1>
-                            {client && <p className="text-lg text-primary">{client.companyName || client.name}</p>}
-                        </div>
-                        <div className="flex gap-2">
-                            <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-secondary/80">
-                                <Edit size={16}/> Edit
-                            </button>
-                             <button onClick={handleDelete} className="flex items-center gap-2 bg-destructive text-destructive-foreground font-semibold py-2 px-4 rounded-lg hover:bg-destructive/90">
-                                <Trash2 size={16}/> Delete
-                            </button>
+            <div className="bg-card p-6 rounded-lg border max-w-4xl mx-auto">
+                <div className="flex justify-between items-start">
+                    <div>
+                        <h1 className="text-3xl font-bold text-foreground">{jobPost.title}</h1>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground mt-2">
+                            {jobPost.rate && <span className="flex items-center gap-1.5"><Briefcase size={14} /> {jobPost.rate}</span>}
+                            {jobPost.location && <span className="flex items-center gap-1.5"><MapPin size={14} /> {jobPost.location}</span>}
                         </div>
                     </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div className="space-y-4">
-                            <h3 className="font-semibold text-lg">Details</h3>
-                            {appointment && <p className="text-sm"><span className="font-semibold text-muted-foreground">Linked Appointment:</span> {appointment.subject}</p>}
-                            <p className="text-sm"><span className="font-semibold text-muted-foreground">Start Date:</span> {jobFile.startDate || 'Not set'}</p>
-                            <p className="text-sm"><span className="font-semibold text-muted-foreground">End Date:</span> {jobFile.endDate || 'Not set'}</p>
-                            {jobFile.fileUrl && (
-                                <a href={jobFile.fileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-primary hover:underline">
-                                    <Download size={16}/> Download Attached File
-                                </a>
-                            )}
-                        </div>
-                        <div className="space-y-4">
-                            <h3 className="font-semibold text-lg">Shared Notes</h3>
-                            <p className="text-sm text-muted-foreground whitespace-pre-wrap bg-background p-3 rounded-md min-h-[100px]">
-                                {jobFile.sharedNotes || 'No shared notes.'}
-                            </p>
-                            <h3 className="font-semibold text-lg">Private Notes</h3>
-                            <p className="text-sm text-muted-foreground whitespace-pre-wrap bg-background p-3 rounded-md min-h-[100px]">
-                                {jobFile.privateNotes || 'No private notes.'}
-                            </p>
-                        </div>
+                    {canApply && (
+                        <button onClick={handleApply} disabled={isApplying || hasApplied} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90 disabled:opacity-50">
+                            {isApplying ? <Loader2 className="animate-spin" size={16}/> : hasApplied ? <CheckCircle size={16}/> : <Send size={16}/>}
+                            {hasApplied ? 'Applied' : 'Apply Now'}
+                        </button>
+                    )}
+                </div>
+
+                <div className="mt-6 pt-6 border-t">
+                    <h3 className="text-lg font-semibold mb-2">Job Description</h3>
+                    <p className="text-base whitespace-pre-wrap">{jobPost.description}</p>
+                </div>
+
+                <div className="mt-6 pt-6 border-t">
+                    <h3 className="text-lg font-semibold mb-2">Required Skills</h3>
+                    <div className="flex flex-wrap gap-2">
+                        {(jobPost.requiredSkills || []).map(skill => (
+                            <span key={skill} className="text-sm bg-secondary text-secondary-foreground px-3 py-1 rounded-full">{skill}</span>
+                        ))}
                     </div>
+                </div>
+
+                 <div className="mt-6 pt-6 border-t text-xs text-muted-foreground">
+                    <p>Job ID: {jobPost.id}</p>
+                    <p>Posted On: {jobPost.createdAt ? format(new Date(jobPost.createdAt as any), 'MMM d, yyyy') : 'N/A'}</p>
                 </div>
             </div>
-
-            <Modal isOpen={isEditing} onClose={() => setIsEditing(false)}>
-                <div className="p-6">
-                    <JobFileForm
-                        initialData={jobFile}
-                        onSave={handleSave}
-                        onCancel={() => setIsEditing(false)}
-                        clients={initialClients}
-                        appointments={initialAppointments}
-                        isSubmitting={isSubmitting}
-                        userId={userId} 
-                    />
-                </div>
-            </Modal>
-        </>
+        </div>
     );
 }

@@ -1,12 +1,20 @@
-import ClientsPageContent from '@/components/ClientsPageContent'; // <-- Corrected import path
+import { auth } from '@clerk/nextjs/server';
+import ClientsPageContent from '@/components/ClientsPageContent';
 import { Suspense } from 'react';
+import { redirect } from 'next/navigation';
 
-const TEMP_USER_ID = "dev-user-1";
+// ✅ Add "async" to the function signature
+export default async function ClientsPage() {
+    // ✅ Add "await" before the auth() call
+    const { userId } = await auth();
 
-export default function ClientsPage() {
+    if (!userId) {
+      redirect('/sign-in');
+    }
+
     return (
         <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading...</div>}>
-            <ClientsPageContent userId={TEMP_USER_ID} />
+            <ClientsPageContent userId={userId} />
         </Suspense>
     );
 }

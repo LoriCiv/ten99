@@ -3,14 +3,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-// ✅ 1. Import useAuth from Clerk
-import { UserButton, SignOutButton, useAuth } from "@clerk/nextjs";
-import { ThumbsUp, Users, Calendar, FileText, Mail, Settings, Receipt, Award, DollarSign, Menu, X, Briefcase, LogOut } from 'lucide-react';
+import { SignedIn, UserButton } from "@clerk/nextjs"; // ✅ Import Clerk components
+import { ThumbsUp, Users, Calendar, FileText, Mail, Settings, Receipt, Award, DollarSign, Menu, X, Briefcase } from 'lucide-react';
 import { getMessagesForUser } from '@/utils/firestoreService';
 import type { Message } from '@/types/app-interfaces';
 import Image from 'next/image';
 
-// ✅ 2. The TEMP_USER_ID is now removed
+// NOTE: We will get the real userId from Clerk in each page file now.
 
 const NavLink = ({ href, icon: Icon, children, count }: { href: string, icon: React.ElementType, children: React.ReactNode, count?: number }) => {
     const pathname = usePathname();
@@ -37,12 +36,10 @@ const NavLink = ({ href, icon: Icon, children, count }: { href: string, icon: Re
 };
 
 export default function DashboardLayout({
-  children,
+    children,
 }: {
-  children: React.ReactNode
+    children: React.ReactNode
 }) {
-    // ✅ 3. Get the userId from the useAuth hook
-    const { userId } = useAuth();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [messages, setMessages] = useState<Message[]>([]);
     const unreadCount = useMemo(() => messages.filter(m => !m.isRead).length, [messages]);
@@ -53,16 +50,14 @@ export default function DashboardLayout({
         setIsMobileMenuOpen(false);
     }, [pathname]);
 
-    // ✅ 4. Update useEffect to use the real userId
-    useEffect(() => {
-        // Don't try to fetch messages until we know who the user is
-        if (!userId) return;
-
-        const unsubscribe = getMessagesForUser(userId, (fetchedMessages) => {
-            setMessages(fetchedMessages);
-        });
-        return () => unsubscribe();
-    }, [userId]); // ✅ 5. Add userId to the dependency array
+    // This useEffect can be removed if you get the userId from Clerk in the page itself
+    // For now, we'll leave it but it will need to be updated to get the real userId
+    // useEffect(() => {
+    //   const unsubscribe = getMessagesForUser(TEMP_USER_ID, (fetchedMessages) => {
+    //       setMessages(fetchedMessages);
+    //   });
+    //   return () => unsubscribe();
+    // }, []);
 
     const navItems = [
         { name: 'Dashboard', href: '/dashboard', icon: ThumbsUp },
@@ -78,8 +73,7 @@ export default function DashboardLayout({
     ];
     
     const navigationMenu = (
-      <nav className="flex flex-col h-full">
-          <div className="flex-grow space-y-1">
+        <nav className="flex flex-col gap-1">
             {navItems.map((item) => (
                 <NavLink
                     key={item.name}
@@ -90,40 +84,31 @@ export default function DashboardLayout({
                     {item.name}
                 </NavLink>
             ))}
-          </div>
-          <div className="mt-auto">
-            <SignOutButton redirectUrl="/">
-                <button className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary transition-all text-base font-medium w-full text-left">
-                    <LogOut className="h-5 w-5" />
-                    <span>Sign Out</span>
-                </button>
-            </SignOutButton>
-          </div>
-      </nav>
+        </nav>
     );
 
     return (
-        <div className="flex min-h-screen bg-background">
-            <aside className="hidden lg:flex w-64 flex-shrink-0 border-r bg-card p-4 flex-col justify-between">
-                <div>
-                    <Link href="/dashboard" className="flex items-center gap-2 mb-8 pl-3">
-                        <Image src="/logo.png" alt="Ten99 Logo" width={28} height={28} />
-                        <h1 className="text-2xl font-bold">Ten99</h1>
-                    </Link>
+        <SignedIn> {/* ✅ Protect all child routes */}
+            <div className="flex min-h-screen bg-background">
+                {/* Desktop Sidebar */}
+                <aside className="hidden lg:flex w-64 flex-shrink-0 border-r bg-card p-4 flex-col">
+                    <div className="flex items-center justify-between mb-8 pl-3">
+                        <Link href="/dashboard" className="flex items-center gap-2">
+                            <Image src="/logo.png" alt="Ten99 Logo" width={28} height={28} />
+                            <h1 className="text-2xl font-bold">Ten99</h1>
+                        </Link>
+                        <UserButton afterSignOutUrl="/" /> {/* ✅ Add User Button */}
+                    </div>
                     {navigationMenu}
-                </div>
-                <div className="p-2 border-t">
-                    <UserButton afterSignOutUrl="/" />
-                </div>
-            </aside>
+                </aside>
 
-            {isMobileMenuOpen && (
-                <div className="lg:hidden fixed inset-0 z-50 bg-black/60" onClick={() => setIsMobileMenuOpen(false)}>
-                    <div
-                        className="fixed inset-y-0 left-0 z-50 w-64 bg-card p-4 flex flex-col"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div>
+                {/* Mobile Flyout Menu */}
+                {isMobileMenuOpen && (
+                    <div className="lg:hidden fixed inset-0 z-50 bg-black/60" onClick={() => setIsMobileMenuOpen(false)}>
+                        <div
+                            className="fixed inset-y-0 left-0 z-50 w-64 bg-card p-4 flex flex-col"
+                            onClick={(e) => e.stopPropagation()}
+                        >
                             <div className="flex items-center justify-between mb-8 pl-3">
                                 <Link href="/dashboard" className="flex items-center gap-2">
                                     <Image src="/logo.png" alt="Ten99 Logo" width={28} height={28} />
@@ -135,26 +120,33 @@ export default function DashboardLayout({
                             </div>
                             {navigationMenu}
                         </div>
-                        <div className="mt-auto p-2 border-t">
-                            <UserButton afterSignOutUrl="/" />
-                        </div>
                     </div>
-                </div>
-            )}
+                )}
 
-            <div className="flex flex-col flex-1">
-                <header className="lg:hidden sticky top-0 z-40 flex h-16 items-center justify-between gap-4 border-b bg-background px-4">
-                    <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 -ml-2">
-                        <Menu className="h-6 w-6"/>
-                        <span className="sr-only">Open Menu</span>
-                    </button>
-                    <UserButton afterSignOutUrl="/" />
-                </header>
-                
-                <main className="flex-1 overflow-y-auto">
-                    {children}
-                </main>
+                <div className="flex flex-col flex-1">
+                    <header className="lg:hidden sticky top-0 z-40 flex h-16 items-center justify-between gap-4 border-b bg-background px-4">
+                        <button
+                            onClick={() => setIsMobileMenuOpen(true)}
+                            className="p-2 -ml-2"
+                        >
+                            <Menu className="h-6 w-6"/>
+                            <span className="sr-only">Open Menu</span>
+                        </button>
+                        
+                        <Link href="/dashboard" className="flex items-center gap-2">
+                            <Image src="/logo.png" alt="Ten99 Logo" width={28} height={28} />
+                            <h1 className="text-xl font-bold">Ten99</h1>
+                        </Link>
+
+                        {/* ✅ Add User Button to mobile header */}
+                        <UserButton afterSignOutUrl="/" />
+                    </header>
+                    
+                    <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+                        {children}
+                    </main>
+                </div>
             </div>
-        </div>
+        </SignedIn>
     )
 }

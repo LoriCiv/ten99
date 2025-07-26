@@ -19,7 +19,6 @@ import {
     declineInboundOffer,
     acceptInboundOfferPending,
     confirmInboundOffer,
-    markAsEducation,
     createEducationAppointmentFromMessage,
     getUserProfile
 } from '@/utils/firestoreService';
@@ -35,7 +34,8 @@ interface MailboxPageContentProps {
     userId: string;
 }
 
-function MailboxPageContent({ userId }: MailboxPageContentProps) {
+// We wrap the main logic in an internal component to use the useSearchParams hook
+function MailboxPageInternal({ userId }: MailboxPageContentProps) {
     const searchParams = useSearchParams();
     const [messages, setMessages] = useState<Message[]>([]);
     const [jobPostings, setJobPostings] = useState<JobPosting[]>([]);
@@ -119,10 +119,10 @@ function MailboxPageContent({ userId }: MailboxPageContentProps) {
     };
 
     const handleSend = async (to: string, subject: string, body: string) => {
-        if (!userId) return false;
+        if (!userId || !userProfile) return false;
         setIsActionLoading(true);
         try {
-            await sendAppMessage(userId, userProfile?.name || "A Freelancer", to, subject, body);
+            await sendAppMessage(userId, userProfile.name || "A Ten99 User", to, subject, body);
             alert("Message sent!");
             setIsComposing(false);
             setActiveFolder('sent');
@@ -152,14 +152,11 @@ function MailboxPageContent({ userId }: MailboxPageContentProps) {
 
     const performAction = async (actionLogic: () => Promise<void>, newStatus: Message['status'], successMessage: string) => {
         if (!selectedMessage?.id) return;
-        const originalMessageId = selectedMessage.id;
         setIsActionLoading(true);
         try {
             await actionLogic();
             alert(successMessage);
-            const updatedMessages = messages.map(m => m.id === originalMessageId ? { ...m, status: newStatus } : m);
-            setMessages(updatedMessages);
-            setSelectedMessage(prev => prev ? { ...prev, status: newStatus } : null);
+            setSelectedMessage(null); // Deselect message, listener will update the list
         } catch (error) {
             console.error("Mailbox action failed:", error);
             alert(`Action failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -167,12 +164,20 @@ function MailboxPageContent({ userId }: MailboxPageContentProps) {
             setIsActionLoading(false);
         }
     };
-
+    
     const handleMarkAsEducation = async () => {
         if (!selectedMessage || !userId) return;
-        if (selectedMessage.appointmentId) {
-            await performAction(() => markAsEducation(userId, selectedMessage), 'archived-education', 'Event marked as education and scheduled!');
+        // If the AI already parsed a date and time, we can schedule it directly
+        if (selectedMessage.proposedDate && selectedMessage.proposedTime) {
+             await performAction(() => createEducationAppointmentFromMessage(userId, selectedMessage, {
+                eventType: 'education',
+                status: 'scheduled',
+                subject: selectedMessage.subject,
+                date: selectedMessage.proposedDate!,
+                time: selectedMessage.proposedTime!,
+             }), 'archived-education', 'Event marked as education and scheduled!');
         } else {
+            // Otherwise, open the modal to ask the user for the date and time
             setEducationFormData({ date: '', time: '' });
             setIsEducationModalOpen(true);
         }
@@ -220,7 +225,7 @@ function MailboxPageContent({ userId }: MailboxPageContentProps) {
                         <Pencil size={16} /> Compose
                     </button>
                 </div>
-                 <div className="relative mt-4">
+                <div className="relative mt-4">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <input onChange={(e) => setSearchTerm(e.target.value)} type="text" placeholder="Search..." className="w-full bg-background border rounded-md pl-9 pr-3 py-2 text-sm"/>
                 </div>
@@ -329,49 +334,49 @@ function MailboxPageContent({ userId }: MailboxPageContentProps) {
 
             <Modal isOpen={isEducationModalOpen} onClose={() => setIsEducationModalOpen(false)}>
                 <div className="p-6">
-                     <h2 className="text-xl font-bold mb-4">Schedule Education Event</h2>
-                     <p className="text-sm text-muted-foreground mb-4">The AI couldn&apos;t find a date in this email. Please set the date and time for this training/workshop.</p>
-                     <div className="space-y-4">
-                          <div>
-                              <label htmlFor="educationDate" className="block text-sm font-medium">Date</label>
-                              <input 
-                                  type="date" 
-                                  id="educationDate" 
-                                  value={educationFormData.date}
-                                  onChange={(e) => setEducationFormData(prev => ({...prev, date: e.target.value}))}
-                                  className="w-full mt-1 p-2 bg-background border rounded-md"
-                              />
-                          </div>
-                          <div>
-                              <label htmlFor="educationTime" className="block text-sm font-medium">Time</label>
-                              <input 
-                                  type="time" 
-                                  id="educationTime" 
-                                  value={educationFormData.time}
-                                  onChange={(e) => setEducationFormData(prev => ({...prev, time: e.target.value}))}
-                                  className="w-full mt-1 p-2 bg-background border rounded-md"
-                              />
-                          </div>
-                     </div>
-                     <div className="flex justify-end gap-4 mt-6">
-                         <button onClick={() => setIsEducationModalOpen(false)} className="bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-secondary/80">Cancel</button>
-                         <button onClick={handleScheduleEducation} disabled={isActionLoading} className="bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg flex items-center gap-2 disabled:opacity-50">
-                             {isActionLoading ? <Loader2 size={16} className="animate-spin"/> : <CalendarCheck size={16}/>}
-                             Schedule Event
-                         </button>
-                     </div>
+                    <h2 className="text-xl font-bold mb-4">Schedule Education Event</h2>
+                    <p className="text-sm text-muted-foreground mb-4">The AI couldn&apos;t find a date in this email. Please set the date and time for this training/workshop.</p>
+                    <div className="space-y-4">
+                        <div>
+                            <label htmlFor="educationDate" className="block text-sm font-medium">Date</label>
+                            <input 
+                                type="date" 
+                                id="educationDate" 
+                                value={educationFormData.date}
+                                onChange={(e) => setEducationFormData(prev => ({...prev, date: e.target.value}))}
+                                className="w-full mt-1 p-2 bg-background border rounded-md"
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="educationTime" className="block text-sm font-medium">Time</label>
+                            <input 
+                                type="time" 
+                                id="educationTime" 
+                                value={educationFormData.time}
+                                onChange={(e) => setEducationFormData(prev => ({...prev, time: e.target.value}))}
+                                className="w-full mt-1 p-2 bg-background border rounded-md"
+                            />
+                        </div>
+                    </div>
+                    <div className="flex justify-end gap-4 mt-6">
+                        <button type="button" onClick={() => setIsEducationModalOpen(false)} className="bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-secondary/80">Cancel</button>
+                        <button onClick={handleScheduleEducation} disabled={isActionLoading} className="bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg flex items-center gap-2 disabled:opacity-50">
+                            {isActionLoading ? <Loader2 size={16} className="animate-spin"/> : <CalendarCheck size={16}/>}
+                            Schedule Event
+                        </button>
+                    </div>
                 </div>
             </Modal>
         </>
     );
 }
 
-// Wrapper component to handle Suspense for search params
-export default function MailboxPageWrapper({ userId }: { userId: string }) {
+// The wrapper component that handles Suspense
+export default function MailboxPageContent({ userId }: MailboxPageContentProps) {
     return (
         <div className="p-4 sm:p-6 lg:p-8">
              <Suspense fallback={<div className="text-center p-8">Loading Mailbox...</div>}>
-                 <MailboxPageContent userId={userId} />
+                 <MailboxPageInternal userId={userId} />
              </Suspense>
         </div>
     );

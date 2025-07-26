@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import type { JobPosting, UserProfile } from '@/types/app-interfaces';
-import { getJobPostings, getUserProfile, reportJobPost } from '@/utils/firestoreService';
+import { reportJobPost } from '@/utils/firestoreService';
 import Link from 'next/link';
-import { PlusCircle, Search, Briefcase, MapPin, Flag, Info, Building } from 'lucide-react';
+import { PlusCircle, Search, Briefcase, MapPin, Tag, Flag, Info, Building } from 'lucide-react';
 import { Switch } from "@/components/ui/switch";
 
 const usStates = [
@@ -46,19 +46,19 @@ const JobPostCard = ({ post }: { post: JobPosting }) => {
             </button>
             
             <div className="flex-grow pr-8">
-                 <div className="flex justify-between items-start">
-                     <h3 className="text-xl font-bold text-foreground mb-1">{post.title}</h3>
-                     <span className={`text-xs font-semibold px-2 py-1 rounded-full ${post.jobType === 'Virtual' ? 'bg-blue-500/10 text-blue-600' : 'bg-green-500/10 text-green-600'}`}>
-                         {post.jobType || 'On-site'}
-                     </span>
-                 </div>
-                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground mt-2">
-                     {post.rate && <span className="flex items-center gap-1.5"><Briefcase size={14} /> {post.rate}</span>}
-                     {post.location && <span className="flex items-center gap-1.5"><MapPin size={14} /> {post.location} ({post.zipCode})</span>}
-                 </div>
-                 <p className="text-sm text-muted-foreground mt-4 h-24 overflow-hidden text-ellipsis">
-                     {post.description}
-                 </p>
+                <div className="flex justify-between items-start">
+                    <h3 className="text-xl font-bold text-foreground mb-1">{post.title}</h3>
+                    <span className={`text-xs font-semibold px-2 py-1 rounded-full ${post.jobType === 'Virtual' ? 'bg-blue-500/10 text-blue-600' : 'bg-green-500/10 text-green-600'}`}>
+                        {post.jobType || 'On-site'}
+                    </span>
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground mt-2">
+                    {post.rate && <span className="flex items-center gap-1.5"><Briefcase size={14} /> {post.rate}</span>}
+                    {post.location && <span className="flex items-center gap-1.5"><MapPin size={14} /> {post.location}</span>}
+                </div>
+                <p className="text-sm text-muted-foreground mt-4 h-24 overflow-hidden text-ellipsis">
+                    {post.description}
+                </p>
             </div>
             <div className="mt-4 pt-4 border-t border-border/50">
                 <div className="flex flex-wrap gap-2">
@@ -72,37 +72,24 @@ const JobPostCard = ({ post }: { post: JobPosting }) => {
 };
 
 interface JobBoardPageContentProps {
-    userId: string | null; // userId can be null for logged-out users
+    initialJobPostings: JobPosting[];
+    currentUserProfile: UserProfile | null;
+    userId: string;
 }
 
-export default function JobBoardPageContent({ userId }: JobBoardPageContentProps) {
-    const [jobPostings, setJobPostings] = useState<JobPosting[]>([]);
-    const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+export default function JobBoardPageContent({ initialJobPostings, currentUserProfile, userId }: JobBoardPageContentProps) {
+    const [jobPostings, setJobPostings] = useState<JobPosting[]>(initialJobPostings);
+    const [userProfile, setUserProfile] = useState<UserProfile | null>(currentUserProfile);
     
     const [searchTerm, setSearchTerm] = useState('');
     const [zipFilter, setZipFilter] = useState('');
-    const [skillFilter, setSkillFilter] = useState('');
     const [stateFilter, setStateFilter] = useState('');
     const [showMatchingOnly, setShowMatchingOnly] = useState(false);
 
     useEffect(() => {
-        const unsubJobs = getJobPostings((posts) => {
-            setJobPostings(posts);
-            setIsLoading(false);
-        });
-
-        // Only fetch the user's profile if they are logged in
-        let unsubProfile = () => {};
-        if (userId) {
-            unsubProfile = getUserProfile(userId, setUserProfile);
-        }
-
-        return () => {
-            unsubJobs();
-            unsubProfile();
-        };
-    }, [userId]);
+        setJobPostings(initialJobPostings);
+        setUserProfile(currentUserProfile);
+    }, [initialJobPostings, currentUserProfile]);
 
     const filteredJobs = useMemo(() => {
         const userSkills = userProfile?.skills || [];
@@ -114,20 +101,14 @@ export default function JobBoardPageContent({ userId }: JobBoardPageContentProps
                 }
             }
             const searchLower = searchTerm.toLowerCase();
-            const skillLower = skillFilter.toLowerCase();
             const titleMatch = post.title.toLowerCase().includes(searchLower);
             const descMatch = post.description.toLowerCase().includes(searchLower);
             const zipMatch = !zipFilter || (post.zipCode || '').includes(zipFilter);
-            const manualSkillMatch = !skillFilter || (post.requiredSkills || []).some(skill => skill.toLowerCase().includes(skillLower));
             const stateMatch = !stateFilter || post.state === stateFilter;
 
-            return (titleMatch || descMatch) && zipMatch && manualSkillMatch && stateMatch;
+            return (titleMatch || descMatch) && zipMatch && stateMatch;
         });
-    }, [jobPostings, searchTerm, zipFilter, skillFilter, stateFilter, showMatchingOnly, userProfile]);
-
-    if (isLoading) {
-        return <div className="p-8 text-center text-muted-foreground">Loading Job Board...</div>;
-    }
+    }, [jobPostings, searchTerm, zipFilter, stateFilter, showMatchingOnly, userProfile]);
 
     return (
         <div className="p-4 sm:p-6 lg:p-8">
@@ -144,10 +125,10 @@ export default function JobBoardPageContent({ userId }: JobBoardPageContentProps
             </header>
             
             <div className="mb-6 p-4 bg-card border rounded-lg">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
                     <div className="lg:col-span-2">
-                        <label htmlFor="search" className="block text-sm font-medium text-muted-foreground mb-1">Search Title/Desc</label>
-                        <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" /><input id="search" type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="e.g., Medical Interpreter" className="w-full pl-10 p-2 border rounded-md bg-background"/></div>
+                        <label htmlFor="search" className="block text-sm font-medium text-muted-foreground mb-1">Search Keywords</label>
+                        <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" /><input id="search" type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="e.g., Medical Interpreter, ASL" className="w-full pl-10 p-2 border rounded-md bg-background"/></div>
                     </div>
                     <div>
                         <label htmlFor="stateFilter" className="block text-sm font-medium text-muted-foreground mb-1">State</label>
@@ -160,8 +141,8 @@ export default function JobBoardPageContent({ userId }: JobBoardPageContentProps
                         <label htmlFor="zipFilter" className="block text-sm font-medium text-muted-foreground mb-1">Zip Code</label>
                         <div className="relative"><MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" /><input id="zipFilter" type="text" value={zipFilter} onChange={(e) => setZipFilter(e.target.value)} placeholder="e.g., 90210" className="w-full pl-10 p-2 border rounded-md bg-background"/></div>
                     </div>
-                    <div className="flex items-center space-x-2 justify-end self-center pb-2">
-                        <label htmlFor="matching-jobs" className="text-sm font-medium text-muted-foreground">Show My Matches</label>
+                    <div className="flex items-center space-x-2 justify-end self-center pb-2 col-span-full">
+                        <label htmlFor="matching-jobs" className="text-sm font-medium">Show only jobs matching my skills</label>
                         <Switch id="matching-jobs" checked={showMatchingOnly} onCheckedChange={setShowMatchingOnly} />
                     </div>
                 </div>
@@ -170,15 +151,14 @@ export default function JobBoardPageContent({ userId }: JobBoardPageContentProps
             <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg flex items-center gap-3">
                 <Info size={20} className="text-blue-600 shrink-0" />
                 <p className="text-sm text-blue-800 dark:text-blue-300">
-                    See an inappropriate post? Click the flag icon (<Flag size={14} className="inline-block" />) to report it. 
-                    For other support, please email <a href="mailto:support@ten99.app" className="font-semibold underline">support@ten99.app</a>.
+                    See an inappropriate post? Click the flag icon (<Flag size={14} className="inline-block" />) to report it.
                 </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredJobs.map(post => (
                     <Link href={`/dashboard/job-board/${post.id}`} key={post.id} className="block h-full">
-                         <JobPostCard post={post} />
+                        <JobPostCard post={post} />
                     </Link>
                 ))}
             </div>
@@ -190,22 +170,22 @@ export default function JobBoardPageContent({ userId }: JobBoardPageContentProps
             )}
 
             <div className="mt-12 bg-zinc-50 dark:bg-zinc-900/50 p-6 rounded-lg border-2 border-dashed border-zinc-300 dark:border-zinc-700">
-                 <div className="flex justify-between items-center mb-4">
-                       <div>
-                           <h3 className="text-lg font-semibold flex items-center gap-2 text-zinc-500 dark:text-zinc-400">
-                               <Building size={20}/> 
-                               Introducing Ten25
-                           </h3>
-                           <p className="text-sm text-zinc-400 dark:text-zinc-500 mt-1">The Command Center for Agencies.</p>
-                       </div>
-                       <span className="text-xs font-semibold bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400 px-2 py-1 rounded-full">COMING SOON</span>
-                 </div>
-                 <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
-                     The agency-side platform to post jobs, manage talent, track appointments, and handle payments in one integrated dashboard.
-                 </p>
-                 <a href="https://www.tenflow.app" target="_blank" rel="noopener noreferrer" className="w-full inline-flex justify-center bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 font-semibold py-2 px-4 rounded-lg hover:bg-zinc-300 dark:hover:bg-zinc-700">
-                     Learn More
-                 </a>
+                <div className="flex justify-between items-center mb-4">
+                    <div>
+                        <h3 className="text-lg font-semibold flex items-center gap-2 text-zinc-500 dark:text-zinc-400">
+                            <Building size={20}/> 
+                            Introducing Ten25
+                        </h3>
+                        <p className="text-sm text-zinc-400 dark:text-zinc-500 mt-1">The Command Center for Agencies.</p>
+                    </div>
+                    <span className="text-xs font-semibold bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400 px-2 py-1 rounded-full">COMING SOON</span>
+                </div>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
+                    The agency-side platform to post jobs, manage talent, track appointments, and handle payments in one integrated dashboard.
+                </p>
+                <a href="https://www.tenflow.app" target="_blank" rel="noopener noreferrer" className="w-full inline-flex justify-center bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 font-semibold py-2 px-4 rounded-lg hover:bg-zinc-300 dark:hover:bg-zinc-700">
+                    Learn More
+                </a>
             </div>
         </div>
     );

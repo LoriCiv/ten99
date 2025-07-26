@@ -1,142 +1,137 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
-import type { Client, PersonalNetworkContact, JobFile } from '@/types/app-interfaces';
-import { getClients, getPersonalNetwork, getJobFiles } from '@/utils/firestoreService';
-import Link from 'next/link';
-import { Search, Building2, User } from 'lucide-react';
-import ClientDetailModal from './ClientDetailModal';
+import type { Expense, Client, UserProfile } from '@/types/app-interfaces';
+import { getExpenses, getClients, getUserProfile, addExpense, updateExpense, deleteExpense } from '@/utils/firestoreService';
+import { PlusCircle, Edit, Trash2 } from 'lucide-react';
+import { format } from 'date-fns';
+import ExpenseModal from './ExpenseModal'; // We'll reuse the modal with the form
 
-interface ClientsPageContentProps {
+interface ExpensesPageContentProps {
     userId: string;
 }
 
-export default function ClientsPageContent({ userId }: ClientsPageContentProps) {
-    const router = useRouter();
+export default function ExpensesPageContent({ userId }: ExpensesPageContentProps) {
+    const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
-    const [contacts, setContacts] = useState<PersonalNetworkContact[]>([]);
-    const [jobFiles, setJobFiles] = useState<JobFile[]>([]);
+    const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [filter, setFilter] = useState<'all' | 'companies' | 'contacts'>('all');
-    const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [selectedItem, setSelectedItem] = useState<Client | PersonalNetworkContact | null>(null);
-    const [itemType, setItemType] = useState<'Company' | 'Contact'>('Company');
+    const [selectedExpense, setSelectedExpense] = useState<Partial<Expense> | undefined>(undefined);
 
     useEffect(() => {
-        setIsLoading(true);
-        const unsubClients = getClients(userId, setClients);
-        const unsubContacts = getPersonalNetwork(userId, setContacts);
-        const unsubJobFiles = getJobFiles(userId, (data) => {
-            setJobFiles(data);
-            setIsLoading(false); 
+        const unsubExpenses = getExpenses(userId, (data) => {
+            setAllExpenses(data);
+            setIsLoading(false);
         });
+        const unsubClients = getClients(userId, setClients);
+        const unsubProfile = getUserProfile(userId, setUserProfile);
 
         return () => {
+            unsubExpenses();
             unsubClients();
-            unsubContacts();
-            unsubJobFiles();
+            unsubProfile();
         };
     }, [userId]);
 
-    const filteredItems = useMemo(() => {
-        const allItems = [
-            ...clients.map(c => ({ ...c, type: 'Company' as const })),
-            ...contacts.map(c => ({ ...c, type: 'Contact' as const }))
-        ];
-
-        return allItems.filter(item => {
-            const typeMatch = filter === 'all' || (filter === 'companies' && item.type === 'Company') || (filter === 'contacts' && item.type === 'Contact');
-            if (!searchTerm) { return typeMatch; }
-            const searchInput = searchTerm.toLowerCase();
-            const nameMatch = (item.name || '').toLowerCase().includes(searchInput);
-            const companyNameMatch = 'companyName' in item && (item.companyName || '').toLowerCase().includes(searchInput);
-            const tagMatch = item.type === 'Contact' && Array.isArray((item as PersonalNetworkContact).tags) && (item as PersonalNetworkContact).tags?.some((tag: string) => tag.toLowerCase().includes(searchInput));
-            return typeMatch && (nameMatch || companyNameMatch || tagMatch);
-        });
-    }, [clients, contacts, filter, searchTerm]);
-
-    const handleItemClick = (item: Client | PersonalNetworkContact, type: 'Company' | 'Contact') => {
-        setSelectedItem(item);
-        setItemType(type);
+    const handleOpenModal = (expense?: Expense) => {
+        setSelectedExpense(expense || {});
         setIsModalOpen(true);
     };
 
     const handleCloseModal = () => {
         setIsModalOpen(false);
-        setSelectedItem(null);
+        setSelectedExpense(undefined);
     };
 
-    const handleDataChanged = () => {
-        router.refresh();
+    const handleSaveExpense = async (data: Partial<Expense>) => {
+        try {
+            if (selectedExpense?.id) {
+                // Update existing expense
+                await updateExpense(userId, selectedExpense.id, data);
+                alert("Expense updated successfully!");
+            } else {
+                // Add new expense
+                await addExpense(userId, data);
+                alert("Expense added successfully!");
+            }
+            handleCloseModal();
+        } catch (error) {
+            console.error("Failed to save expense:", error);
+            alert("Failed to save expense.");
+        }
+    };
+    
+    const handleDeleteExpense = async (expenseId: string) => {
+        if (window.confirm("Are you sure you want to delete this expense?")) {
+            try {
+                await deleteExpense(userId, expenseId);
+                alert("Expense deleted.");
+                handleCloseModal();
+            } catch (error) {
+                console.error("Failed to delete expense:", error);
+                alert("Failed to delete expense.");
+            }
+        }
     };
 
     if (isLoading) {
-        return <div className="p-8 text-center text-muted-foreground">Loading...</div>;
+        return <div className="p-8 text-center text-muted-foreground">Loading Expenses...</div>;
     }
 
     return (
         <>
             <div className="p-4 sm:p-6 lg:p-8">
-                <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                <header className="mb-6">
                     <div>
-                        <h1 className="text-3xl font-bold text-foreground">Clients & Connections</h1>
-                        <p className="text-muted-foreground mt-1">Manage your business clients and personal network.</p>
+                        <h1 className="text-3xl font-bold text-foreground">Expenses</h1>
+                        <p className="text-muted-foreground mt-1">Track and manage all your business expenses.</p>
                     </div>
-                    <div className="flex gap-2">
-                        <Link href="/dashboard/clients/new-contact" className="flex items-center gap-2 bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-secondary/80">
-                            <User size={20} /> New Contact
-                        </Link>
-                        <Link href="/dashboard/clients/new-company" className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90">
-                            <Building2 size={20} /> New Company
-                        </Link>
+                    <div className="mt-4 flex justify-end">
+                        <button onClick={() => handleOpenModal()} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90">
+                            <PlusCircle size={20} /> New Expense
+                        </button>
                     </div>
                 </header>
-
-                <div className="mb-6 p-4 bg-card border rounded-lg">
-                    <div className="flex flex-col sm:flex-row gap-4">
-                        <div className="relative flex-grow">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                            <input type="text" placeholder="Search by name, company, or tag..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 p-2 border rounded-md bg-background"/>
-                        </div>
-                        <div className="flex items-center gap-2 bg-background p-1 rounded-lg border">
-                            <button onClick={() => setFilter('all')} className={`px-4 py-1.5 text-sm font-semibold rounded-md ${filter === 'all' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>All</button>
-                            <button onClick={() => setFilter('companies')} className={`px-4 py-1.5 text-sm font-semibold rounded-md ${filter === 'companies' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>Companies</button>
-                            <button onClick={() => setFilter('contacts')} className={`px-4 py-1.5 text-sm font-semibold rounded-md ${filter === 'contacts' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>Contacts</button>
-                        </div>
-                    </div>
-                </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredItems.map(item => (
-                        <div key={`${item.type}-${item.id}`} onClick={() => handleItemClick(item, item.type)} className="bg-card p-4 rounded-lg border hover:border-primary hover:shadow-lg transition-all cursor-pointer">
-                            <div className="flex items-center gap-4">
-                                <div className="bg-secondary p-3 rounded-lg">
-                                    {item.type === 'Company'
-                                        ? <Building2 className="h-6 w-6 text-secondary-foreground" />
-                                        : <User className="h-6 w-6 text-secondary-foreground" />
-                                    }
+                <div className="bg-card border rounded-lg">
+                    <div className="hidden md:grid md:grid-cols-5 gap-4 p-4 border-b text-sm font-semibold text-muted-foreground">
+                        <span>Date</span>
+                        <span className="col-span-2">Description</span>
+                        <span>Category</span>
+                        <span className="text-right">Amount</span>
+                    </div>
+                    <div className="divide-y">
+                        {allExpenses.map(expense => {
+                            const client = clients.find(c => c.id === expense.clientId);
+                            return (
+                                <div key={expense.id} onClick={() => handleOpenModal(expense)} className="grid grid-cols-2 md:grid-cols-5 gap-4 p-4 cursor-pointer hover:bg-muted">
+                                    <div className="font-medium text-foreground">{format(new Date(expense.date + 'T00:00:00'), 'MMM d, yyyy')}</div>
+                                    <div className="col-span-2">
+                                        <p className="font-semibold text-foreground">{expense.description}</p>
+                                        {client && <p className="text-xs text-primary">{client.name}</p>}
+                                    </div>
+                                    <div className="text-muted-foreground">{expense.category}</div>
+                                    <div className="font-mono text-right text-foreground col-start-2 md:col-start-auto">${(Number(expense.amount) || 0).toFixed(2)}</div>
                                 </div>
-                                <div>
-                                    <h3 className="text-lg font-bold text-foreground truncate">{item.type === 'Company' ? (item as Client).companyName : item.name}</h3>
-                                    <p className="text-muted-foreground text-sm truncate">{item.email}</p>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
+                            );
+                        })}
+                        {allExpenses.length === 0 && (
+                            <p className="p-8 text-center text-muted-foreground">You haven't logged any expenses yet.</p>
+                        )}
+                    </div>
                 </div>
             </div>
 
             {isModalOpen && (
-                <ClientDetailModal
-                    item={selectedItem}
-                    itemType={itemType}
+                <ExpenseModal
+                    isOpen={isModalOpen}
+                    onClose={handleCloseModal}
+                    onSave={handleSaveExpense}
+                    expense={selectedExpense}
                     userId={userId}
                     clients={clients}
-                    jobFiles={jobFiles}
-                    onClose={handleCloseModal}
-                    onSave={handleDataChanged}
+                    userProfile={userProfile}
                 />
             )}
         </>

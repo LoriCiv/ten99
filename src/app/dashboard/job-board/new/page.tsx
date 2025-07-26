@@ -7,32 +7,27 @@ import { addJobPosting, getUserProfile, updateUserProfile } from '@/utils/firest
 import JobPostForm from '@/components/JobPostForm';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-// ✅ 1. Import useAuth from Clerk
-import { useAuth } from '@clerk/nextjs';
+import { useAuth } from '@clerk/nextjs'; // Use client-side hook here
 
-const POST_LIMIT = 2; // Set the monthly post limit here
+const POST_LIMIT = 2; 
 
 export default function NewJobPostPage() {
     const router = useRouter();
-    // ✅ 2. Get the real userId from the hook
-    const { userId } = useAuth();
+    const { userId } = useAuth(); // Get userId on the client
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
-        // ✅ 3. Fetch the user profile only if we have a userId
-        if (userId) {
-            const unsub = getUserProfile(userId, (profile) => {
-                setUserProfile(profile);
-                setIsLoading(false);
-            });
-            return () => unsub();
-        }
-    }, [userId]); // ✅ 4. Add userId as a dependency
+        if (!userId) return;
+        const unsub = getUserProfile(userId, (profile) => {
+            setUserProfile(profile);
+            setIsLoading(false);
+        });
+        return () => unsub();
+    }, [userId]);
 
     const handleSave = async (data: Partial<JobPosting>) => {
-        // ✅ 5. Use the real userId for all checks and actions
         if (!userId || !userProfile) {
             alert("Could not verify user profile. Please try again.");
             return;
@@ -43,7 +38,6 @@ export default function NewJobPostPage() {
         
         let currentPostCount = userProfile.monthlyPostCount || 0;
         
-        // Reset count if it's a new month
         if (userProfile.postCountResetDate !== currentMonthYear) {
             currentPostCount = 0;
         }
@@ -57,7 +51,6 @@ export default function NewJobPostPage() {
         try {
             await addJobPosting(userId, data);
             
-            // Update the user's post count
             const newCount = currentPostCount + 1;
             await updateUserProfile(userId, {
                 monthlyPostCount: newCount,

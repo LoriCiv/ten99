@@ -1,14 +1,20 @@
+import { auth } from '@clerk/nextjs/server';
 import DashboardPageContent from '@/components/DashboardPageContent';
-import { auth } from "@clerk/nextjs/server";
+import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 
 export default async function DashboardPage() {
-  // ✅ FIX: Add the "await" keyword here
-  const { userId } = await auth();
+    const { userId } = await auth();
 
-  if (!userId) {
-    redirect('/sign-in');
-  }
+    if (!userId) {
+      // If there's no user, send them to the sign-in page
+      redirect('/sign-in');
+    }
 
-  return <DashboardPageContent userId={userId} />;
+    return (
+        <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading dashboard...</div>}>
+            {/* This passes the real, unique userId to the component that shows the dashboard */}
+            <DashboardPageContent userId={userId} />
+        </Suspense>
+    );
 }

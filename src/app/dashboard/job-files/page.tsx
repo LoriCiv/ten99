@@ -1,6 +1,7 @@
-import JobFilesPageWrapper from '@/components/JobFilesPageContent';
+import JobFilesPageContent from '@/components/JobFilesPageContent';
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from 'next/navigation';
+import { Suspense } from 'react';
 
 export default async function JobFilesPage() {
   const { userId } = await auth();
@@ -9,5 +10,9 @@ export default async function JobFilesPage() {
     redirect('/sign-in');
   }
 
-  return <JobFilesPageWrapper userId={userId} />;
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading Job Files...</div>}>
+        <JobFilesPageContent userId={userId} />
+    </Suspense>
+  );
 }

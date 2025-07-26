@@ -1,48 +1,42 @@
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { JobFile, Client, PersonalNetworkContact, Appointment } from '@/types/app-interfaces';
-import { updateJobFile, deleteJobFile } from '@/utils/firestoreService';
+import type { JobFile, Client } from '@/types/app-interfaces';
+import { updateJobFile, deleteJobFile, uploadFile } from '@/utils/firestoreService';
 import Link from 'next/link';
-import { ArrowLeft, Edit, Trash2, Download } from 'lucide-react';
-import JobFileForm from './JobFileForm';
-import Modal from './Modal';
+import { ArrowLeft, Edit, Trash2, Save, Loader2, Paperclip, Upload, Star } from 'lucide-react';
 
-interface JobFileDetailPageContentProps {
+interface JobFileDetailContentProps {
     initialJobFile: JobFile;
-    initialClients: Client[];
-    initialContacts: PersonalNetworkContact[];
-    initialAppointments: Appointment[];
+    initialClient: Client | null;
     userId: string;
 }
 
-export default function JobFileDetailPageContent({
-    initialJobFile,
-    initialClients,
-    initialAppointments,
-    userId
-}: JobFileDetailPageContentProps) {
+export default function JobFileDetailContent({ initialJobFile, initialClient, userId }: JobFileDetailContentProps) {
     const router = useRouter();
-    const [jobFile, setJobFile] = useState(initialJobFile);
+    const [jobFile, setJobFile] = useState<JobFile>(initialJobFile);
+    const [client] = useState<Client | null>(initialClient);
     const [isEditing, setIsEditing] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [isUploading, setIsUploading] = useState(false);
 
-    const client = useMemo(() => initialClients.find(c => c.id === jobFile.clientId), [initialClients, jobFile.clientId]);
-    const appointment = useMemo(() => initialAppointments.find(a => a.id === jobFile.appointmentId), [initialAppointments, jobFile.appointmentId]);
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        const { name, value } = e.target;
+        setJobFile(prev => ({ ...prev, [name]: value }));
+    };
 
-    const handleSave = async (data: Partial<JobFile>) => {
+    const handleSave = async () => {
         if (!jobFile.id) return;
         setIsSubmitting(true);
         try {
-            await updateJobFile(userId, jobFile.id, data);
-            // We refresh the page from the server to get the latest data
-            router.refresh();
+            const { id, createdAt, ...dataToUpdate } = jobFile;
+            await updateJobFile(userId, id, dataToUpdate);
             setIsEditing(false);
-            alert("Job File updated successfully!");
         } catch (error) {
-            console.error("Error saving job file:", error);
-            alert("Failed to save job file.");
+            console.error("Error updating job file:", error);
+            alert("Failed to update job file.");
         } finally {
             setIsSubmitting(false);
         }
@@ -50,10 +44,10 @@ export default function JobFileDetailPageContent({
     
     const handleDelete = async () => {
         if (!jobFile.id) return;
-        if (window.confirm("Are you sure you want to delete this job file? This cannot be undone.")) {
+        if (window.confirm("Are you sure you want to delete this job file? This action cannot be undone.")) {
             try {
                 await deleteJobFile(userId, jobFile.id);
-                alert("Job File deleted.");
+                alert("Job file deleted.");
                 router.push('/dashboard/job-files');
             } catch (error) {
                 console.error("Error deleting job file:", error);
@@ -62,69 +56,122 @@ export default function JobFileDetailPageContent({
         }
     };
 
-    return (
-        <>
-            <div className="p-4 sm:p-6 lg:p-8">
-                <Link href="/dashboard/job-files" className="inline-flex items-center text-sm font-semibold text-muted-foreground hover:text-primary mb-6">
-                    <ArrowLeft className="w-4 h-4 mr-2" />
-                    Back to Job Files
-                </Link>
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            setSelectedFile(e.target.files[0]);
+        }
+    };
 
-                <div className="bg-card p-6 rounded-lg border">
-                    <div className="flex justify-between items-start mb-4 pb-4 border-b">
-                        <div>
+    const handleFileUpload = async () => {
+        if (!selectedFile || !jobFile.id) return;
+        setIsUploading(true);
+        try {
+            const downloadURL = await uploadFile(userId, selectedFile);
+            const newAttachment = { name: selectedFile.name, url: downloadURL };
+            const updatedAttachments = [...(jobFile.attachments || []), newAttachment];
+            await updateJobFile(userId, jobFile.id, { attachments: updatedAttachments });
+            setJobFile(prev => ({ ...prev, attachments: updatedAttachments }));
+            setSelectedFile(null);
+        } catch (error) {
+            console.error("Error uploading file:", error);
+            alert("File upload failed.");
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    const handleSetPriority = async (newPriority: number) => {
+        if (!jobFile.id) return;
+        const finalPriority = jobFile.priority === newPriority ? 0 : newPriority;
+        try {
+            await updateJobFile(userId, jobFile.id, { priority: finalPriority });
+            setJobFile(prev => ({ ...prev, priority: finalPriority }));
+        } catch (error) {
+            console.error("Error updating priority:", error);
+        }
+    };
+
+    return (
+        <div className="p-4 sm:p-6 lg:p-8">
+            <Link href="/dashboard/job-files" className="inline-flex items-center text-sm font-semibold text-muted-foreground hover:text-primary mb-6">
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Job Files
+            </Link>
+
+            <div className="bg-card p-6 rounded-lg border">
+                <div className="flex justify-between items-start mb-4">
+                    <div>
+                        {isEditing ? (
+                            <input
+                                name="jobTitle"
+                                value={jobFile.jobTitle}
+                                onChange={handleInputChange}
+                                className="text-3xl font-bold bg-background border rounded-md p-2 -ml-2"
+                            />
+                        ) : (
                             <h1 className="text-3xl font-bold text-foreground">{jobFile.jobTitle}</h1>
-                            {client && <p className="text-lg text-primary">{client.companyName || client.name}</p>}
-                        </div>
-                        <div className="flex gap-2">
-                            <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-secondary/80">
-                                <Edit size={16}/> Edit
-                            </button>
-                             <button onClick={handleDelete} className="flex items-center gap-2 bg-destructive text-destructive-foreground font-semibold py-2 px-4 rounded-lg hover:bg-destructive/90">
-                                <Trash2 size={16}/> Delete
-                            </button>
-                        </div>
+                        )}
+                        {client && <p className="text-primary font-semibold">{client.name}</p>}
                     </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div className="space-y-4">
-                            <h3 className="font-semibold text-lg">Details</h3>
-                            {appointment && <p className="text-sm"><span className="font-semibold text-muted-foreground">Linked Appointment:</span> {appointment.subject}</p>}
-                            <p className="text-sm"><span className="font-semibold text-muted-foreground">Start Date:</span> {jobFile.startDate || 'Not set'}</p>
-                            <p className="text-sm"><span className="font-semibold text-muted-foreground">End Date:</span> {jobFile.endDate || 'Not set'}</p>
-                            {jobFile.fileUrl && (
-                                <a href={jobFile.fileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-primary hover:underline">
-                                    <Download size={16}/> Download Attached File
-                                </a>
-                            )}
+                    <div className="flex items-center gap-2">
+                        <div className="flex">
+                           {[1, 2].map(p => (
+                                <button key={p} onClick={() => handleSetPriority(p)}>
+                                    <Star size={20} className={jobFile.priority && jobFile.priority >= p ? 'text-yellow-400 fill-current' : 'text-muted-foreground'}/>
+                                </button>
+                           ))}
                         </div>
-                        <div className="space-y-4">
-                            <h3 className="font-semibold text-lg">Shared Notes</h3>
-                            <p className="text-sm text-muted-foreground whitespace-pre-wrap bg-background p-3 rounded-md min-h-[100px]">
-                                {jobFile.sharedNotes || 'No shared notes.'}
-                            </p>
-                            <h3 className="font-semibold text-lg">Private Notes</h3>
-                            <p className="text-sm text-muted-foreground whitespace-pre-wrap bg-background p-3 rounded-md min-h-[100px]">
-                                {jobFile.privateNotes || 'No private notes.'}
-                            </p>
+                        {isEditing ? (
+                            <>
+                                <button onClick={handleSave} disabled={isSubmitting} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg">
+                                    {isSubmitting ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>} Save
+                                </button>
+                                <button onClick={() => setIsEditing(false)} className="text-sm font-semibold">Cancel</button>
+                            </>
+                        ) : (
+                            <>
+                                <button onClick={() => setIsEditing(true)} className="p-2 hover:bg-muted rounded-md"><Edit size={16}/></button>
+                                <button onClick={handleDelete} className="p-2 hover:bg-muted rounded-md text-destructive"><Trash2 size={16}/></button>
+                            </>
+                        )}
+                    </div>
+                </div>
+
+                <div className="mt-6 pt-6 border-t">
+                    <h3 className="text-lg font-semibold mb-4">Private Notes</h3>
+                    {isEditing ? (
+                         <textarea
+                            name="privateNotes"
+                            value={jobFile.privateNotes || ''}
+                            onChange={handleInputChange}
+                            rows={10}
+                            className="w-full p-3 bg-background border rounded-md"
+                         />
+                    ) : (
+                        <div className="prose dark:prose-invert max-w-none p-3 bg-background rounded-md min-h-[100px] whitespace-pre-wrap">
+                            {jobFile.privateNotes || <span className="text-muted-foreground">No private notes for this job file.</span>}
                         </div>
+                    )}
+                </div>
+
+                <div className="mt-6 pt-6 border-t">
+                    <h3 className="text-lg font-semibold mb-4">Attachments</h3>
+                    <div className="space-y-3">
+                        {(jobFile.attachments || []).map((file, index) => (
+                            <a key={index} href={file.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-background rounded-md border hover:border-primary">
+                                <Paperclip size={16} />
+                                <span className="font-medium text-primary underline">{file.name}</span>
+                            </a>
+                        ))}
+                    </div>
+                    <div className="mt-4 flex items-center gap-4">
+                        <input type="file" onChange={handleFileChange} className="text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"/>
+                        <button onClick={handleFileUpload} disabled={!selectedFile || isUploading} className="flex items-center gap-2 bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg disabled:opacity-50">
+                             {isUploading ? <Loader2 className="animate-spin" size={16}/> : <Upload size={16}/>} Upload
+                        </button>
                     </div>
                 </div>
             </div>
-
-            <Modal isOpen={isEditing} onClose={() => setIsEditing(false)}>
-                <div className="p-6">
-                    <JobFileForm
-                        initialData={jobFile}
-                        onSave={handleSave}
-                        onCancel={() => setIsEditing(false)}
-                        clients={initialClients}
-                        appointments={initialAppointments}
-                        isSubmitting={isSubmitting}
-                        userId={userId}
-                    />
-                </div>
-            </Modal>
-        </>
+        </div>
     );
 }

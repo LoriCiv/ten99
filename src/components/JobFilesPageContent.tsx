@@ -193,11 +193,11 @@ function JobFilesPageContentInternal({ userId }: JobFilesPageContentProps) {
                             </div>
                             
                             <div className="text-sm text-muted-foreground mt-4 pt-4 border-t border-border/20 flex flex-col items-start gap-1">
-                                 <div className="flex items-center gap-2">
-                                     <StatusIcon className={`h-4 w-4 ${status.color}`} />
-                                     <span className={`font-semibold ${status.color}`}>{status.text}</span>
-                                 </div>
-                                 {dateRange && <span>{dateRange}</span>}
+                                <div className="flex items-center gap-2">
+                                    <StatusIcon className={`h-4 w-4 ${status.color}`} />
+                                    <span className={`font-semibold ${status.color}`}>{status.text}</span>
+                                </div>
+                                {dateRange && <span>{dateRange}</span>}
                             </div>
                         </Link>
                     );
