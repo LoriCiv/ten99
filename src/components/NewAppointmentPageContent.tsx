@@ -63,9 +63,8 @@ export default function NewAppointmentPageContent({ userId }: NewAppointmentPage
 
         const clientListForAI = clients.map(c => ({ id: c.id, name: c.companyName || c.name }));
 
-        // ✅ FIX: The prompt now instructs the AI to combine location details into the main 'address' field.
         const prompt = `
-You are an intelligent scheduling assistant for an application called Ten99. Your task is to parse unstructured text about a job or appointment and convert it into a structured JSON object.
+You are an intelligent scheduling assistant. Parse the text below and convert it into a structured JSON object adhering to the schema.
 
 CONTEXT:
 - Today's Date: ${new Date().toLocaleDateString()}
@@ -73,10 +72,10 @@ CONTEXT:
 
 INSTRUCTIONS:
 1.  Analyze the 'TEXT TO PARSE' below.
-2.  Extract details for an appointment. Infer a 'subject' if one is not explicitly stated. Look for keywords like "Situation:", "Job#", "City Name:", and "Site Zip Code:".
-3.  **Company Name:** Look for the company name in the "From:" line of the email. For example, in "From: GISN <request@gisn.info>", the company is "GISN".
-4.  **Client Matching:** If a parsed company name closely matches a name in the 'Existing Clients List', use the corresponding 'id' for the 'clientId' field. If no client is found, create a 'newClientName' field.
-5.  **Date and Time:** Convert all dates to 'YYYY-MM-DD' format and all times to 24-hour 'HH:mm' format.
+2.  Extract details, inferring a 'subject' if needed. Look for "Situation:", "Job#", "City Name:", and "Site Zip Code:".
+3.  **Company Name:** Find the company name in the "From:" line (e.g., "From: GISN <...>").
+4.  **Client Matching:** If a parsed company name matches an existing client, use their 'id' for 'clientId'. Otherwise, create a 'newClientName' field.
+5.  **Formatting:** Dates must be 'YYYY-MM-DD', and times must be 24-hour 'HH:mm'.
 6.  **Address Handling:** If you find a 'City Name' and/or 'Site Zip Code' but no full street address, combine them into a single string for the 'address' field (e.g., "Cave Springs, 30124").
 7.  **Output:** Respond with ONLY the valid JSON object. Do not include any explanatory text or markdown formatting.
 
@@ -89,7 +88,7 @@ JSON SCHEMA:
   "clientId": "string" | null,
   "newClientName": "string" | null,
   "jobNumber": "string" | null,
-  "notes": "string" | null,
+  "notes": "string | null",
   "address": "string" | null,
   "city": "string" | null,
   "state": "string" | null,
@@ -160,13 +159,18 @@ ${pastedText}
             const parsedJson = JSON.parse(jsonString);
 
             if (parsedJson.newClientName && !parsedJson.clientId) {
-                const newClientRef = await addClient(userId, {
+                const newClientData: Partial<Client> = {
                     companyName: parsedJson.newClientName,
                     name: parsedJson.newClientName,
                     status: 'Active',
                     clientType: 'business_1099'
-                });
+                };
+                const newClientRef = await addClient(userId, newClientData);
                 parsedJson.clientId = newClientRef.id;
+                
+                // ✅ FIX: Manually add the new client to our local state so the UI updates instantly.
+                const newClient = { id: newClientRef.id, ...newClientData } as Client;
+                setClients(prevClients => [newClient, ...prevClients]);
             }
             
             setPrefilledData(parsedJson);
