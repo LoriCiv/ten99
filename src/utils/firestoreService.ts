@@ -102,6 +102,11 @@ export const getMileage = (userId: string, callback: (data: Mileage[]) => void) 
     const q = query(collection(db, `users/${userId}/mileage`), orderBy('date', 'desc'));
     return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Mileage))); });
 };
+// ✅ FIX: Added the missing function back
+export const getPriorityJobFiles = (userId: string, callback: (data: JobFile[]) => void) => {
+    const q = query(collection(db, `users/${userId}/jobFiles`), where('priority', '==', 2), orderBy('createdAt', 'desc'));
+    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as JobFile))); });
+};
 
 // --- SERVER-SIDE DATA FETCHERS ---
 export const getJobFile = async (userId: string, jobFileId: string): Promise<JobFile | null> => {
