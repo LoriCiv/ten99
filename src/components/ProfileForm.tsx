@@ -7,8 +7,6 @@ import type { UserProfile, JobHistoryEntry, EducationEntry } from '@/types/app-i
 import { uploadFile } from '@/utils/firestoreService';
 import { Save, Loader2, Plus, Trash2, User as UserIcon, ExternalLink } from 'lucide-react';
 
-// ✅ The TEMP_USER_ID constant has been removed.
-
 const usStates = [
     "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", "Delaware",
     "Florida", "Georgia", "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky",
@@ -60,7 +58,7 @@ export default function ProfileForm({ initialProfile, onSave, isSubmitting, user
         if (selectedFile) {
             setIsUploading(true);
             try {
-                // ✅ Use the real userId for the file upload
+                // ✅ Use the real userId for the photo upload
                 const photoUrl = await uploadFile(userId, selectedFile);
                 profileDataToSave.photoUrl = photoUrl;
             } catch (error) {
