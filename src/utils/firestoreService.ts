@@ -67,15 +67,6 @@ export const getAppointments = (userId: string, callback: (data: Appointment[]) 
     const q = query(collection(db, `users/${userId}/appointments`), orderBy('date', 'desc'));
     return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as Appointment))); });
 };
-// ✅ FIX: Changed getJobFile to be async to work on the server correctly
-export const getJobFile = async (userId: string, jobFileId: string): Promise<JobFile | null> => {
-    const jobFileRef = doc(db, 'users', userId, 'jobFiles', jobFileId);
-    const docSnap = await getDoc(jobFileRef);
-    if (docSnap.exists()) {
-        return { id: docSnap.id, ...docSnap.data() } as JobFile;
-    }
-    return null;
-};
 export const getMessagesForUser = (userId: string, callback: (data: Message[]) => void) => {
     const messagesRef = collection(db, 'users', userId, 'messages');
     const q = query(messagesRef, where('recipientId', '==', userId), orderBy('createdAt', 'desc'));
@@ -113,6 +104,12 @@ export const getMileage = (userId: string, callback: (data: Mileage[]) => void) 
 };
 
 // --- SERVER-SIDE DATA FETCHERS ---
+export const getJobFile = async (userId: string, jobFileId: string): Promise<JobFile | null> => {
+    const docRef = doc(db, `users/${userId}/jobFiles`, jobFileId);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) { return { id: docSnap.id, ...docSnap.data() } as JobFile; }
+    return null;
+};
 export const getProfileData = async (userId: string): Promise<UserProfile | null> => {
     const docRef = doc(db, `users/${userId}/profile`, 'mainProfile');
     const docSnap = await getDoc(docRef);
@@ -152,17 +149,13 @@ export const getClientForJobFile = async (userId: string, clientId: string): Pro
     return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as Client : null; 
 };
 
-// ... (All your WRITE/UPDATE/DELETE functions will go here)
-// I've included the full, correct list from your app below.
-
+// --- WRITE/UPDATE/DELETE FUNCTIONS ---
 export const addClient = (userId: string, clientData: Partial<Client>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/clients`), { ...cleanupObject(clientData), createdAt: serverTimestamp() }); };
 export const updateClient = (userId: string, clientId: string, clientData: Partial<Client>): Promise<void> => { return setDoc(doc(db, `users/${userId}/clients`, clientId), cleanupObject(clientData), { merge: true }); };
 export const deleteClient = (userId: string, clientId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/clients`, clientId)); };
 export const addPersonalNetworkContact = (userId: string, contactData: Partial<PersonalNetworkContact>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/personalNetwork`), { ...cleanupObject(contactData), createdAt: serverTimestamp() }); };
 export const updatePersonalNetworkContact = (userId: string, contactId: string, contactData: Partial<PersonalNetworkContact>): Promise<void> => { const docRef = doc(db, `users/${userId}/personalNetwork`, contactId); return setDoc(docRef, cleanupObject(contactData), { merge: true }); };
 export const deletePersonalNetworkContact = (userId: string, contactId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/personalNetwork`, contactId)); };
-export const convertClientToContact = async (userId: string, client: Client): Promise<void> => { if (!client.id) throw new Error("Client ID is missing for conversion."); const newContactData = { name: client.companyName || client.name || 'Unknown', email: client.email, phone: client.phone, notes: client.notes, tags: ['converted-from-client'], createdAt: client.createdAt || serverTimestamp() }; const batch = writeBatch(db); const oldClientRef = doc(db, `users/${userId}/clients`, client.id); const newContactRef = doc(db, `users/${userId}/personalNetwork`, client.id); batch.set(newContactRef, cleanupObject(newContactData)); batch.delete(oldClientRef); await batch.commit(); };
-export const convertContactToClient = async (userId: string, contact: PersonalNetworkContact): Promise<void> => { if (!contact.id) throw new Error("Contact ID is missing for conversion."); const newClientData = { name: contact.name, companyName: contact.name, email: contact.email, phone: contact.phone, notes: contact.notes, status: 'Active' as const, clientType: 'business_1099' as const, createdAt: contact.createdAt || serverTimestamp() }; const batch = writeBatch(db); const oldContactRef = doc(db, `users/${userId}/personalNetwork`, contact.id); const newClientRef = doc(db, `users/${userId}/clients`, contact.id); batch.set(newClientRef, cleanupObject(newClientData)); batch.delete(oldContactRef); await batch.commit(); };
 export const addJobFile = (userId: string, jobFileData: Partial<JobFile>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/jobFiles`), { ...cleanupObject(jobFileData), createdAt: serverTimestamp(), updatedAt: serverTimestamp() }); };
 export const updateJobFile = (userId: string, jobFileId: string, jobFileData: Partial<JobFile>): Promise<void> => { const dataToSave = { ...cleanupObject(jobFileData), updatedAt: serverTimestamp() }; return updateDoc(doc(db, `users/${userId}/jobFiles`, jobFileId), dataToSave); };
 export const deleteJobFile = (userId: string, jobFileId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/jobFiles`, jobFileId)); };
@@ -203,6 +196,8 @@ export const deleteAppointment = (userId: string, appointmentId: string): Promis
 export const updateMessage = (userId: string, messageId: string, messageData: Partial<Message>): Promise<void> => { const messageRef = doc(db, 'users', userId, 'messages', messageId); return updateDoc(messageRef, cleanupObject(messageData)); };
 export const deleteMessage = (userId: string, messageId: string): Promise<void> => { const messageRef = doc(db, `users/${userId}/messages`, messageId); return deleteDoc(messageRef); };
 export const sendAppMessage = async (senderId: string, senderName: string, recipientIdOrEmail: string, subject: string, body: string, type: Message['type'] = 'standard', jobPostId?: string): Promise<void> => {
+    const senderProfile = await getProfileData(senderId);
+    const senderEmail = senderProfile?.email || 'noreply@ten99.app';
     const usersRef = collection(db, 'users');
     const q = query(usersRef, where("email", "==", recipientIdOrEmail), limit(1));
     const querySnapshot = await getDocs(q);
@@ -211,7 +206,15 @@ export const sendAppMessage = async (senderId: string, senderName: string, recip
     const messageData: Partial<Message> = { senderId, senderName, recipientId, subject, body, isRead: false, status: 'new', createdAt: serverTimestamp(), type, jobPostId };
     const sentMessageData: Partial<Message> = { ...messageData, isRead: true };
     await addDoc(collection(db, `users/${senderId}/messages`), cleanupObject(sentMessageData));
-    if (!querySnapshot.empty) { await addDoc(collection(db, `users/${recipientId}/messages`), cleanupObject(messageData)); } else { await fetch('/api/send-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fromName: senderName, to: recipientIdOrEmail, subject, html: `<p>${body.replace(/\n/g, '<br>')}</p><p>Sent by ${senderName} via the Ten99 App.</p>` }), }); }
+    if (!querySnapshot.empty) { 
+        await addDoc(collection(db, `users/${recipientId}/messages`), cleanupObject(messageData)); 
+    } else { 
+        await fetch('/api/send-email', { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ fromName: senderName, to: recipientIdOrEmail, subject, html: `<p>${body.replace(/\n/g, '<br>')}</p>`, replyToEmail: senderEmail }), 
+        }); 
+    }
 };
 export const addTemplate = (userId: string, templateData: Partial<Template>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/templates`), { ...cleanupObject(templateData), createdAt: serverTimestamp() }); };
 export const updateTemplate = (userId: string, templateId: string, templateData: Partial<Template>): Promise<void> => { const docRef = doc(db, `users/${userId}/templates`, templateId); return setDoc(docRef, cleanupObject(templateData), { merge: true }); };
@@ -245,7 +248,7 @@ export const createInvoiceFromAppointment = async (userId: string, appointment: 
         });
     }
     const subtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
-    const total = subtotal; // This assumes tax is handled later or is 0 for now
+    const total = subtotal; 
     const invoiceData: Partial<Invoice> = {
         clientId: appointment.clientId, appointmentId: appointment.id, invoiceDate: new Date().toISOString().split('T')[0],
         dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], status: 'draft',

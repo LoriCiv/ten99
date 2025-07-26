@@ -1,35 +1,51 @@
-// src/app/api/send-email/route.ts
 import { NextResponse } from 'next/server';
 import sgMail from '@sendgrid/mail';
 
-sgMail.setApiKey(process.env.SENDGRID_API_KEY || '');
-
-export async function POST(request: Request) {
-  try {
-    const { to, subject, html, fromName } = await request.json();
-
-    if (!to || !subject || !html || !fromName) {
-        return NextResponse.json({ error: 'Missing required fields: to, subject, html, fromName' }, { status: 400 });
+export async function POST(req: Request) {
+    if (req.method !== 'POST') {
+        return NextResponse.json({ error: 'Method not allowed' }, { status: 405 });
     }
 
-    const msg = {
-        to: to,
-        from: {
-            email: 'system@ten99.app',
-            name: fromName,
-        },
-        subject: subject,
-        html: html,
-    };
+    const apiKey = process.env.SENDGRID_API_KEY;
+    if (!apiKey) {
+        console.error("SENDGRID_API_KEY is not set in environment variables.");
+        return NextResponse.json({ error: "Server configuration error." }, { status: 500 });
+    }
+    sgMail.setApiKey(apiKey);
 
-    await sgMail.send(msg);
+    try {
+        // We now expect 'replyToEmail' in the request
+        const { fromName, to, subject, html, replyToEmail } = await req.json();
 
-    return NextResponse.json({ message: 'Email sent successfully!' });
+        // This is your verified professional email address.
+        const fromEmail = "support@ten99.app"; 
 
-  } catch (err) {
-    // ✅ UPDATED: More specific error handling to satisfy the linter
-    console.error("API error sending email:", err);
-    const message = err instanceof Error ? err.message : 'An unknown error occurred.';
-    return NextResponse.json({ error: `Failed to send email: ${message}` }, { status: 500 });
-  }
+        const fullHtml = `
+            ${html}
+            <br><br>
+            <p style="font-size: 12px; color: #888;">
+                You received this email from ${fromName} via the Ten99 App.
+            </p>
+        `;
+
+        const msg = {
+            to: to,
+            from: {
+                email: fromEmail,
+                name: `${fromName} (via Ten99)`,
+            },
+            subject: subject,
+            html: fullHtml,
+            // When the recipient replies, it will go to the actual user's email
+            replyTo: replyToEmail, 
+        };
+
+        await sgMail.send(msg);
+
+        return NextResponse.json({ message: 'Email sent successfully' }, { status: 200 });
+
+    } catch (error) {
+        console.error('Failed to send email:', error);
+        return NextResponse.json({ error: 'Failed to send email' }, { status: 500 });
+    }
 }
