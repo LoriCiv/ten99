@@ -1,55 +1,51 @@
 "use client";
 
-import { useState, useEffect, Suspense } from 'react';
-// ✅ Import useSearchParams to read from the URL
+import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { Client } from '@/types/app-interfaces';
 import { addClient } from '@/utils/firestoreService';
 import ClientForm from '@/components/ClientForm';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
+import { useAuth } from '@clerk/nextjs'; // ✅ 1. Import useAuth
 
-const TEMP_USER_ID = "dev-user-1";
-
-// ✅ We need an inner component to use the searchParams hook
 function NewCompanyPageInternal() {
     const router = useRouter();
     const searchParams = useSearchParams();
+    const { userId } = useAuth(); // ✅ 2. Get the real userId
+    
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [initialData, setInitialData] = useState<Partial<Client> | undefined>();
+    const dataString = searchParams.get('data');
+    const initialData = dataString ? JSON.parse(decodeURIComponent(dataString)) : {};
 
-    useEffect(() => {
-        // Check if there's pre-filled data in the URL
-        const dataParam = searchParams.get('data');
-        if (dataParam) {
-            try {
-                const parsedData = JSON.parse(decodeURIComponent(dataParam));
-                setInitialData(parsedData);
-            } catch (error) {
-                console.error("Failed to parse duplicate data:", error);
-            }
+    const handleSave = async (formData: Partial<Client>) => {
+        if (!userId) { // Safety check
+            alert("You must be logged in to create a client.");
+            return;
         }
-    }, [searchParams]);
-
-    const handleSave = async (data: Partial<Client>) => {
         setIsSubmitting(true);
         try {
-            await addClient(TEMP_USER_ID, data);
-            alert('Company added successfully!');
+            // ✅ 3. Use the real userId to save the new client
+            await addClient(userId, formData);
+            alert("Company created successfully!");
             router.push('/dashboard/clients');
         } catch (error) {
-            console.error("Error adding company:", error);
-            alert('Failed to add company.');
+            console.error("Error saving company:", error);
+            alert("Failed to save company.");
         } finally {
             setIsSubmitting(false);
         }
     };
 
+    if (!userId) {
+        return <div className="p-8 text-center">Loading user...</div>;
+    }
+
     return (
         <div className="p-4 sm:p-6 lg:p-8">
             <Link href="/dashboard/clients" className="inline-flex items-center text-sm font-semibold text-muted-foreground hover:text-primary mb-6">
                 <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Clients & Connections
+                Back to Clients
             </Link>
             <ClientForm
                 initialData={initialData}
@@ -61,10 +57,9 @@ function NewCompanyPageInternal() {
     );
 }
 
-// ✅ The main export now wraps our component in Suspense, which is required by Next.js for useSearchParams
 export default function NewCompanyPage() {
     return (
-        <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading...</div>}>
+        <Suspense fallback={<div className="p-8 text-center">Loading...</div>}>
             <NewCompanyPageInternal />
         </Suspense>
     );

@@ -14,17 +14,17 @@ import {
 import InvoiceForm from './InvoiceForm';
 import Modal from './Modal';
 
-const TEMP_USER_ID = "dev-user-1";
-
+// ✅ 1. Update the props to receive userId
 interface InvoiceDetailModalProps {
     invoice: Invoice | null;
     clients: Client[];
     userProfile: UserProfile | null;
     onClose: () => void;
     onSave: () => void;
+    userId: string;
 }
 
-export default function InvoiceDetailModal({ invoice, clients, userProfile, onClose, onSave }: InvoiceDetailModalProps) {
+export default function InvoiceDetailModal({ invoice, clients, userProfile, onClose, onSave, userId }: InvoiceDetailModalProps) { // ✅ 2. Receive userId
     const [isEditing, setIsEditing] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -38,7 +38,8 @@ export default function InvoiceDetailModal({ invoice, clients, userProfile, onCl
         if (!invoice?.id) return;
         setIsSubmitting(true);
         try {
-            await updateInvoice(TEMP_USER_ID, invoice.id, data);
+            // ✅ 3. Use the real userId for all actions
+            await updateInvoice(userId, invoice.id, data);
             alert("Invoice updated!");
             onSave();
             onClose();
@@ -54,7 +55,7 @@ export default function InvoiceDetailModal({ invoice, clients, userProfile, onCl
         if (!invoice?.id) return;
         if (window.confirm("Are you sure you want to delete this invoice?")) {
             try {
-                await deleteInvoice(TEMP_USER_ID, invoice.id);
+                await deleteInvoice(userId, invoice.id);
                 alert("Invoice deleted.");
                 onSave();
                 onClose();
@@ -69,7 +70,7 @@ export default function InvoiceDetailModal({ invoice, clients, userProfile, onCl
         if (!invoice?.id) return;
         if (window.confirm("Are you sure you want to mark this invoice as paid?")) {
              try {
-                await updateInvoice(TEMP_USER_ID, invoice.id, {
+                await updateInvoice(userId, invoice.id, {
                     status: 'paid',
                     paymentDate: new Date().toISOString().split('T')[0]
                 });
@@ -110,7 +111,7 @@ export default function InvoiceDetailModal({ invoice, clients, userProfile, onCl
                 throw new Error(errorData.error || "Failed to send email.");
             }
 
-            await updateInvoice(TEMP_USER_ID, invoice.id!, { status: 'sent' });
+            await updateInvoice(userId, invoice.id!, { status: 'sent' });
             alert("Invoice sent successfully!");
             onSave();
             onClose();

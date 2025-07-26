@@ -1,29 +1,7 @@
 import { db, storage } from '@/lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import {
-    collection,
-    onSnapshot,
-    query,
-    orderBy,
-    addDoc,
-    doc,
-    updateDoc,
-    deleteDoc,
-    serverTimestamp,
-    writeBatch,
-    getDoc,
-    setDoc,
-    where,
-    getDocs,
-    limit,
-    Timestamp,
-    runTransaction,
-    DocumentReference,
-    QueryDocumentSnapshot,
-    collectionGroup,
-    increment
-} from 'firebase/firestore';
-import type { Client, PersonalNetworkContact, JobFile, Appointment, Message, Template, Certification, CEU, UserProfile, Invoice, Expense, JobPosting, Reminder, Mileage, Differential } from '@/types/app-interfaces';
+import { collection, onSnapshot, query, orderBy, addDoc, doc, updateDoc, deleteDoc, serverTimestamp, writeBatch, getDoc, setDoc, where, getDocs, limit, Timestamp, runTransaction, DocumentReference, QueryDocumentSnapshot, collectionGroup, increment } from 'firebase/firestore';
+import type { Client, PersonalNetworkContact, JobFile, Appointment, Message, Template, Certification, CEU, UserProfile, Invoice, Expense, JobPosting, Reminder, Mileage, Differential, LineItem } from '@/types/app-interfaces';
 import { v4 as uuidv4 } from 'uuid';
 
 const cleanupObject = <T extends Record<string, unknown>>(data: T): Partial<T> => {
@@ -37,6 +15,17 @@ const cleanupObject = <T extends Record<string, unknown>>(data: T): Partial<T> =
         }
     }
     return cleaned;
+};
+
+const serializeData = <T extends object>(doc: T | null): T | null => {
+    if (!doc) return null;
+    const data: { [key: string]: any } = { ...doc };
+    for (const key in data) {
+        if (data[key] instanceof Timestamp) {
+            data[key] = data[key].toDate().toISOString();
+        }
+    }
+    return data as T;
 };
 
 // --- REAL-TIME LISTENERS ---
@@ -84,71 +73,60 @@ export const getInvoices = (userId: string, callback: (data: Invoice[]) => void)
 export const getExpenses = (userId: string, callback: (data: Expense[]) => void) => { const q = query(collection(db, `users/${userId}/expenses`), orderBy('date', 'desc')); return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Expense))); }); };
 export const getJobPostings = (callback: (data: JobPosting[]) => void) => {
     const now = new Date();
-    const q = query(
-        collection(db, 'jobPostings'),
-        where('expiresAt', '>', now),
-        orderBy('expiresAt', 'asc')
-    );
-    return onSnapshot(q, (snapshot) => {
-        callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as JobPosting)))
-    });
+    const q = query(collection(db, 'jobPostings'), where('expiresAt', '>', now), orderBy('expiresAt', 'asc'));
+    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as JobPosting))) });
 };
 export const getRecentInvoices = (userId: string, callback: (data: Invoice[]) => void) => {
-    const q = query(
-        collection(db, `users/${userId}/invoices`),
-        orderBy('createdAt', 'desc'),
-        limit(5)
-    );
-    return onSnapshot(q, (snapshot) => {
-        callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Invoice)));
-    });
+    const q = query(collection(db, `users/${userId}/invoices`), orderBy('createdAt', 'desc'), limit(5));
+    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Invoice))); });
 };
 export const getPriorityJobFiles = (userId: string, callback: (data: JobFile[]) => void) => {
-    const q = query(
-        collection(db, `users/${userId}/jobFiles`),
-        where('priority', '==', 2),
-        orderBy('createdAt', 'desc')
-    );
-    return onSnapshot(q, (snapshot) => {
-        callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as JobFile)));
-    });
+    const q = query(collection(db, `users/${userId}/jobFiles`), where('priority', '==', 2), orderBy('createdAt', 'desc'));
+    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as JobFile))); });
 };
 export const getReminders = (userId: string, callback: (data: Reminder[]) => void) => {
     const q = query(collection(db, `users/${userId}/reminders`), orderBy('createdAt', 'desc'));
-    return onSnapshot(q, (snapshot) => {
-        callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reminder)));
-    });
+    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reminder))); });
 };
 export const getMileage = (userId: string, callback: (data: Mileage[]) => void) => {
     const q = query(collection(db, `users/${userId}/mileage`), orderBy('date', 'desc'));
-    return onSnapshot(q, (snapshot) => {
-        callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Mileage)));
-    });
+    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Mileage))); });
 };
 
 // --- SERVER-SIDE DATA FETCHERS ---
 export const getProfileData = async (userId: string): Promise<UserProfile | null> => {
     const docRef = doc(db, `users/${userId}/profile`, 'mainProfile');
     const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-        return { id: docSnap.id, ...docSnap.data() } as UserProfile;
-    }
-    return {
-        isVirtual: false, skills: [], languages: [], jobHistory: [], education: [],
-        expenseCategories: ['Travel', 'Equipment', 'Supplies', 'Professional Development', 'Other'],
-        invoiceLineItems: [],
-    };
+    if (docSnap.exists()) { return serializeData({ id: docSnap.id, ...docSnap.data() } as UserProfile); }
+    return null;
 };
 export const getTemplatesData = async (userId: string): Promise<Template[]> => {
     const q = query(collection(db, `users/${userId}/templates`), orderBy('createdAt', 'desc'));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Template));
+    return snapshot.docs.map(doc => serializeData({ id: doc.id, ...doc.data() } as Template)).filter((item): item is Template => item !== null);
+};
+export const getRemindersData = async (userId: string): Promise<Reminder[]> => {
+    const q = query(collection(db, `users/${userId}/reminders`), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => serializeData({ id: doc.id, ...doc.data() } as Reminder)).filter((item): item is Reminder => item !== null);
 };
 export const getPublicUserProfile = async (userId: string): Promise<UserProfile | null> => { const docRef = doc(db, `users/${userId}/profile`, 'mainProfile'); const docSnap = await getDoc(docRef); if (docSnap.exists()) { return { id: docSnap.id, ...docSnap.data() } as UserProfile; } return null; };
 export const getPublicCertifications = async (userId: string): Promise<Certification[]> => {
     const q = query(collection(db, `users/${userId}/certifications`), orderBy('createdAt', 'desc'));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Certification));
+};
+
+// ✅ ADD THESE TWO FUNCTIONS BACK
+export const getPublicJobFile = async (publicId: string): Promise<JobFile | null> => { 
+    const docRef = doc(db, "publicJobFiles", publicId); 
+    const docSnap = await getDoc(docRef); 
+    return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as JobFile : null; 
+};
+export const getClientForJobFile = async (userId: string, clientId: string): Promise<Client | null> => { 
+    const docRef = doc(db, 'users', userId, 'clients', clientId); 
+    const docSnap = await getDoc(docRef); 
+    return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as Client : null; 
 };
 
 // --- WRITE/UPDATE/DELETE FUNCTIONS ---
@@ -209,17 +187,11 @@ export const sendAppMessage = async (senderId: string, senderName: string, recip
     const q = query(usersRef, where("email", "==", recipientIdOrEmail), limit(1));
     const querySnapshot = await getDocs(q);
     let recipientId = recipientIdOrEmail;
-    if (!querySnapshot.empty) {
-        recipientId = querySnapshot.docs[0].id;
-    }
+    if (!querySnapshot.empty) { recipientId = querySnapshot.docs[0].id; }
     const messageData: Partial<Message> = { senderId, senderName, recipientId, subject, body, isRead: false, status: 'new', createdAt: serverTimestamp(), type, jobPostId };
     const sentMessageData: Partial<Message> = { ...messageData, isRead: true };
     await addDoc(collection(db, `users/${senderId}/messages`), cleanupObject(sentMessageData));
-    if (!querySnapshot.empty) {
-        await addDoc(collection(db, `users/${recipientId}/messages`), cleanupObject(messageData));
-    } else {
-        await fetch('/api/send-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fromName: senderName, to: recipientIdOrEmail, subject, html: `<p>${body.replace(/\n/g, '<br>')}</p><p>Sent by ${senderName} via the Ten99 App.</p>` }), });
-    }
+    if (!querySnapshot.empty) { await addDoc(collection(db, `users/${recipientId}/messages`), cleanupObject(messageData)); } else { await fetch('/api/send-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fromName: senderName, to: recipientIdOrEmail, subject, html: `<p>${body.replace(/\n/g, '<br>')}</p><p>Sent by ${senderName} via the Ten99 App.</p>` }), }); }
 };
 export const addTemplate = (userId: string, templateData: Partial<Template>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/templates`), { ...cleanupObject(templateData), createdAt: serverTimestamp() }); };
 export const updateTemplate = (userId: string, templateId: string, templateData: Partial<Template>): Promise<void> => { const docRef = doc(db, `users/${userId}/templates`, templateId); return setDoc(docRef, cleanupObject(templateData), { merge: true }); };
@@ -237,58 +209,30 @@ export const addInvoice = async (userId: string, invoiceData: Partial<Invoice>):
 export const updateInvoice = (userId: string, invoiceId: string, invoiceData: Partial<Invoice>): Promise<void> => { const docRef = doc(db, `users/${userId}/invoices`, invoiceId); return setDoc(docRef, cleanupObject(invoiceData), { merge: true }); };
 export const deleteInvoice = (userId: string, invoiceId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/invoices`, invoiceId)); };
 const calculateDurationInHours = (startTime?: string, endTime?: string): number => { if (!startTime || !endTime) return 1; const start = new Date(`1970-01-01T${startTime}`); const end = new Date(`1970-01-01T${endTime}`); const diffMs = end.getTime() - start.getTime(); if (diffMs <= 0) return 1; return parseFloat((diffMs / (1000 * 60 * 60)).toFixed(2)); };
-
-// ✅ 2. This is the fully updated function with differential logic
 export const createInvoiceFromAppointment = async (userId: string, appointment: Appointment): Promise<void> => {
-    if (!appointment.clientId || !appointment.id) {
-        throw new Error("Appointment must have an ID and be linked to a client.");
-    }
+    if (!appointment.clientId || !appointment.id) { throw new Error("Appointment must have an ID and be linked to a client."); }
     const clientRef = doc(db, `users/${userId}/clients`, appointment.clientId);
     const clientSnap = await getDoc(clientRef);
-    if (!clientSnap.exists()) {
-        throw new Error("Client not found for this appointment.");
-    }
+    if (!clientSnap.exists()) { throw new Error("Client not found for this appointment."); }
     const client = clientSnap.data() as Client;
     const rate = client.rate || 0;
-
     const duration = calculateDurationInHours(appointment.time, appointment.endTime);
     const description = `${appointment.subject || 'Services Rendered'}\nDate: ${appointment.date}`;
-    
-    const lineItems = [{ 
-        description, 
-        quantity: duration, 
-        unitPrice: rate, 
-        total: duration * rate 
-    }];
-
+    const lineItems: LineItem[] = [{ description, quantity: duration, unitPrice: rate, total: duration * rate, isTaxable: true }];
     if (client.differentials && client.differentials.length > 0) {
         client.differentials.forEach(diff => {
-            lineItems.push({
-                description: diff.description,
-                quantity: 1,
-                unitPrice: diff.amount,
-                total: diff.amount
-            });
+            lineItems.push({ description: diff.description, quantity: 1, unitPrice: diff.amount, total: diff.amount, isTaxable: true });
         });
     }
-
     const subtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
     const total = subtotal;
-
     const invoiceData: Partial<Invoice> = {
-        clientId: appointment.clientId,
-        appointmentId: appointment.id,
-        invoiceDate: new Date().toISOString().split('T')[0],
-        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        status: 'draft',
-        lineItems: lineItems,
-        subtotal: subtotal,
-        total: total,
+        clientId: appointment.clientId, appointmentId: appointment.id, invoiceDate: new Date().toISOString().split('T')[0],
+        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], status: 'draft',
+        lineItems: lineItems, subtotal: subtotal, total: total,
     };
-
     await addInvoice(userId, invoiceData);
 };
-
 export const addExpense = (userId: string, expenseData: Partial<Expense>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/expenses`), { ...cleanupObject(expenseData), createdAt: serverTimestamp() }); };
 export const updateExpense = (userId: string, expenseId: string, expenseData: Partial<Expense>): Promise<void> => { return setDoc(doc(db, `users/${userId}/expenses`, expenseId), cleanupObject(expenseData), { merge: true }); };
 export const deleteExpense = (userId: string, expenseId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/expenses`, expenseId)); };
@@ -326,12 +270,7 @@ export const sendJobApplicationMessage = async (applicantId: string, applicantPr
     if (applicantId === jobPost.userId) { throw new Error("You cannot apply to your own job posting."); }
     const applicantName = applicantProfile.name || 'A freelancer';
     const profileUrl = `${window.location.origin}/profile/${applicantId}`;
-    await sendAppMessage(
-        applicantId, applicantName, jobPost.userId,
-        `Application for: ${jobPost.title}`,
-        `${applicantName} has applied for your job posting, "${jobPost.title}".\n\nYou can view their public profile here:\n${profileUrl}`,
-        'application', jobPost.id
-    );
+    await sendAppMessage(applicantId, applicantName, jobPost.userId, `Application for: ${jobPost.title}`, `${applicantName} has applied for your job posting, "${jobPost.title}".\n\nYou can view their public profile here:\n${profileUrl}`, 'application', jobPost.id);
 };
 export const sendJobOffer = async (applicationMessage: Message): Promise<void> => {
     if (!applicationMessage.id || !applicationMessage.jobPostId) throw new Error("Message is not a valid application.");
@@ -345,20 +284,11 @@ export const sendJobOffer = async (applicationMessage: Message): Promise<void> =
     const originalMessageRef = doc(db, 'users', applicationMessage.recipientId, 'messages', applicationMessage.id);
     batch.update(originalMessageRef, { status: 'offer-pending' });
     await batch.commit();
-    await sendAppMessage(
-        applicationMessage.recipientId, "Job Poster", applicationMessage.senderId,
-        `Job Offer for: ${jobPost.title}`,
-        `Congratulations! You have been offered the job for "${jobPost.title}". Please review the offer and accept or decline it from your mailbox.`,
-        'offer', jobPost.id
-    );
+    await sendAppMessage(applicationMessage.recipientId, "Job Poster", applicationMessage.senderId, `Job Offer for: ${jobPost.title}`, `Congratulations! You have been offered the job for "${jobPost.title}". Please review the offer and accept or decline it from your mailbox.`, 'offer', jobPost.id);
 };
 export const declineJobApplication = async (applicationMessage: Message): Promise<void> => {
     if (!applicationMessage.id) return;
-    await sendAppMessage(
-        applicationMessage.recipientId, "Job Poster", applicationMessage.senderId,
-        `Regarding your application for: ${applicationMessage.subject.replace('Application for: ', '')}`,
-        `Thank you for your interest. Unfortunately, another candidate has been selected. We wish you the best in your job search.`
-    );
+    await sendAppMessage(applicationMessage.recipientId, "Job Poster", applicationMessage.senderId, `Regarding your application for: ${applicationMessage.subject.replace('Application for: ', '')}`, `Thank you for your interest. Unfortunately, another candidate has been selected. We wish you the best in your job search.`);
     const originalMessageRef = doc(db, 'users', applicationMessage.recipientId, 'messages', applicationMessage.id);
     await updateDoc(originalMessageRef, { status: 'declined' });
 };
@@ -373,18 +303,9 @@ export const acceptJobOffer = async (offerMessage: Message): Promise<void> => {
     const offerMessageRef = doc(db, 'users', offerMessage.recipientId, 'messages', offerMessage.id);
     batch.update(offerMessageRef, { status: 'approved' });
     await batch.commit();
-    const newAppointmentData: Partial<Appointment> = {
-        subject: jobPost.title, date: new Date().toISOString().split('T')[0], time: '09:00',
-        status: 'pending-confirmation', locationType: jobPost.jobType === 'Virtual' ? 'virtual' : 'physical',
-        address: jobPost.location,
-        notes: `This appointment was created from your successful application... Please confirm or update the date and time.`,
-    };
+    const newAppointmentData: Partial<Appointment> = { subject: jobPost.title, date: new Date().toISOString().split('T')[0], time: '09:00', status: 'pending-confirmation', locationType: jobPost.jobType === 'Virtual' ? 'virtual' : 'physical', address: jobPost.location, notes: `This appointment was created from your successful application... Please confirm or update the date and time.`, };
     await addAppointment(offerMessage.recipientId, newAppointmentData);
-    await sendAppMessage(
-        offerMessage.recipientId, "Ten99 System", jobPost.userId,
-        `Offer Accepted: ${jobPost.title}`,
-        `${offerMessage.senderName} has accepted your offer for "${jobPost.title}". An event has been added to their calendar for confirmation.`
-    );
+    await sendAppMessage(offerMessage.recipientId, "Ten99 System", jobPost.userId, `Offer Accepted: ${jobPost.title}`, `${offerMessage.senderName} has accepted your offer for "${jobPost.title}". An event has been added to their calendar for confirmation.`);
 };
 export const declineJobOffer = async (offerMessage: Message): Promise<void> => {
     if (!offerMessage.id || !offerMessage.jobPostId || offerMessage.type !== 'offer') throw new Error("Invalid offer message.");
@@ -392,11 +313,7 @@ export const declineJobOffer = async (offerMessage: Message): Promise<void> => {
     await updateDoc(jobPostRef, { pendingApplicantId: '' });
     const offerMessageRef = doc(db, 'users', offerMessage.recipientId, 'messages', offerMessage.id);
     await updateDoc(offerMessageRef, { status: 'declined' });
-    await sendAppMessage(
-        offerMessage.recipientId, "Ten99 System", offerMessage.senderId,
-        `Offer Declined: ${offerMessage.subject.replace('Job Offer for: ', '')}`,
-        `The applicant has declined your offer. The job post "${offerMessage.subject.replace('Job Offer for: ', '')}" has been made available for other applicants.`
-    );
+    await sendAppMessage(offerMessage.recipientId, "Ten99 System", offerMessage.senderId, `Offer Declined: ${offerMessage.subject.replace('Job Offer for: ', '')}`, `The applicant has declined your offer. The job post "${offerMessage.subject.replace('Job Offer for: ', '')}" has been made available for other applicants.`);
 };
 export const rescindJobOffer = async (applicationMessage: Message): Promise<void> => {
     if (!applicationMessage.id || !applicationMessage.jobPostId) return;
@@ -404,37 +321,24 @@ export const rescindJobOffer = async (applicationMessage: Message): Promise<void
     await updateDoc(jobPostRef, { pendingApplicantId: '' });
     const originalMessageRef = doc(db, 'users', applicationMessage.recipientId, 'messages', applicationMessage.id);
     await updateDoc(originalMessageRef, { status: 'offer-rescinded' });
-    await sendAppMessage(
-        applicationMessage.recipientId, "Job Poster", applicationMessage.senderId,
-        `Offer Rescinded for: ${applicationMessage.subject.replace('Application for: ', '')}`,
-        `The job offer for "${applicationMessage.subject.replace('Application for: ', '')}" has been rescinded.`
-    );
+    await sendAppMessage(applicationMessage.recipientId, "Job Poster", applicationMessage.senderId, `Offer Rescinded for: ${applicationMessage.subject.replace('Application for: ', '')}`, `The job offer for "${applicationMessage.subject.replace('Application for: ', '')}" has been rescinded.`);
 };
 export const reportJobPost = async (postId: string): Promise<void> => {
     if (!postId) return;
     const jobRef = doc(db, 'jobPostings', postId);
-    await updateDoc(jobRef, {
-        reportCount: increment(1)
-    });
+    await updateDoc(jobRef, { reportCount: increment(1) });
 };
 
 // --- MAGIC MAILBOX ACTION FUNCTIONS ---
 export const confirmInboundOffer = async (userId: string, message: Message): Promise<void> => {
-    if (!message.id || !message.appointmentId) {
-        throw new Error("Cannot confirm offer: The message is missing a linked appointment ID.");
-    }
+    if (!message.id || !message.appointmentId) { throw new Error("Cannot confirm offer: The message is missing a linked appointment ID."); }
     const batch = writeBatch(db);
     const messageRef = doc(db, `users/${userId}/messages`, message.id);
     batch.update(messageRef, { status: 'approved' });
     const appointmentRef = doc(db, `users/${userId}/appointments`, message.appointmentId);
     const appointmentSnap = await getDoc(appointmentRef);
-    if (!appointmentSnap.exists()) {
-        throw new Error("Could not find the linked appointment to confirm.");
-    }
-    batch.update(appointmentRef, {
-        status: 'scheduled',
-        subject: appointmentSnap.data().subject.replace('Pending: ', '')
-    });
+    if (!appointmentSnap.exists()) { throw new Error("Could not find the linked appointment to confirm."); }
+    batch.update(appointmentRef, { status: 'scheduled', subject: appointmentSnap.data().subject.replace('Pending: ', '') });
     await batch.commit();
 };
 export const acceptInboundOfferPending = async (userId: string, message: Message): Promise<void> => {
@@ -444,12 +348,8 @@ export const acceptInboundOfferPending = async (userId: string, message: Message
     const templatesRef = collection(db, `users/${userId}/templates`);
     const q = query(templatesRef, where("type", "==", "pending"), limit(1));
     const templateSnapshot = await getDocs(q);
-    if (templateSnapshot.empty) {
-        console.warn("No 'pending' template found. Skipping email reply.");
-    } else {
-        const template = templateSnapshot.docs[0].data() as Template;
-        await sendAppMessage(userId, userName, message.senderId, template.subject, template.body);
-    }
+    if (templateSnapshot.empty) { console.warn("No 'pending' template found. Skipping email reply."); }
+    else { const template = templateSnapshot.docs[0].data() as Template; await sendAppMessage(userId, userName, message.senderId, template.subject, template.body); }
     await updateDoc(doc(db, `users/${userId}/messages`, message.id), { status: 'pending' });
 };
 export const declineInboundOffer = async (userId: string, message: Message): Promise<void> => {
@@ -466,61 +366,38 @@ export const declineInboundOffer = async (userId: string, message: Message): Pro
     const templatesRef = collection(db, `users/${userId}/templates`);
     const q = query(templatesRef, where("type", "==", "decline"), limit(1));
     const templateSnapshot = await getDocs(q);
-    if (!templateSnapshot.empty) {
-        const template = templateSnapshot.docs[0].data() as Template;
-        await sendAppMessage(userId, userName, message.senderId, template.subject, template.body);
-    } else {
-        console.warn("No 'decline' template found. Skipping email reply.");
-    }
+    if (!templateSnapshot.empty) { const template = templateSnapshot.docs[0].data() as Template; await sendAppMessage(userId, userName, message.senderId, template.subject, template.body); }
+    else { console.warn("No 'decline' template found. Skipping email reply."); }
     await batch.commit();
 };
 export const markAsEducation = async (userId: string, message: Message): Promise<void> => {
-    if (!message.id || !message.appointmentId) {
-        throw new Error("Cannot process education event: The message is missing a linked appointment ID.");
-    }
+    if (!message.id || !message.appointmentId) { throw new Error("Cannot process education event: The message is missing a linked appointment ID."); }
     const batch = writeBatch(db);
     const messageRef = doc(db, `users/${userId}/messages`, message.id);
     batch.update(messageRef, { status: 'archived-education' });
     const appointmentRef = doc(db, `users/${userId}/appointments`, message.appointmentId);
-    batch.update(appointmentRef, { 
-        status: 'scheduled',
-        eventType: 'education'
-    });
+    batch.update(appointmentRef, { status: 'scheduled', eventType: 'education' });
     await batch.commit();
 };
 export const createEducationAppointmentFromMessage = async (userId: string, message: Message, appointmentData: Partial<Appointment>): Promise<void> => {
-    if (!message.id) {
-        throw new Error("Cannot create event: Message ID is missing.");
-    }
+    if (!message.id) { throw new Error("Cannot create event: Message ID is missing."); }
     const batch = writeBatch(db);
-    
     const newAppointmentRef = doc(collection(db, `users/${userId}/appointments`));
     batch.set(newAppointmentRef, { ...cleanupObject(appointmentData), createdAt: serverTimestamp() });
-
     const messageRef = doc(db, `users/${userId}/messages`, message.id);
-    batch.update(messageRef, {
-        status: 'archived-education',
-        appointmentId: newAppointmentRef.id
-    });
-
+    batch.update(messageRef, { status: 'archived-education', appointmentId: newAppointmentRef.id });
     await batch.commit();
 };
 
 // --- REMINDER & MILEAGE FUNCTIONS ---
 export const addReminder = (userId: string, reminderData: Partial<Reminder>): Promise<DocumentReference> => {
-    return addDoc(collection(db, `users/${userId}/reminders`), {
-        ...cleanupObject(reminderData),
-        createdAt: serverTimestamp()
-    });
+    return addDoc(collection(db, `users/${userId}/reminders`), { ...cleanupObject(reminderData), createdAt: serverTimestamp() });
 };
 export const deleteReminder = (userId: string, reminderId: string): Promise<void> => {
     return deleteDoc(doc(db, `users/${userId}/reminders`, reminderId));
 };
 export const addMileage = (userId: string, mileageData: Partial<Mileage>): Promise<DocumentReference> => {
-    return addDoc(collection(db, `users/${userId}/mileage`), {
-        ...cleanupObject(mileageData),
-        createdAt: serverTimestamp()
-    });
+    return addDoc(collection(db, `users/${userId}/mileage`), { ...cleanupObject(mileageData), createdAt: serverTimestamp() });
 };
 export const deleteMileage = (userId: string, mileageId: string): Promise<void> => {
     return deleteDoc(doc(db, `users/${userId}/mileage`, mileageId));

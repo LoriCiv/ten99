@@ -1,55 +1,31 @@
-// src/app/dashboard/job-board/[id]/page.tsx
-import { getJobPostingById, getPublicUserProfile } from '@/utils/firestoreService';
+import { getJobPostingById, getPublicUserProfile, getProfileData } from '@/utils/firestoreService';
+import JobBoardDetailPageContent from '@/components/JobBoardDetailPageContent';
+import { auth } from "@clerk/nextjs/server";
 import { notFound } from 'next/navigation';
-import JobDetailPageContent from '@/components/JobDetailPageContent';
-import { Timestamp } from 'firebase/firestore';
-import type { JobPosting, UserProfile } from '@/types/app-interfaces';
-import { JSX } from 'react';
 
-const TEMP_USER_ID = 'dev-user-1';
+export default async function JobBoardDetailPage({ params }: { params: { id: string } }) {
+    // ✅ FIX: Added the "await" keyword here
+    const { userId } = await auth(); 
+    const jobPostId = params.id;
 
-type PageProps = {
-  params: {
-    id: string;
-  };
-};
+    const jobPost = await getJobPostingById(jobPostId);
 
-const serializeData = <T extends object>(doc: T | null): T | null => {
-  if (!doc) return null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const data: { [key: string]: any } = { ...doc };
-  for (const key in data) {
-    if (data[key] instanceof Timestamp) {
-      data[key] = data[key].toDate().toISOString();
+    if (!jobPost) {
+        notFound();
     }
-  }
-  return data as T;
-};
 
-export default async function Page({ params }: PageProps): Promise<JSX.Element> {
-  const postId = params.id;
-
-  const [jobPostData, currentUserProfileData] = await Promise.all([
-    getJobPostingById(postId),
-    getPublicUserProfile(TEMP_USER_ID),
-  ]);
-
-  if (!jobPostData) {
-    notFound();
-  }
-
-  const jobPost = serializeData(jobPostData);
-  const currentUserProfile = serializeData(currentUserProfileData);
-  
-  if (!jobPost) {
-      notFound();
-  }
-
-  return (
-    <JobDetailPageContent
-      jobPost={jobPost as JobPosting}
-      currentUserProfile={currentUserProfile as UserProfile | null}
-      currentUserId={TEMP_USER_ID}
-    />
-  );
+    // Fetch the profile of the person who posted the job
+    const posterProfile = await getPublicUserProfile(jobPost.userId);
+    
+    // Fetch the profile of the person VIEWING the job, if they are logged in
+    const userProfile = userId ? await getProfileData(userId) : null;
+    
+    return (
+        <JobBoardDetailPageContent
+            jobPost={jobPost}
+            posterProfile={posterProfile}
+            userProfile={userProfile}
+            currentUserId={userId}
+        />
+    );
 }

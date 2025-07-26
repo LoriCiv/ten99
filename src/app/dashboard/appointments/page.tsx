@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-// ✅ 1. Import the BookOpen icon
 import { Search, PlusCircle, ChevronDown, MapPin, Video, CheckCircle, Clock, AlertTriangle, XCircle, Calendar, HelpCircle, List, BookOpen } from 'lucide-react';
 import type { Appointment, Client, PersonalNetworkContact, JobFile } from '@/types/app-interfaces';
 import { getAppointments, getClients, getPersonalNetwork, getJobFiles } from '@/utils/firestoreService';
@@ -10,9 +9,6 @@ import Link from 'next/link';
 import AppointmentDetailModal from '@/components/AppointmentDetailModal';
 import InteractiveCalendar from '@/components/InteractiveCalendar';
 
-const TEMP_USER_ID = "dev-user-1";
-
-// This object defines colors and icons based on the event's STATUS
 const statusInfo: { [key: string]: { icon: React.ElementType, keyColor: string, label: string } } = {
     'scheduled': { icon: Calendar, keyColor: 'bg-blue-400', label: 'Scheduled' },
     'pending': { icon: Clock, keyColor: 'bg-yellow-400', label: 'Pending' },
@@ -22,14 +18,12 @@ const statusInfo: { [key: string]: { icon: React.ElementType, keyColor: string, 
     'pending-confirmation': { icon: HelpCircle, keyColor: 'bg-orange-400', label: 'Pending Confirmation' }
 };
 
-// ✅ 2. This new object defines colors and icons based on the event's TYPE
 const eventTypeInfo: { [key: string]: { borderColor: string, bgColor: string, icon: React.ElementType, keyColor: string, label: string } } = {
     'job': { borderColor: 'border-l-blue-500', bgColor: 'hover:bg-blue-500/10', icon: Calendar, keyColor: 'bg-blue-400', label: 'Job' },
     'personal': { borderColor: 'border-l-pink-500', bgColor: 'hover:bg-pink-500/10', icon: Calendar, keyColor: 'bg-pink-400', label: 'Personal' },
     'billing': { borderColor: 'border-l-green-500', bgColor: 'hover:bg-green-500/10', icon: Calendar, keyColor: 'bg-green-400', label: 'Billing' },
     'education': { borderColor: 'border-l-purple-500', bgColor: 'hover:bg-purple-500/10', icon: BookOpen, keyColor: 'bg-purple-400', label: 'Education' }
 };
-
 
 const formatTime = (timeString?: string) => {
     if (!timeString) return '';
@@ -60,18 +54,22 @@ const AppointmentListItem = ({ appointment, clientName }: { appointment: Appoint
                     {statusInfo[appointment.status]?.label || 'Unknown'}
                 </span>
             </div>
-            {/* ✅ 3. Updated list view to show event type with color */}
             <div className="md:col-span-2 text-right">
                  <span className="inline-flex items-center gap-2 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
-                    <span className={`w-2 h-2 rounded-full ${typeStyle.keyColor}`}></span>
-                    {eventTypeInfo[appointment.eventType]?.label || 'Event'}
-                </span>
+                     <span className={`w-2 h-2 rounded-full ${typeStyle.keyColor}`}></span>
+                     {eventTypeInfo[appointment.eventType]?.label || 'Event'}
+                 </span>
             </div>
         </div>
     );
 };
 
-export default function AppointmentsPage() {
+// ✅ 1. Update the props to receive a userId
+interface AppointmentsPageContentProps {
+    userId: string;
+}
+
+export default function AppointmentsPageContent({ userId }: AppointmentsPageContentProps) { // ✅ 2. Receive userId and change component name
     const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
     const [contacts, setContacts] = useState<PersonalNetworkContact[]>([]);
@@ -87,10 +85,11 @@ export default function AppointmentsPage() {
 
     useEffect(() => {
         setIsLoading(true);
-        const unsubAppointments = getAppointments(TEMP_USER_ID, setAllAppointments);
-        const unsubClients = getClients(TEMP_USER_ID, setClients);
-        const unsubContacts = getPersonalNetwork(TEMP_USER_ID, setContacts);
-        const unsubJobFiles = getJobFiles(TEMP_USER_ID, setJobFiles);
+        // ✅ 3. Use the real userId for all data fetching (replaces TEMP_USER_ID)
+        const unsubAppointments = getAppointments(userId, setAllAppointments);
+        const unsubClients = getClients(userId, setClients);
+        const unsubContacts = getPersonalNetwork(userId, setContacts);
+        const unsubJobFiles = getJobFiles(userId, setJobFiles);
         
         const timer = setTimeout(() => setIsLoading(false), 1000);
 
@@ -101,7 +100,7 @@ export default function AppointmentsPage() {
             unsubJobFiles();
             clearTimeout(timer);
         };
-    }, []);
+    }, [userId]); // ✅ 4. Add userId as a dependency
 
     const filteredAppointments = useMemo(() => {
         const lowercasedTerm = searchTerm.toLowerCase();
@@ -204,7 +203,6 @@ export default function AppointmentsPage() {
                             <div className="space-y-3 h-[60vh] overflow-y-auto pr-2">
                                 {appointmentsForSelectedDay.length > 0 ? (
                                     appointmentsForSelectedDay.map(appt => {
-                                        // ✅ 4. Use eventType for colors and status for the icon
                                         const { borderColor, bgColor, icon: TypeIcon } = eventTypeInfo[appt.eventType] || { borderColor: 'border-l-gray-500', bgColor: 'hover:bg-gray-500/10', icon: Calendar };
                                         const { icon: StatusIcon } = statusInfo[appt.status] || { icon: HelpCircle };
                                         const clientName = clients.find(c => c.id === appt.clientId)?.companyName || clients.find(c => c.id === appt.clientId)?.name;
@@ -258,6 +256,7 @@ export default function AppointmentsPage() {
                     jobFiles={jobFiles}
                     onClose={handleCloseModal}
                     onSave={handleDataSaved}
+                    userId={userId} // ✅ 5. Pass the userId down to the modal
                 />
             )}
         </>

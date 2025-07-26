@@ -1,33 +1,46 @@
-// src/components/ClientsPageContent.tsx
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Client, PersonalNetworkContact, JobFile } from '@/types/app-interfaces';
+import { getClients, getPersonalNetwork, getJobFiles } from '@/utils/firestoreService';
 import Link from 'next/link';
 import { Search, Building2, User } from 'lucide-react';
 import ClientDetailModal from './ClientDetailModal';
-import clsx from 'clsx'; // Import the clsx utility
 
+// ✅ 1. Add the props interface
 interface ClientsPageContentProps {
-    clients: Client[];
-    contacts: PersonalNetworkContact[];
-    jobFiles: JobFile[];
     userId: string;
 }
 
-export default function ClientsPageContent({
-    clients = [],
-    contacts = [],
-    jobFiles = [],
-    userId,
-}: ClientsPageContentProps) {
+export default function ClientsPageContent({ userId }: ClientsPageContentProps) { // ✅ 2. Receive userId
     const router = useRouter();
+    const [clients, setClients] = useState<Client[]>([]);
+    const [contacts, setContacts] = useState<PersonalNetworkContact[]>([]);
+    const [jobFiles, setJobFiles] = useState<JobFile[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [filter, setFilter] = useState<'all' | 'companies' | 'contacts'>('all');
     const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedItem, setSelectedItem] = useState<Client | PersonalNetworkContact | null>(null);
     const [itemType, setItemType] = useState<'Company' | 'Contact'>('Company');
+
+    // ✅ 3. Move all data fetching logic here and use the real userId
+    useEffect(() => {
+        setIsLoading(true);
+        const unsubClients = getClients(userId, setClients);
+        const unsubContacts = getPersonalNetwork(userId, setContacts);
+        const unsubJobFiles = getJobFiles(userId, (data) => {
+            setJobFiles(data);
+            setIsLoading(false); 
+        });
+
+        return () => {
+            unsubClients();
+            unsubContacts();
+            unsubJobFiles();
+        };
+    }, [userId]);
 
     const filteredItems = useMemo(() => {
         const allItems = [
@@ -46,7 +59,6 @@ export default function ClientsPageContent({
         });
     }, [clients, contacts, filter, searchTerm]);
 
-
     const handleItemClick = (item: Client | PersonalNetworkContact, type: 'Company' | 'Contact') => {
         setSelectedItem(item);
         setItemType(type);
@@ -61,6 +73,10 @@ export default function ClientsPageContent({
     const handleDataChanged = () => {
         router.refresh();
     };
+
+    if (isLoading) {
+        return <div className="p-8 text-center text-muted-foreground">Loading...</div>;
+    }
 
     return (
         <>
@@ -96,36 +112,17 @@ export default function ClientsPageContent({
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredItems.map(item => (
-                        <div 
-                            key={`${item.type}-${item.id}`} 
-                            onClick={() => handleItemClick(item, item.type)} 
-                            className="bg-card rounded-lg border hover:border-primary hover:shadow-lg transition-all cursor-pointer relative overflow-hidden group"
-                        >
-                            <div className={clsx(
-                                'absolute top-0 left-0 h-1.5 w-full',
-                                {
-                                    'bg-blue-500': item.type === 'Company',
-                                    'bg-purple-500': item.type === 'Contact',
-                                }
-                            )}></div>
-                            <div className="p-4 pt-6"> {/* Added more top padding */}
-                                <div className="flex items-center gap-4">
-                                    <div className={clsx(
-                                        'p-3 rounded-lg',
-                                        {
-                                            'bg-blue-100 dark:bg-blue-900/50': item.type === 'Company',
-                                            'bg-purple-100 dark:bg-purple-900/50': item.type === 'Contact',
-                                        }
-                                    )}>
-                                        {item.type === 'Company' 
-                                            ? <Building2 className="h-6 w-6 text-blue-600 dark:text-blue-400" /> 
-                                            : <User className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-                                        }
-                                    </div>
-                                    <div>
-                                        <h3 className="text-lg font-bold text-foreground truncate">{item.type === 'Company' ? (item as Client).companyName : item.name}</h3>
-                                        <p className="text-muted-foreground text-sm truncate">{item.email}</p>
-                                    </div>
+                        <div key={`${item.type}-${item.id}`} onClick={() => handleItemClick(item, item.type)} className="bg-card p-4 rounded-lg border hover:border-primary hover:shadow-lg transition-all cursor-pointer">
+                            <div className="flex items-center gap-4">
+                                <div className="bg-secondary p-3 rounded-lg">
+                                    {item.type === 'Company'
+                                        ? <Building2 className="h-6 w-6 text-secondary-foreground" />
+                                        : <User className="h-6 w-6 text-secondary-foreground" />
+                                    }
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-foreground truncate">{item.type === 'Company' ? (item as Client).companyName : item.name}</h3>
+                                    <p className="text-muted-foreground text-sm truncate">{item.email}</p>
                                 </div>
                             </div>
                         </div>

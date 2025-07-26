@@ -2,59 +2,24 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-// ✅ 1. Import the new Reminder type and Firestore functions
 import type { Template, UserProfile, InvoiceLineItemTemplate, Reminder } from '@/types/app-interfaces';
-import { 
-    addTemplate, updateTemplate, deleteTemplate, updateUserProfile,
-    getReminders, addReminder, deleteReminder 
-} from '@/utils/firestoreService';
+import { addTemplate, updateTemplate, deleteTemplate, updateUserProfile, addReminder, deleteReminder } from '@/utils/firestoreService';
 import TemplateFormModal from './TemplateFormModal';
 import ProfileForm from './ProfileForm';
 import { ThemeToggle } from './ThemeToggle';
-import {
-    PlusCircle, Edit, Trash2, Save, Loader2, ArrowUp, ArrowDown, Info, ThumbsUp,
-    Calendar, Mail, Briefcase, FileText, Users, Receipt, DollarSign, Award, LifeBuoy,
-    Settings as SettingsIcon, BellRing
-} from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Save, Loader2, ArrowUp, ArrowDown, Info, ThumbsUp, Calendar, Mail, Briefcase, FileText, Users, Receipt, DollarSign, Award, LifeBuoy, Settings as SettingsIcon, BellRing } from 'lucide-react';
 import { Switch } from "@/components/ui/switch";
 
 const defaultTermsText = `This contract incorporates pre-negotiated terms...`;
 const defaultPaymentText = `Payment can be made via:\n- Venmo: @YourUsername...`;
 const DEFAULT_EXPENSE_CATEGORIES = ['Travel', 'Equipment', 'Supplies', 'Professional Development', 'Other'];
 
-// "How To" Tab Component
 const HowToTab = () => {
     const featureSections = [
-        {
-            title: "Schedule",
-            features: [
-                { icon: ThumbsUp, name: "Dashboard", description: "Your at-a-glance command center for upcoming events, inbox items, and job alerts." },
-                { icon: Calendar, name: "Appointments", description: "A full calendar and list view of your entire schedule, color-coded by event type." },
-                { icon: Mail, name: "Mailbox", description: "The magic inbox. Forward client emails here to automatically create appointments and organize your work." }
-            ]
-        },
-        {
-            title: "Work",
-            features: [
-                { icon: Briefcase, name: "Job Board", description: "Find new opportunities posted by the community or post your own jobs." },
-                { icon: FileText, name: "Job Files", description: "A dedicated folder for every job. Keep notes, files, and client info all in one place." },
-                { icon: Users, name: "Clients", description: "Your complete client database. Manage contact info, billing details, and communication history." }
-            ]
-        },
-        {
-            title: "Finances",
-            features: [
-                { icon: Receipt, name: "Invoices", description: "Create, send, and track professional invoices. Drafts are created automatically from completed jobs." },
-                { icon: DollarSign, name: "My Money", description: "Your financial dashboard. Track income, log expenses with AI receipt-scanning, and estimate your tax liability." }
-            ]
-        },
-        {
-            title: "Account",
-            features: [
-                { icon: Award, name: "Credentials", description: "Track your licenses, certifications, and continuing education units (CEUs) with progress bars." },
-                { icon: SettingsIcon, name: "Settings", description: "Customize the app to your workflow, from invoice defaults to automated email templates." }
-            ]
-        }
+        { title: "Schedule", features: [ { icon: ThumbsUp, name: "Dashboard", description: "Your at-a-glance command center for upcoming events, inbox items, and job alerts." }, { icon: Calendar, name: "Appointments", description: "A full calendar and list view of your entire schedule, color-coded by event type." }, { icon: Mail, name: "Mailbox", description: "The magic inbox. Forward client emails here to automatically create appointments and organize your work." } ] },
+        { title: "Work", features: [ { icon: Briefcase, name: "Job Board", description: "Find new opportunities posted by the community or post your own jobs." }, { icon: FileText, name: "Job Files", description: "A dedicated folder for every job. Keep notes, files, and client info all in one place." }, { icon: Users, name: "Clients", description: "Your complete client database. Manage contact info, billing details, and communication history." } ] },
+        { title: "Finances", features: [ { icon: Receipt, name: "Invoices", description: "Create, send, and track professional invoices. Drafts are created automatically from completed jobs." }, { icon: DollarSign, name: "My Money", description: "Your financial dashboard. Track income, log expenses with AI receipt-scanning, and estimate your tax liability." } ] },
+        { title: "Account", features: [ { icon: Award, name: "Credentials", description: "Track your licenses, certifications, and continuing education units (CEUs) with progress bars." }, { icon: SettingsIcon, name: "Settings", description: "Customize the app to your workflow, from invoice defaults to automated email templates." } ] }
     ];
 
     return (
@@ -76,19 +41,19 @@ const HowToTab = () => {
                 </div>
             ))}
             <div className="pt-8 mt-8 border-t">
-                 <h2 className="text-2xl font-bold text-foreground mb-4 flex items-center gap-2">
-                    <LifeBuoy className="h-6 w-6" />
-                    Need Help?
-                </h2>
-                <div className="bg-card p-6 rounded-lg border space-y-3">
-                    <p className="text-muted-foreground">
-                        For support, feature requests, or to report a bug, please don&apos;t hesitate to reach out.
-                    </p>
-                    <div className="flex flex-wrap gap-4 pt-2">
-                        <a href="mailto:support@ten99.app" className="text-primary font-semibold hover:underline">support@ten99.app</a>
-                        <a href="https://www.tenflow.app" target="_blank" rel="noopener noreferrer" className="text-primary font-semibold hover:underline">www.tenflow.app</a>
-                    </div>
-                </div>
+               <h2 className="text-2xl font-bold text-foreground mb-4 flex items-center gap-2">
+                   <LifeBuoy className="h-6 w-6" />
+                   Need Help?
+               </h2>
+               <div className="bg-card p-6 rounded-lg border space-y-3">
+                   <p className="text-muted-foreground">
+                       For support, feature requests, or to report a bug, please don&apos;t hesitate to reach out.
+                   </p>
+                   <div className="flex flex-wrap gap-4 pt-2">
+                       <a href="mailto:support@ten99.app" className="text-primary font-semibold hover:underline">support@ten99.app</a>
+                       <a href="https://www.tenflow.app" target="_blank" rel="noopener noreferrer" className="text-primary font-semibold hover:underline">www.tenflow.app</a>
+                   </div>
+               </div>
             </div>
         </div>
     );
@@ -98,10 +63,11 @@ const HowToTab = () => {
 interface SettingsPageContentProps {
     initialTemplates: Template[];
     initialProfile: UserProfile | null;
+    initialReminders: Reminder[];
     userId: string;
 }
 
-export default function SettingsPageContent({ initialTemplates, initialProfile, userId }: SettingsPageContentProps) {
+export default function SettingsPageContent({ initialTemplates, initialProfile, initialReminders, userId }: SettingsPageContentProps) {
     const router = useRouter();
     const [templates, setTemplates] = useState<Template[]>(initialTemplates);
     const [profile, setProfile] = useState<Partial<UserProfile>>(initialProfile || {});
@@ -110,11 +76,12 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
     const [editingTemplate, setEditingTemplate] = useState<Partial<Template> | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
-    const [reminders, setReminders] = useState<Reminder[]>([]);
+    const [reminders, setReminders] = useState<Reminder[]>(initialReminders);
     const [newReminder, setNewReminder] = useState<Partial<Reminder>>({ type: 'one-time', text: '' });
 
     useEffect(() => {
         setTemplates(initialTemplates);
+        setReminders(initialReminders);
         if (initialProfile) {
             setProfile({
                 ...initialProfile,
@@ -124,11 +91,7 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
                 invoiceLineItems: initialProfile.invoiceLineItems || [],
             });
         }
-        
-        const unsubscribeReminders = getReminders(userId, setReminders);
-        return () => unsubscribeReminders();
-
-    }, [initialTemplates, initialProfile, userId]);
+    }, [initialTemplates, initialProfile, initialReminders]);
 
     const handleSaveSettings = async (dataToSave: Partial<UserProfile>) => {
         setIsSubmitting(true);
@@ -147,7 +110,6 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
     const handleOpenTemplateModal = (template: Partial<Template> | null) => { setEditingTemplate(template); setIsTemplateModalOpen(true); };
     const handleCloseTemplateModal = () => { setIsTemplateModalOpen(false); setEditingTemplate(null); };
     
-    // ✅ All your original handler functions are preserved below
     const handleSaveTemplate = async (data: Partial<Template>) => {
         setIsSubmitting(true);
         try {
@@ -217,7 +179,8 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
         setIsSubmitting(true);
         try {
             await addReminder(userId, newReminder);
-            setNewReminder({ type: 'one-time', text: '' }); // Reset form
+            setNewReminder({ type: 'one-time', text: '' });
+            router.refresh();
         } catch (error) {
             console.error("Error saving reminder:", error);
             alert("Failed to save reminder.");
@@ -230,6 +193,7 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
         if (window.confirm("Are you sure you want to delete this reminder?")) {
             try {
                 await deleteReminder(userId, id);
+                router.refresh();
             } catch (error) {
                 console.error("Error deleting reminder:", error);
                 alert("Failed to delete reminder.");
@@ -289,7 +253,6 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
                                 <h2 className="text-xl font-semibold">Custom Reminders</h2>
                                 <p className="text-muted-foreground text-sm mt-1">Create personal reminders that will appear on your dashboard.</p>
                             </div>
-
                             <div className="bg-card p-6 rounded-lg border space-y-4">
                                 <h3 className="font-medium text-foreground">Add New Reminder</h3>
                                 <div>
@@ -304,7 +267,7 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
                                     </select>
                                 </div>
                                 {newReminder.type === 'one-time' && (
-                                     <div>
+                                    <div>
                                         <label htmlFor="reminderDate" className="block text-sm font-medium text-muted-foreground">Date</label>
                                         <input id="reminderDate" type="date" value={newReminder.reminderDate || ''} onChange={(e) => setNewReminder(p => ({ ...p, reminderDate: e.target.value }))} className="w-full mt-1 p-2 bg-background border rounded-md"/>
                                     </div>
@@ -343,7 +306,7 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
                             <div>
                                 <h3 className="font-medium text-foreground mb-2">Your Reminders</h3>
                                 <div className="space-y-2">
-                                    {reminders.length > 0 ? reminders.map(reminder => (
+                                    {reminders.map(reminder => (
                                         <div key={reminder.id} className="bg-card p-3 rounded-lg border flex justify-between items-center">
                                             <div>
                                                 <p className="font-semibold text-foreground flex items-center gap-2"><BellRing size={14}/> {reminder.text}</p>
@@ -354,7 +317,8 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
                                             </div>
                                             <button onClick={() => handleDeleteReminder(reminder.id!)} className="p-2 hover:bg-muted rounded-md text-muted-foreground hover:text-destructive"><Trash2 size={16}/></button>
                                         </div>
-                                    )) : (
+                                    ))}
+                                    {reminders.length === 0 && (
                                         <p className="text-sm text-muted-foreground text-center py-4">You haven&apos;t created any reminders yet.</p>
                                     )}
                                 </div>
@@ -400,22 +364,22 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
                               </div>
                               <div className="bg-card p-6 rounded-lg border">
                                   <div className="space-y-2">
-                                       {(profile.expenseCategories || DEFAULT_EXPENSE_CATEGORIES).map((category, index) => (
-                                           <div key={category} className="flex justify-between items-center bg-background p-2 rounded-md group">
-                                               <span>{category}</span>
-                                               <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                   <button onClick={() => handleMoveCategory(index, 'up')} disabled={index === 0} className="p-1 rounded-full text-muted-foreground hover:text-primary disabled:opacity-20 disabled:cursor-not-allowed"><ArrowUp size={16} /></button>
-                                                   <button onClick={() => handleMoveCategory(index, 'down')} disabled={index === (profile.expenseCategories || []).length - 1} className="p-1 rounded-full text-muted-foreground hover:text-primary disabled:opacity-20 disabled:cursor-not-allowed"><ArrowDown size={16} /></button>
-                                                   {!DEFAULT_EXPENSE_CATEGORIES.includes(category) && (
-                                                       <button onClick={() => handleDeleteCategory(category)} className="p-1 rounded-full text-muted-foreground hover:text-destructive ml-2"><Trash2 size={16} /></button>
-                                                   )}
-                                               </div>
-                                           </div>
-                                       ))}
+                                      {(profile.expenseCategories || DEFAULT_EXPENSE_CATEGORIES).map((category, index) => (
+                                          <div key={category} className="flex justify-between items-center bg-background p-2 rounded-md group">
+                                              <span>{category}</span>
+                                              <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                  <button onClick={() => handleMoveCategory(index, 'up')} disabled={index === 0} className="p-1 rounded-full text-muted-foreground hover:text-primary disabled:opacity-20 disabled:cursor-not-allowed"><ArrowUp size={16} /></button>
+                                                  <button onClick={() => handleMoveCategory(index, 'down')} disabled={index === (profile.expenseCategories || []).length - 1} className="p-1 rounded-full text-muted-foreground hover:text-primary disabled:opacity-20 disabled:cursor-not-allowed"><ArrowDown size={16} /></button>
+                                                  {!DEFAULT_EXPENSE_CATEGORIES.includes(category) && (
+                                                      <button onClick={() => handleDeleteCategory(category)} className="p-1 rounded-full text-muted-foreground hover:text-destructive ml-2"><Trash2 size={16} /></button>
+                                                  )}
+                                              </div>
+                                          </div>
+                                      ))}
                                   </div>
                                   <div className="mt-4 pt-4 border-t flex gap-2">
-                                       <input id="newCategoryInput" type="text" className="w-full p-2 bg-background border rounded-md" placeholder="Add new category name"/>
-                                       <button onClick={handleAddCategory} className="bg-secondary text-secondary-foreground font-semibold p-2 rounded-lg hover:bg-secondary/80"><PlusCircle size={20} /></button>
+                                      <input id="newCategoryInput" type="text" className="w-full p-2 bg-background border rounded-md" placeholder="Add new category name"/>
+                                      <button onClick={handleAddCategory} className="bg-secondary text-secondary-foreground font-semibold p-2 rounded-lg hover:bg-secondary/80"><PlusCircle size={20} /></button>
                                   </div>
                               </div>
                               <div className="flex justify-end">
@@ -456,21 +420,21 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
                               </div>
                               <div className="bg-card p-6 rounded-lg border">
                                   <div className="space-y-2">
-                                       {(profile.invoiceLineItems || []).map(item => (
-                                           <div key={item.id} className="flex justify-between items-center bg-background p-2 rounded-md">
-                                               <div className="flex items-center gap-3">
-                                                   <input type="checkbox" checked={!!item.isTaxable} onChange={() => handleToggleLineItemTaxable(item.id)} className="cursor-pointer h-4 w-4" />
-                                                   <div><span>{item.description}</span><p className="text-xs text-muted-foreground">({item.isTaxable ? 'Taxable' : 'Non-Taxable'})</p></div>
-                                               </div>
-                                               <div className="flex items-center gap-2"><span className="font-mono text-sm">${item.unitPrice.toFixed(2)}</span><button onClick={() => handleDeleteLineItem(item.id)} className="text-muted-foreground hover:text-destructive p-1 rounded-full"><Trash2 size={16} /></button></div>
-                                           </div>
-                                       ))}
+                                      {(profile.invoiceLineItems || []).map(item => (
+                                          <div key={item.id} className="flex justify-between items-center bg-background p-2 rounded-md">
+                                              <div className="flex items-center gap-3">
+                                                  <input type="checkbox" checked={!!item.isTaxable} onChange={() => handleToggleLineItemTaxable(item.id)} className="cursor-pointer h-4 w-4" />
+                                                  <div><span>{item.description}</span><p className="text-xs text-muted-foreground">({item.isTaxable ? 'Taxable' : 'Non-Taxable'})</p></div>
+                                              </div>
+                                              <div className="flex items-center gap-2"><span className="font-mono text-sm">${item.unitPrice.toFixed(2)}</span><button onClick={() => handleDeleteLineItem(item.id)} className="text-muted-foreground hover:text-destructive p-1 rounded-full"><Trash2 size={16} /></button></div>
+                                          </div>
+                                      ))}
                                   </div>
                                   <div className="mt-4 pt-4 border-t grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
-                                       <input id="newItemDesc" type="text" className="md:col-span-2 w-full p-2 bg-background border rounded-md" placeholder="New item description..."/>
-                                       <input id="newItemPrice" type="number" className="w-full p-2 bg-background border rounded-md" placeholder="Price"/>
-                                       <div className="flex items-center gap-2"><input id="newItemIsTaxable" type="checkbox" defaultChecked className="h-4 w-4"/><label htmlFor="newItemIsTaxable" className="text-sm">Taxable</label></div>
-                                       <button onClick={handleAddLineItem} className="md:col-span-4 w-full mt-2 bg-secondary text-secondary-foreground font-semibold p-2 rounded-lg hover:bg-secondary/80 flex items-center justify-center gap-2"><PlusCircle size={20} /> Add Item</button>
+                                      <input id="newItemDesc" type="text" className="md:col-span-2 w-full p-2 bg-background border rounded-md" placeholder="New item description..."/>
+                                      <input id="newItemPrice" type="number" className="w-full p-2 bg-background border rounded-md" placeholder="Price"/>
+                                      <div className="flex items-center gap-2"><input id="newItemIsTaxable" type="checkbox" defaultChecked className="h-4 w-4"/><label htmlFor="newItemIsTaxable" className="text-sm">Taxable</label></div>
+                                      <button onClick={handleAddLineItem} className="md:col-span-4 w-full mt-2 bg-secondary text-secondary-foreground font-semibold p-2 rounded-lg hover:bg-secondary/80 flex items-center justify-center gap-2"><PlusCircle size={20} /> Add Item</button>
                                   </div>
                               </div>
                               <div className="flex justify-end pt-6">
@@ -530,7 +494,7 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
                                      ))}
                                 </div>
                             </div>
-                        </div>
+                         </div>
                     )}
                     
                     {activeTab === 'howto' && <HowToTab />}

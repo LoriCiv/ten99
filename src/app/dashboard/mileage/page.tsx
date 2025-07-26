@@ -5,10 +5,12 @@ import type { Mileage } from '@/types/app-interfaces';
 import { getMileage, addMileage, deleteMileage } from '@/utils/firestoreService';
 import { Map, PlusCircle, Trash2, Save, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
-
-const TEMP_USER_ID = "dev-user-1";
+// ✅ 1. Import useAuth from Clerk
+import { useAuth } from '@clerk/nextjs';
 
 export default function MileagePage() {
+    // ✅ 2. Get the real userId from the hook
+    const { userId } = useAuth();
     const [mileageEntries, setMileageEntries] = useState<Mileage[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [newEntry, setNewEntry] = useState<Partial<Mileage>>({
@@ -17,10 +19,13 @@ export default function MileagePage() {
         purpose: '',
     });
 
+    // ✅ 3. Update useEffect to use the real userId
     useEffect(() => {
-        const unsubscribe = getMileage(TEMP_USER_ID, setMileageEntries);
+        if (!userId) return; // Don't fetch data until we have a user ID
+
+        const unsubscribe = getMileage(userId, setMileageEntries);
         return () => unsubscribe();
-    }, []);
+    }, [userId]); // ✅ 4. Add userId as a dependency
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value, type } = e.target;
@@ -32,13 +37,19 @@ export default function MileagePage() {
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
+        // ✅ 5. Add a safety check for userId
+        if (!userId) {
+            alert("You must be logged in to save mileage.");
+            return;
+        }
         if (!newEntry.date || !newEntry.miles || !newEntry.purpose) {
             alert("Please fill in all required fields.");
             return;
         }
         setIsSubmitting(true);
         try {
-            await addMileage(TEMP_USER_ID, newEntry);
+            // ✅ 6. Use the real userId to save the new entry
+            await addMileage(userId, newEntry);
             setNewEntry({
                 date: new Date().toISOString().split('T')[0],
                 miles: 0,
@@ -56,8 +67,13 @@ export default function MileagePage() {
     };
     
     const handleDelete = async (id: string) => {
+        if (!userId) {
+            alert("You must be logged in to delete mileage.");
+            return;
+        }
         if (window.confirm("Are you sure you want to delete this entry?")) {
-            await deleteMileage(TEMP_USER_ID, id);
+            // ✅ 7. Use the real userId to delete the entry
+            await deleteMileage(userId, id);
         }
     };
 

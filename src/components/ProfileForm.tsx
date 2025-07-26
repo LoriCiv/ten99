@@ -1,16 +1,14 @@
-// src/components/ProfileForm.tsx
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import type { UserProfile, JobHistoryEntry, EducationEntry } from '@/types/app-interfaces';
 import { uploadFile } from '@/utils/firestoreService';
 import { Save, Loader2, Plus, Trash2, User as UserIcon, ExternalLink } from 'lucide-react';
 
-const TEMP_USER_ID = "dev-user-1";
+// ✅ The TEMP_USER_ID constant has been removed.
 
-// ✅ 1. Added a list of states for the new dropdown menu
 const usStates = [
     "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", "Delaware",
     "Florida", "Georgia", "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky",
@@ -35,6 +33,10 @@ export default function ProfileForm({ initialProfile, onSave, isSubmitting, user
     const [skillInput, setSkillInput] = useState('');
     const [languageInput, setLanguageInput] = useState('');
 
+    useEffect(() => {
+        setFormData(initialProfile);
+    }, [initialProfile]);
+
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, type } = e.target;
         const value = type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value;
@@ -58,7 +60,8 @@ export default function ProfileForm({ initialProfile, onSave, isSubmitting, user
         if (selectedFile) {
             setIsUploading(true);
             try {
-                const photoUrl = await uploadFile(TEMP_USER_ID, selectedFile);
+                // ✅ Use the real userId for the file upload
+                const photoUrl = await uploadFile(userId, selectedFile);
                 profileDataToSave.photoUrl = photoUrl;
             } catch (error) {
                 console.error("Photo upload failed:", error);
@@ -76,10 +79,10 @@ export default function ProfileForm({ initialProfile, onSave, isSubmitting, user
     return (
         <form onSubmit={handleSubmit} className="space-y-8">
              <div className="flex justify-between items-center pb-4 border-b">
-                  <h2 className="text-xl font-semibold">Public Profile Settings</h2>
-                  <Link href={`/profile/${userId}`} target="_blank" className="flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
-                      View My Public Profile <ExternalLink size={14} />
-                  </Link>
+                 <h2 className="text-xl font-semibold">Public Profile Settings</h2>
+                 <Link href={`/profile/${userId}`} target="_blank" className="flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
+                     View My Public Profile <ExternalLink size={14} />
+                 </Link>
              </div>
 
              <div className="flex items-start gap-6">
@@ -103,18 +106,17 @@ export default function ProfileForm({ initialProfile, onSave, isSubmitting, user
                  <div><label className="block text-sm font-medium text-muted-foreground">Phone Number</label><input type="tel" name="phone" value={formData.phone || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" /></div>
                  <div className="md:col-span-2"><label className="block text-sm font-medium text-muted-foreground">Address</label><textarea name="address" value={formData.address || ''} onChange={handleInputChange} rows={2} className="w-full mt-1 p-2 bg-background border rounded-md" placeholder="123 Main St, Anytown, USA 12345"></textarea></div>
                  
-                 {/* ✅ 2. This is the new State dropdown */}
                  <div>
-                    <label className="block text-sm font-medium text-muted-foreground">State</label>
-                    <select name="state" value={formData.state || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md">
-                        <option value="">Select your state</option>
-                        {usStates.map(state => <option key={state} value={state}>{state}</option>)}
-                    </select>
+                     <label className="block text-sm font-medium text-muted-foreground">State</label>
+                     <select name="state" value={formData.state || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md">
+                         <option value="">Select your state</option>
+                         {usStates.map(state => <option key={state} value={state}>{state}</option>)}
+                     </select>
                  </div>
 
                  <div>
-                    <label className="block text-sm font-medium text-muted-foreground">Zip Code</label>
-                    <input name="zipCode" value={formData.zipCode || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" />
+                     <label className="block text-sm font-medium text-muted-foreground">Zip Code</label>
+                     <input name="zipCode" value={formData.zipCode || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" />
                  </div>
 
                  <div className="flex items-center gap-2 pt-2"><input type="checkbox" name="isVirtual" id="isVirtual" checked={formData.isVirtual || false} onChange={handleInputChange} className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" /><label htmlFor="isVirtual" className="text-sm font-medium text-muted-foreground">Available for virtual work</label></div>

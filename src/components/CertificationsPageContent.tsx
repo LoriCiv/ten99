@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Certification, CEU } from '@/types/app-interfaces';
 import { PlusCircle, Edit, Trash2, Award, BookOpen, Library, Users } from 'lucide-react';
-import { addCertification, updateCertification, deleteCertification, addCEU, updateCEU, deleteCEU } from '@/utils/firestoreService';
+import { getCertifications, getAllCEUs, addCertification, updateCertification, deleteCertification, addCEU, updateCEU, deleteCEU } from '@/utils/firestoreService';
 import CertificationForm from './CertificationForm';
 import CEUForm from './CEUForm';
 import CEUDetailModal from './CEUDetailModal';
@@ -18,15 +18,14 @@ const getIconForType = (type: 'certification' | 'license' | 'membership') => {
 };
 
 interface CertificationsPageContentProps {
-    initialCertifications: Certification[];
-    initialCeus: CEU[];
     userId: string;
 }
 
-export default function CertificationsPageContent({ initialCertifications, initialCeus, userId }: CertificationsPageContentProps) {
+export default function CertificationsPageContent({ userId }: CertificationsPageContentProps) {
     const router = useRouter();
-    const [certifications, setCertifications] = useState<Certification[]>(initialCertifications);
-    const [ceus, setCeus] = useState<CEU[]>(initialCeus);
+    const [certifications, setCertifications] = useState<Certification[]>([]);
+    const [ceus, setCeus] = useState<CEU[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'certs' | 'ceus'>('certs');
     const [isCertModalOpen, setIsCertModalOpen] = useState(false);
     const [editingCert, setEditingCert] = useState<Partial<Certification> | null>(null);
@@ -38,8 +37,19 @@ export default function CertificationsPageContent({ initialCertifications, initi
     const [isCeuDetailModalOpen, setIsCeuDetailModalOpen] = useState(false);
     const [selectedCeuForDetail, setSelectedCeuForDetail] = useState<CEU | null>(null);
 
-    useEffect(() => { setCertifications(initialCertifications); }, [initialCertifications]);
-    useEffect(() => { setCeus(initialCeus); }, [initialCeus]);
+    useEffect(() => {
+        setIsLoading(true);
+        const unsubCerts = getCertifications(userId, setCertifications);
+        const unsubCEUs = getAllCEUs(userId, (ceus) => {
+            setCeus(ceus);
+            setIsLoading(false);
+        });
+
+        return () => {
+            unsubCerts();
+            unsubCEUs();
+        };
+    }, [userId]);
 
     const certificationsWithCeus = useMemo(() => {
         return certifications.map(cert => {
@@ -142,6 +152,10 @@ export default function CertificationsPageContent({ initialCertifications, initi
     if (certForCeu?.specialtyCeusCategory) { availableCategories.push(certForCeu.specialtyCeusCategory); }
     if (certForCeu?.specialtyCeusCategory2) { availableCategories.push(certForCeu.specialtyCeusCategory2); }
 
+    if (isLoading) {
+        return <div className="p-8 text-center text-muted-foreground">Loading credentials...</div>;
+    }
+
     return (
         <>
             <div className="p-4 sm:p-6 lg:p-8">
@@ -152,8 +166,8 @@ export default function CertificationsPageContent({ initialCertifications, initi
                     </div>
                     <div className="mt-4 flex justify-end">
                          <button onClick={() => handleOpenCertModal(null)} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90">
-                            <PlusCircle size={20} /> Add Credential
-                        </button>
+                             <PlusCircle size={20} /> Add Credential
+                         </button>
                     </div>
                 </header>
 

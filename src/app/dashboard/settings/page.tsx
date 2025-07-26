@@ -1,11 +1,12 @@
-import { getTemplatesData, getProfileData } from '@/utils/firestoreService';
+// ✅ 1. Import getRemindersData and the Reminder type
+import { getTemplatesData, getProfileData, getRemindersData } from '@/utils/firestoreService';
 import SettingsPageContent from '@/components/SettingsPageContent';
-import type { Template, UserProfile } from '@/types/app-interfaces';
+import type { Template, UserProfile, Reminder } from '@/types/app-interfaces';
 import { Timestamp } from 'firebase/firestore';
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from 'next/navigation';
 
-const TEMP_USER_ID = "dev-user-1";
-
-// ✅ FIX: Added a comment to disable the strict 'any' rule for this line
+// Helper function to serialize Firestore Timestamps for the client
 const serializeData = <T extends object>(doc: T | null): T | null => {
     if (!doc) return null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -19,19 +20,28 @@ const serializeData = <T extends object>(doc: T | null): T | null => {
 };
 
 export default async function SettingsPage() {
-    const [templatesData, profileData] = await Promise.all([
-        getTemplatesData(TEMP_USER_ID),
-        getProfileData(TEMP_USER_ID)
+    const { userId } = await auth();
+    if (!userId) {
+        redirect('/sign-in');
+    }
+
+    // ✅ 2. Fetch reminders data along with the other data
+    const [templatesData, profileData, remindersData] = await Promise.all([
+        getTemplatesData(userId),
+        getProfileData(userId),
+        getRemindersData(userId)
     ]);
 
     const templates = templatesData.map(t => serializeData(t));
     const profile = serializeData(profileData);
+    const reminders = remindersData.map(r => serializeData(r)); // ✅ 3. Serialize the reminders
 
     return (
         <SettingsPageContent
             initialTemplates={templates as Template[]}
             initialProfile={profile as UserProfile | null}
-            userId={TEMP_USER_ID}
+            initialReminders={reminders as Reminder[]} // ✅ 4. Pass the reminders as a prop
+            userId={userId}
         />
     );
 }

@@ -1,20 +1,17 @@
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import type { JobFile, Client } from '@/types/app-interfaces';
+import { getJobFiles, getClients, updateJobFile } from '@/utils/firestoreService';
 import Link from 'next/link';
 import { FilePlus, Search, X, CalendarDays, Tag, Clock, CheckCircle, Star } from 'lucide-react';
-import { updateJobFile } from '@/utils/firestoreService';
 import { Timestamp } from 'firebase/firestore';
 
 interface JobFilesPageContentProps {
-    jobFiles: JobFile[];
-    clients: Client[];
     userId: string;
-    initialClientFilter?: string;
 }
 
-// Helper component for the priority stars
 const PriorityStars = ({ priority, onClick }: { priority: number, onClick: (newPriority: number) => void }) => {
     return (
         <div className="flex" onClick={(e) => e.stopPropagation()}>
@@ -23,7 +20,6 @@ const PriorityStars = ({ priority, onClick }: { priority: number, onClick: (newP
                     key={starValue}
                     onClick={(e) => {
                         e.preventDefault();
-                        // If you click the same star again, it unsets the priority to 0
                         const newPriority = priority === starValue ? 0 : starValue;
                         onClick(newPriority);
                     }}
@@ -37,20 +33,38 @@ const PriorityStars = ({ priority, onClick }: { priority: number, onClick: (newP
     );
 };
 
+function JobFilesPageContentInternal({ userId }: JobFilesPageContentProps) {
+    const searchParams = useSearchParams();
+    const [jobFiles, setJobFiles] = useState<JobFile[]>([]);
+    const [clients, setClients] = useState<Client[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
-export default function JobFilesPageContent({
-    jobFiles,
-    clients,
-    userId,
-    initialClientFilter = ''
-}: JobFilesPageContentProps) {
     const [searchTerm, setSearchTerm] = useState('');
-    const [clientFilter, setClientFilter] = useState(initialClientFilter);
+    const [clientFilter, setClientFilter] = useState('');
     const [tagFilter, setTagFilter] = useState('');
+
+    useEffect(() => {
+        const initialFilter = searchParams.get('clientId');
+        if (initialFilter) {
+            setClientFilter(initialFilter);
+        }
+    }, [searchParams]);
+
+    useEffect(() => {
+        const unsubJobFiles = getJobFiles(userId, (data) => {
+            setJobFiles(data);
+            setIsLoading(false);
+        });
+        const unsubClients = getClients(userId, setClients);
+
+        return () => {
+            unsubJobFiles();
+            unsubClients();
+        };
+    }, [userId]);
 
     const allTags = useMemo(() => {
         const tagsSet = new Set<string>();
-        // Add a safety check to ensure jobFiles is an array
         if (Array.isArray(jobFiles)) {
             jobFiles.forEach(file => {
                 file.tags?.forEach(tag => tagsSet.add(tag));
@@ -62,16 +76,11 @@ export default function JobFilesPageContent({
     const filteredJobFiles = useMemo(() => {
         const getSortableDate = (item: JobFile): number => {
             const createdAt = item.createdAt as Timestamp;
-            if (!createdAt || typeof createdAt.toMillis !== 'function') {
-                return 0;
-            }
+            if (!createdAt || typeof createdAt.toMillis !== 'function') { return 0; }
             return createdAt.toMillis();
         };
 
-        // Add a safety check here as well
-        if (!Array.isArray(jobFiles)) {
-            return [];
-        }
+        if (!Array.isArray(jobFiles)) { return []; }
 
         return jobFiles
             .filter(file => {
@@ -86,10 +95,8 @@ export default function JobFilesPageContent({
             .sort((a, b) => {
                 const aPriority = a.priority || 0;
                 const bPriority = b.priority || 0;
-                if (aPriority !== bPriority) {
-                    return bPriority - aPriority; // Higher priority first
-                }
-                return getSortableDate(b) - getSortableDate(a); // Then newest first
+                if (aPriority !== bPriority) { return bPriority - aPriority; }
+                return getSortableDate(b) - getSortableDate(a);
             });
     }, [jobFiles, searchTerm, clientFilter, tagFilter, clients]);
 
@@ -116,7 +123,7 @@ export default function JobFilesPageContent({
             return start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         }
         const end = new Date(endDate + 'T00:00:00');
-        return `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} - ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+        return `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
     };
     
     const getJobStatus = (startDate?: string, endDate?: string) => {
@@ -130,6 +137,10 @@ export default function JobFilesPageContent({
         if (start > today) return { text: 'Upcoming', icon: CalendarDays, color: 'text-blue-500' };
         return { text: 'In Progress', icon: Clock, color: 'text-yellow-500' };
     };
+
+    if (isLoading) {
+        return <div className="p-8 text-center text-muted-foreground">Loading Job Files...</div>;
+    }
 
     return (
         <div className="p-4 sm:p-6 lg:p-8">
@@ -198,5 +209,14 @@ export default function JobFilesPageContent({
                 </div>
             )}
         </div>
+    );
+}
+
+// Wrapper component to handle Suspense for search params
+export default function JobFilesPageContent({ userId }: { userId: string }) {
+    return (
+        <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading...</div>}>
+            <JobFilesPageContentInternal userId={userId} />
+        </Suspense>
     );
 }

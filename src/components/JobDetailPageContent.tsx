@@ -1,92 +1,136 @@
-// src/components/JobDetailPageContent.tsx
 "use client";
 
-import { useState } from 'react';
-import type { JobPosting, UserProfile } from '@/types/app-interfaces';
-import { sendJobApplicationMessage } from '@/utils/firestoreService';
+import { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
+import type { JobFile, Client, PersonalNetworkContact, Appointment } from '@/types/app-interfaces';
+import { updateJobFile, deleteJobFile, uploadFile } from '@/utils/firestoreService';
 import Link from 'next/link';
-import { ArrowLeft, Briefcase, MapPin, Tag, Check, Loader2, Calendar } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Download } from 'lucide-react';
+import JobFileForm from './JobFileForm';
+import Modal from './Modal';
 
-interface JobDetailPageContentProps {
-    jobPost: JobPosting;
-    currentUserProfile: UserProfile | null;
-    currentUserId: string;
+interface JobFileDetailPageContentProps {
+    initialJobFile: JobFile;
+    initialClients: Client[];
+    initialContacts: PersonalNetworkContact[];
+    initialAppointments: Appointment[];
+    userId: string;
 }
 
-export default function JobDetailPageContent({ jobPost, currentUserProfile, currentUserId }: JobDetailPageContentProps) {
-    const [isLoading, setIsLoading] = useState(false);
-    const [isApplied, setIsApplied] = useState(false);
+export default function JobFileDetailPageContent({
+    initialJobFile,
+    initialClients,
+    initialContacts,
+    initialAppointments,
+    userId
+}: JobFileDetailPageContentProps) {
+    const router = useRouter();
+    const [jobFile, setJobFile] = useState(initialJobFile);
+    const [isEditing, setIsEditing] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const isOwner = jobPost.userId === currentUserId;
+    const client = useMemo(() => initialClients.find(c => c.id === jobFile.clientId), [initialClients, jobFile.clientId]);
+    const appointment = useMemo(() => initialAppointments.find(a => a.id === jobFile.appointmentId), [initialAppointments, jobFile.appointmentId]);
 
-    const handleBid = async () => {
-        if (!currentUserProfile || isOwner) return;
+    const handleSave = async (data: Partial<JobFile>, fileToUpload: File | null) => {
+        if (!jobFile.id) return;
+        setIsSubmitting(true);
+        let updatedData = { ...data };
 
-        setIsLoading(true);
         try {
-            await sendJobApplicationMessage(currentUserId, currentUserProfile, jobPost);
-            setIsApplied(true);
-            alert("Your application has been sent!");
+            if (fileToUpload) {
+                const downloadURL = await uploadFile(userId, fileToUpload);
+                updatedData.fileUrl = downloadURL;
+            }
+            await updateJobFile(userId, jobFile.id, updatedData);
+            setJobFile(prev => ({ ...prev, ...updatedData }));
+            setIsEditing(false);
+            alert("Job File updated successfully!");
         } catch (error) {
-            console.error("Failed to send application:", error);
-            alert("There was an error sending your application.");
+            console.error("Error saving job file:", error);
+            alert("Failed to save job file.");
         } finally {
-            setIsLoading(false);
+            setIsSubmitting(false);
         }
     };
     
+    const handleDelete = async () => {
+        if (!jobFile.id) return;
+        if (window.confirm("Are you sure you want to delete this job file? This cannot be undone.")) {
+            try {
+                await deleteJobFile(userId, jobFile.id);
+                alert("Job File deleted.");
+                router.push('/dashboard/job-files');
+            } catch (error) {
+                console.error("Error deleting job file:", error);
+                alert("Failed to delete job file.");
+            }
+        }
+    };
+
     return (
-        <div className="p-4 sm:p-6 lg:p-8">
-            <Link href="/dashboard/job-board" className="inline-flex items-center text-sm font-semibold text-muted-foreground hover:text-primary mb-6">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Job Board
-            </Link>
+        <>
+            <div className="p-4 sm:p-6 lg:p-8">
+                <Link href="/dashboard/job-files" className="inline-flex items-center text-sm font-semibold text-muted-foreground hover:text-primary mb-6">
+                    <ArrowLeft className="w-4 h-4 mr-2" />
+                    Back to Job Files
+                </Link>
 
-            <div className="bg-card p-8 rounded-lg border max-w-4xl mx-auto">
-                <div className="flex flex-col md:flex-row justify-between md:items-start gap-4">
-                    <div>
-                        <h1 className="text-3xl font-bold text-foreground">{jobPost.title}</h1>
-                        <div className="flex flex-wrap gap-x-6 gap-y-2 text-md text-muted-foreground mt-2">
-                           {jobPost.rate && <span className="flex items-center gap-1.5"><Briefcase size={16} /> {jobPost.rate}</span>}
-                           {jobPost.location && <span className="flex items-center gap-1.5"><MapPin size={16} /> {jobPost.location} ({jobPost.zipCode})</span>}
-                           {jobPost.startDate && <span className="flex items-center gap-1.5"><Calendar size={16} /> {jobPost.startDate} {jobPost.startTime || ''}</span>}
+                <div className="bg-card p-6 rounded-lg border">
+                    <div className="flex justify-between items-start mb-4 pb-4 border-b">
+                        <div>
+                            <h1 className="text-3xl font-bold text-foreground">{jobFile.jobTitle}</h1>
+                            {client && <p className="text-lg text-primary">{client.companyName || client.name}</p>}
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-secondary/80">
+                                <Edit size={16}/> Edit
+                            </button>
+                             <button onClick={handleDelete} className="flex items-center gap-2 bg-destructive text-destructive-foreground font-semibold py-2 px-4 rounded-lg hover:bg-destructive/90">
+                                <Trash2 size={16}/> Delete
+                            </button>
                         </div>
                     </div>
-                    <div>
-                        {isOwner ? (
-                            <p className="text-sm font-semibold bg-secondary text-secondary-foreground px-4 py-2 rounded-lg">This is your job post.</p>
-                        ) : isApplied ? (
-                            <button disabled className="bg-green-600 text-white font-semibold py-2 px-4 rounded-lg flex items-center gap-2 w-full sm:w-auto justify-center">
-                                <Check size={18} /> Applied
-                            </button>
-                        ) : (
-                            <button onClick={handleBid} disabled={isLoading} className="bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg flex items-center gap-2 hover:bg-primary/90 disabled:opacity-50 w-full sm:w-auto justify-center">
-                                {isLoading ? <Loader2 size={18} className="animate-spin" /> : 'Bid on this Job'}
-                            </button>
-                        )}
-                    </div>
-                </div>
-                
-                <hr className="my-6" />
-
-                <div>
-                    <h3 className="text-lg font-semibold mb-2">Job Description</h3>
-                    <p className="text-muted-foreground whitespace-pre-wrap">{jobPost.description}</p>
-                </div>
-
-                {jobPost.requiredSkills && jobPost.requiredSkills.length > 0 && (
-                    <div className="mt-6 pt-6 border-t">
-                        <h3 className="text-lg font-semibold mb-2">Required Skills</h3>
-                        <div className="flex flex-wrap gap-2">
-                             {jobPost.requiredSkills.map(skill => (
-                                <span key={skill} className="text-sm bg-secondary text-secondary-foreground px-3 py-1 rounded-full flex items-center gap-2">
-                                    <Tag size={14}/> {skill}
-                                </span>
-                            ))}
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="space-y-4">
+                            <h3 className="font-semibold text-lg">Details</h3>
+                            {appointment && <p className="text-sm"><span className="font-semibold text-muted-foreground">Linked Appointment:</span> {appointment.subject}</p>}
+                            <p className="text-sm"><span className="font-semibold text-muted-foreground">Start Date:</span> {jobFile.startDate || 'Not set'}</p>
+                            <p className="text-sm"><span className="font-semibold text-muted-foreground">End Date:</span> {jobFile.endDate || 'Not set'}</p>
+                            {jobFile.fileUrl && (
+                                <a href={jobFile.fileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-primary hover:underline">
+                                    <Download size={16}/> Download Attached File
+                                </a>
+                            )}
+                        </div>
+                        <div className="space-y-4">
+                            <h3 className="font-semibold text-lg">Shared Notes</h3>
+                            <p className="text-sm text-muted-foreground whitespace-pre-wrap bg-background p-3 rounded-md min-h-[100px]">
+                                {jobFile.sharedNotes || 'No shared notes.'}
+                            </p>
+                            <h3 className="font-semibold text-lg">Private Notes</h3>
+                            <p className="text-sm text-muted-foreground whitespace-pre-wrap bg-background p-3 rounded-md min-h-[100px]">
+                                {jobFile.privateNotes || 'No private notes.'}
+                            </p>
                         </div>
                     </div>
-                )}
+                </div>
             </div>
-        </div>
+
+            <Modal isOpen={isEditing} onClose={() => setIsEditing(false)}>
+                <div className="p-6">
+                    <JobFileForm
+                        initialData={jobFile}
+                        onSave={handleSave}
+                        onCancel={() => setIsEditing(false)}
+                        clients={initialClients}
+                        appointments={initialAppointments}
+                        isSubmitting={isSubmitting}
+                        userId={userId} 
+                    />
+                </div>
+            </Modal>
+        </>
     );
 }

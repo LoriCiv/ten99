@@ -1,12 +1,17 @@
-// src/app/api/upload/route.ts
 import { NextResponse } from 'next/server';
-import { storage } from '@/lib/firebase-admin'; // ✅ FIX: Use the named 'storage' import
+import { storage } from '@/lib/firebase-admin';
 import { v4 as uuidv4 } from 'uuid';
-
-const TEMP_USER_ID = "dev-user-1";
+import { auth } from '@clerk/nextjs/server';
 
 export async function POST(request: Request) {
     try {
+        // ✅ FIX: Add the "await" keyword here
+        const { userId } = await auth();
+
+        if (!userId) {
+            return NextResponse.json({ error: 'Unauthorized: You must be logged in to upload files.' }, { status: 401 });
+        }
+
         const formData = await request.formData();
         const file = formData.get('file') as File | null;
 
@@ -17,7 +22,7 @@ export async function POST(request: Request) {
         const bucket = storage.bucket(process.env.FIREBASE_STORAGE_BUCKET);
         const fileExtension = file.name.split('.').pop();
         const fileName = `${uuidv4()}.${fileExtension}`;
-        const filePath = `jobFiles/${TEMP_USER_ID}/${fileName}`;
+        const filePath = `jobFiles/${userId}/${fileName}`;
         
         const fileBuffer = Buffer.from(await file.arrayBuffer());
 

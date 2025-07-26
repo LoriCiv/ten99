@@ -1,115 +1,105 @@
-// src/app/api/inbound-email/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import {
-    addMessage,
-    addAppointment,
-    updateMessage,
-} from '@/utils/firestoreService';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import type { Message, Appointment } from '@/types/app-interfaces';
+import { NextResponse, type NextRequest } from 'next/server';
+import { simpleParser } from 'mailparser';
+import { addAppointment, addClient, getProfileData } from '@/utils/firestoreService';
+import type { Appointment, Client } from '@/types/app-interfaces';
 
-const extractJson = (text: string): unknown => {
-    const match = text.match(/```json\n([\s\S]*?)\n```/);
-    if (match && match[1]) {
-        try { return JSON.parse(match[1]); }
-        catch (e) { console.error("Failed to parse JSON from markdown block:", e); }
+// Helper function to call the Gemini API
+async function parseEmailWithAI(emailBody: string, clientList: {id?: string, name?: string}[]) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+        throw new Error("Gemini API key is not configured.");
     }
-    try { return JSON.parse(text); }
-    catch(e) { console.error("Failed to parse the entire text as JSON:", e); }
-    return null;
-};
+    const prompt = `
+        You are an intelligent scheduling assistant. Parse the text to extract appointment details.
+        Today's Date: ${new Date().toLocaleDateString()}
+        Existing Clients: ${JSON.stringify(clientList)}
+        
+        Instructions:
+        1. Extract details into a JSON object with fields: "subject", "date" (YYYY-MM-DD), "time" (HH:mm), "clientId" (if a name matches the Existing Clients list), "newClientName" (if no client matches), "notes".
+        2. If a date is mentioned without a year, assume the current year.
+        3. Respond with ONLY the valid JSON object.
+        
+        TEXT TO PARSE:
+        ${emailBody}
+    `;
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+    });
+    if (!response.ok) throw new Error("API request failed");
+    const result = await response.json();
+    const rawText = result.candidates[0].content.parts[0].text;
+    const jsonStart = rawText.indexOf('{');
+    const jsonEnd = rawText.lastIndexOf('}');
+    return JSON.parse(rawText.substring(jsonStart, jsonEnd + 1));
+}
 
-type AiResponse = {
-    senderName: string;
-    subject: string;
-    body: string;
-    isAppointmentRequest: boolean;
-    proposedDate?: string;
-    proposedTime?: string;
-};
 
 export async function POST(request: NextRequest) {
-    const TEMP_USER_ID = "dev-user-1";
-
-    if (!process.env.GEMINI_API_KEY) {
-        console.error("GEMINI_API_KEY is not set.");
-        return NextResponse.json({ success: false, error: "Server configuration error." }, { status: 500 });
+    const webhookSecret = process.env.SENDGRID_WEBHOOK_SECRET;
+    if (webhookSecret && request.headers.get('X-SendGrid-Signature') !== webhookSecret) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     try {
         const formData = await request.formData();
-        const emailData = {
-            from: formData.get('from') as string || '',
-            subject: formData.get('subject') as string || '',
-            text: formData.get('text') as string || '',
-        };
+        const to = formData.get('to') as string;
+        const from = formData.get('from') as string;
+        const emailContent = formData.get('email') as string;
 
-        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
-
-        const prompt = `Analyze the email below. Determine if it's an appointment request. Extract the sender's name, a subject, the full body, a proposed date (YYYY-MM-DD), and time (HH:MM 24-hour).
-Respond ONLY with a valid JSON object:
-{
-  "senderName": "John Doe",
-  "subject": "Meeting Request",
-  "body": "...",
-  "isAppointmentRequest": true,
-  "proposedDate": "2025-08-15",
-  "proposedTime": "14:30"
-}
-If it is not an appointment request, set "isAppointmentRequest" to false.
-
-Email Content:
-From: ${emailData.from}
-Subject: ${emailData.subject}
-
-${emailData.text}`;
-
-        const result = await model.generateContent(prompt);
-        const responseText = result.response.text();
-        const parsedContent = extractJson(responseText) as AiResponse;
-
-        if (!parsedContent) {
-            throw new Error("AI parsing failed to produce valid JSON.");
+        if (!to || !emailContent) {
+            return NextResponse.json({ error: 'Missing required fields.' }, { status: 400 });
         }
-
-        const messageData: Partial<Message> = {
-            senderId: emailData.from,
-            senderName: parsedContent.senderName || emailData.from,
-            recipientId: TEMP_USER_ID,
-            subject: parsedContent.subject || emailData.subject,
-            body: parsedContent.body || emailData.text,
-            isRead: false,
-            status: 'new',
-            type: parsedContent.isAppointmentRequest ? 'inbound-offer' : 'standard',
-            proposedDate: parsedContent.proposedDate || undefined,
-            proposedTime: parsedContent.proposedTime || undefined,
-        };
-
-        const messageId = await addMessage(TEMP_USER_ID, messageData);
         
-        if (parsedContent.isAppointmentRequest && messageData.proposedDate && messageData.proposedTime) {
-            const appointmentData: Partial<Appointment> = {
-                eventType: 'job',
-                subject: `Pending: ${messageData.subject}`,
-                status: 'pending-confirmation',
-                date: messageData.proposedDate,
-                time: messageData.proposedTime,
-                notes: `Proposed via email from ${messageData.senderName}.\n\n---Original Message---\n${messageData.body}`,
-                userId: TEMP_USER_ID,
-            };
-            
-            const appointmentId = await addAppointment(TEMP_USER_ID, appointmentData);
-
-            if (appointmentId) {
-                await updateMessage(TEMP_USER_ID, messageId, { appointmentId: appointmentId });
-            }
+        // Extract the core email address from a string like "Name <email@example.com>"
+        const toEmailAddress = to.split('<').pop()?.split('>')[0].trim();
+        if (!toEmailAddress || !toEmailAddress.includes('@')) {
+            return NextResponse.json({ error: 'Invalid "to" address format.' }, { status: 400 });
         }
 
-        return NextResponse.json({ success: true });
+        // ✅ THE MAGIC: The user's ID is the part of the email before the "@"
+        const userId = toEmailAddress.split('@')[0];
+
+        if (!userId) {
+            console.error(`Could not extract userId from inbound address: ${toEmailAddress}`);
+            return NextResponse.json({ error: 'Could not identify user from address.' }, { status: 400 });
+        }
+
+        // Now we use the real userId to fetch the user's profile and clients
+        const userProfile = await getProfileData(userId);
+        // Note: We'd need a server-side getClientsData function here. For now, we'll proceed without it for the AI context.
+
+        const parsedEmail = await simpleParser(emailContent);
+        const emailBody = parsedEmail.text || '';
+
+        // The AI parsing and appointment creation logic now uses the real userId
+        const aiResult = await parseEmailWithAI(emailBody, []); // Pass client list if available
+        
+        let clientId = aiResult.clientId;
+        if (aiResult.newClientName && !clientId) {
+            const newClientData: Partial<Client> = { name: aiResult.newClientName, companyName: aiResult.newClientName, status: 'Lead', clientType: 'business_1099' };
+            const newClientRef = await addClient(userId, newClientData);
+            clientId = newClientRef.id;
+        }
+
+        const appointmentData: Partial<Appointment> = {
+            subject: `Pending: ${aiResult.subject || 'New Appointment'}`,
+            date: aiResult.date,
+            time: aiResult.time,
+            notes: aiResult.notes || emailBody,
+            clientId: clientId,
+            status: 'pending-confirmation',
+            eventType: 'job',
+        };
+        
+        await addAppointment(userId, appointmentData);
+
+        return NextResponse.json({ success: true, message: "Appointment created pending confirmation." });
 
     } catch (error) {
-        console.error('Inbound Email Route Error:', error);
-        return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
+        console.error("Inbound email webhook error:", error);
+        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+        return NextResponse.json({ error: "Failed to process inbound email.", details: errorMessage }, { status: 500 });
     }
 }

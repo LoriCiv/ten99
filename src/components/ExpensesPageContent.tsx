@@ -2,235 +2,142 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import type { Expense, Client, UserProfile, Certification, CEU } from '@/types/app-interfaces';
-import { deleteExpense, addExpense, updateExpense } from '@/utils/firestoreService';
-import { PlusCircle, Award } from 'lucide-react';
-import ExpenseModal from '@/components/ExpenseModal';
-import ExpenseDetailModal from '@/components/ExpenseDetailModal';
+import type { Client, PersonalNetworkContact, JobFile } from '@/types/app-interfaces';
+import { getClients, getPersonalNetwork, getJobFiles } from '@/utils/firestoreService';
+import Link from 'next/link';
+import { Search, Building2, User } from 'lucide-react';
+import ClientDetailModal from './ClientDetailModal';
 
-interface ExpensesPageContentProps {
-    initialExpenses: Expense[];
-    initialClients: Client[];
-    initialProfile: UserProfile | null;
-    initialCerts: Certification[];
-    initialCeus: CEU[];
+interface ClientsPageContentProps {
     userId: string;
 }
 
-export default function ExpensesPageContent({ 
-    initialExpenses, 
-    initialClients, 
-    initialProfile,
-    initialCerts,
-    initialCeus,
-    userId 
-}: ExpensesPageContentProps) {
+export default function ClientsPageContent({ userId }: ClientsPageContentProps) {
     const router = useRouter();
-    const [expenses, setExpenses] = useState(initialExpenses);
-    const [clients] = useState(initialClients);
-    const [userProfile] = useState(initialProfile);
-    const [certifications] = useState(initialCerts);
-    const [allCeus] = useState(initialCeus);
-    const [isFormModalOpen, setIsFormModalOpen] = useState(false);
-    const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
-    const [categoryFilter, setCategoryFilter] = useState('all');
-    const [clientFilter, setClientFilter] = useState('all');
-    const [sortOrder, setSortOrder] = useState('date-desc');
+    const [clients, setClients] = useState<Client[]>([]);
+    const [contacts, setContacts] = useState<PersonalNetworkContact[]>([]);
+    const [jobFiles, setJobFiles] = useState<JobFile[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [filter, setFilter] = useState<'all' | 'companies' | 'contacts'>('all');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [selectedItem, setSelectedItem] = useState<Client | PersonalNetworkContact | null>(null);
+    const [itemType, setItemType] = useState<'Company' | 'Contact'>('Company');
 
     useEffect(() => {
-        setExpenses(initialExpenses);
-    }, [initialExpenses]);
+        setIsLoading(true);
+        const unsubClients = getClients(userId, setClients);
+        const unsubContacts = getPersonalNetwork(userId, setContacts);
+        const unsubJobFiles = getJobFiles(userId, (data) => {
+            setJobFiles(data);
+            setIsLoading(false); 
+        });
 
-    const filteredAndSortedExpenses = useMemo(() => {
-        const certExpenses: Expense[] = (certifications || [])
-            .filter(cert => cert.renewalCost && cert.renewalCost > 0)
-            .map(cert => ({
-                id: `cert-${cert.id}`,
-                description: `Renewal for ${cert.name}`,
-                amount: cert.renewalCost!,
-                date: cert.issueDate || new Date().toISOString().split('T')[0],
-                category: 'professional_development',
-                isReadOnly: true,
-            }));
+        return () => {
+            unsubClients();
+            unsubContacts();
+            unsubJobFiles();
+        };
+    }, [userId]);
 
-        const ceuExpenses: Expense[] = (allCeus || [])
-            .filter(ceu => ceu.cost && ceu.cost > 0)
-            .map(ceu => ({
-                id: `ceu-${ceu.id}`,
-                description: `CEU: ${ceu.activityName}`,
-                amount: ceu.cost!,
-                date: ceu.dateCompleted,
-                category: 'professional_development',
-                isReadOnly: true,
-            }));
-            
-        return [...expenses, ...certExpenses, ...ceuExpenses]
-            .filter(expense => {
-                const categoryMatch = categoryFilter === 'all' || expense.category === categoryFilter;
-                const clientMatch = clientFilter === 'all' || !expense.isReadOnly && expense.clientId === clientFilter;
-                return categoryMatch && clientMatch;
-            })
-            .sort((a, b) => {
-                switch (sortOrder) {
-                    case 'amount-desc':
-                        return (Number(b.amount) || 0) - (Number(a.amount) || 0);
-                    case 'amount-asc':
-                        return (Number(a.amount) || 0) - (Number(b.amount) || 0);
-                    case 'date-asc':
-                        return new Date(a.date).getTime() - new Date(b.date).getTime();
-                    case 'date-desc':
-                    default:
-                        return new Date(b.date).getTime() - new Date(a.date).getTime();
-                }
-            });
-    }, [expenses, certifications, allCeus, categoryFilter, clientFilter, sortOrder]);
+    const filteredItems = useMemo(() => {
+        const allItems = [
+            ...clients.map(c => ({ ...c, type: 'Company' as const })),
+            ...contacts.map(c => ({ ...c, type: 'Contact' as const }))
+        ];
 
-    const handleOpenFormModal = (expense?: Expense) => {
-        if (expense?.isReadOnly) return;
-        setSelectedExpense(expense || null);
-        setIsFormModalOpen(true);
+        return allItems.filter(item => {
+            const typeMatch = filter === 'all' || (filter === 'companies' && item.type === 'Company') || (filter === 'contacts' && item.type === 'Contact');
+            if (!searchTerm) { return typeMatch; }
+            const searchInput = searchTerm.toLowerCase();
+            const nameMatch = (item.name || '').toLowerCase().includes(searchInput);
+            const companyNameMatch = 'companyName' in item && (item.companyName || '').toLowerCase().includes(searchInput);
+            const tagMatch = item.type === 'Contact' && Array.isArray((item as PersonalNetworkContact).tags) && (item as PersonalNetworkContact).tags?.some((tag: string) => tag.toLowerCase().includes(searchInput));
+            return typeMatch && (nameMatch || companyNameMatch || tagMatch);
+        });
+    }, [clients, contacts, filter, searchTerm]);
+
+    const handleItemClick = (item: Client | PersonalNetworkContact, type: 'Company' | 'Contact') => {
+        setSelectedItem(item);
+        setItemType(type);
+        setIsModalOpen(true);
     };
 
-    const handleCloseFormModal = () => {
-        setIsFormModalOpen(false);
-        setSelectedExpense(null);
+    const handleCloseModal = () => {
+        setIsModalOpen(false);
+        setSelectedItem(null);
     };
 
-    const handleSave = async (data: Partial<Expense>) => {
-        try {
-            if (selectedExpense?.id && !selectedExpense.id.startsWith('cert-') && !selectedExpense.id.startsWith('ceu-')) {
-                await updateExpense(userId, selectedExpense.id, data);
-            } else {
-                await addExpense(userId, data);
-            }
-            alert("Expense saved!");
-            handleCloseFormModal();
-            router.refresh();
-        } catch (error) {
-            console.error("Failed to save expense:", error);
-            alert("Failed to save expense.");
-        }
+    const handleDataChanged = () => {
+        router.refresh();
     };
 
-    const handleDelete = async (expenseId: string) => {
-        if (window.confirm("Are you sure you want to delete this expense?")) {
-            try {
-                await deleteExpense(userId, expenseId);
-                alert("Expense deleted.");
-                setSelectedExpense(null);
-                router.refresh();
-            } catch (error) {
-                console.error("Failed to delete expense:", error);
-                alert("Failed to delete expense.");
-            }
-        }
-    };
-    
+    if (isLoading) {
+        return <div className="p-8 text-center text-muted-foreground">Loading...</div>;
+    }
+
     return (
         <>
             <div className="p-4 sm:p-6 lg:p-8">
-                <header className="flex justify-between items-center mb-6">
-                    <h1 className="text-3xl font-bold text-foreground">All Expenses</h1>
-                    <button onClick={() => handleOpenFormModal()} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90">
-                        <PlusCircle size={20} /> Add Expense
-                    </button>
+                <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                    <div>
+                        <h1 className="text-3xl font-bold text-foreground">Clients & Connections</h1>
+                        <p className="text-muted-foreground mt-1">Manage your business clients and personal network.</p>
+                    </div>
+                    <div className="flex gap-2">
+                        <Link href="/dashboard/clients/new-contact" className="flex items-center gap-2 bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-secondary/80">
+                            <User size={20} /> New Contact
+                        </Link>
+                        <Link href="/dashboard/clients/new-company" className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90">
+                            <Building2 size={20} /> New Company
+                        </Link>
+                    </div>
                 </header>
 
                 <div className="mb-6 p-4 bg-card border rounded-lg">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                            <label htmlFor="categoryFilter" className="block text-sm font-medium text-muted-foreground mb-1">Category</label>
-                            <select id="categoryFilter" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="w-full p-2 border rounded-md bg-background">
-                                <option value="all">All Categories</option>
-                                {(userProfile?.expenseCategories || ['Travel', 'Equipment', 'Supplies', 'Professional Development', 'Other']).map(cat => (
-                                    <option key={cat} value={cat.toLowerCase().replace(/\s/g, '_')}>{cat}</option>
-                                ))}
-                            </select>
+                    <div className="flex flex-col sm:flex-row gap-4">
+                        <div className="relative flex-grow">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                            <input type="text" placeholder="Search by name, company, or tag..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 p-2 border rounded-md bg-background"/>
                         </div>
-                        <div>
-                            <label htmlFor="clientFilter" className="block text-sm font-medium text-muted-foreground mb-1">Client</label>
-                            <select id="clientFilter" value={clientFilter} onChange={(e) => setClientFilter(e.target.value)} className="w-full p-2 border rounded-md bg-background">
-                                <option value="all">All Clients</option>
-                                {clients.map(client => (
-                                    <option key={client.id} value={client.id!}>{client.name}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label htmlFor="sortOrder" className="block text-sm font-medium text-muted-foreground mb-1">Sort By</label>
-                            <select id="sortOrder" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} className="w-full p-2 border rounded-md bg-background">
-                                <option value="date-desc">Date: Newest First</option>
-                                <option value="date-asc">Date: Oldest First</option>
-                                <option value="amount-desc">Amount: High to Low</option>
-                                <option value="amount-asc">Amount: Low to High</option>
-                            </select>
+                        <div className="flex items-center gap-2 bg-background p-1 rounded-lg border">
+                            <button onClick={() => setFilter('all')} className={`px-4 py-1.5 text-sm font-semibold rounded-md ${filter === 'all' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>All</button>
+                            <button onClick={() => setFilter('companies')} className={`px-4 py-1.5 text-sm font-semibold rounded-md ${filter === 'companies' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>Companies</button>
+                            <button onClick={() => setFilter('contacts')} className={`px-4 py-1.5 text-sm font-semibold rounded-md ${filter === 'contacts' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>Contacts</button>
                         </div>
                     </div>
                 </div>
-
-                <div className="bg-card p-4 rounded-lg border">
-                    <div className="hidden md:grid md:grid-cols-4 gap-4 px-3 pb-2 text-sm font-semibold text-muted-foreground border-b">
-                        <div className="col-span-2">Description</div>
-                        <div>Category</div>
-                        <div className="text-right">Amount</div>
-                    </div>
-                    <div className="space-y-2 mt-2 md:mt-0">
-                        {filteredAndSortedExpenses.map(expense => {
-                            const clientName = clients.find(c => c.id === expense.clientId)?.name;
-                            return (
-                                <div key={expense.id} onClick={() => !expense.isReadOnly && setSelectedExpense(expense)} className={`p-3 rounded-md border md:border-0 ${expense.isReadOnly ? 'bg-muted/50' : 'hover:bg-muted cursor-pointer'}`}>
-                                    <div className="md:hidden">
-                                        <div className="flex justify-between items-start">
-                                            <div className="font-semibold text-foreground flex items-center gap-2 pr-2">
-                                                {expense.isReadOnly && <Award size={14} className="text-amber-500 flex-shrink-0" />}
-                                                <span>{expense.description}</span>
-                                            </div>
-                                            <div className="font-medium text-rose-600 text-right whitespace-nowrap">
-                                                -${(Number(expense.amount) || 0).toFixed(2)}
-                                            </div>
-                                        </div>
-                                        <div className="text-sm text-muted-foreground mt-1">
-                                            <span>{expense.date.split('T')[0]}</span>
-                                            <span className="mx-2">•</span>
-                                            <span className="capitalize">{expense.category.replace(/_/g, ' ')}</span>
-                                        </div>
-                                        {clientName && (
-                                            <div className="text-xs text-primary mt-1">Client: {clientName}</div>
-                                        )}
-                                    </div>
-                                    <div className="hidden md:grid md:grid-cols-4 gap-4 items-center">
-                                        <div className="col-span-2">
-                                            <p className="font-semibold flex items-center gap-2">
-                                                {expense.isReadOnly && (
-                                                    <span title="Auto-generated from Credentials">
-                                                        <Award size={14} className="text-amber-500" />
-                                                    </span>
-                                                )}
-                                                {expense.description}
-                                            </p>
-                                            <p className="text-xs text-muted-foreground">{expense.date.split('T')[0]} {clientName && `• ${clientName}`}</p>
-                                        </div>
-                                        <p className="text-sm capitalize">{expense.category.replace(/_/g, ' ')}</p>
-                                        <p className="text-right font-medium text-rose-600">-${(Number(expense.amount) || 0).toFixed(2)}</p>
-                                    </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {filteredItems.map(item => (
+                        <div key={`${item.type}-${item.id}`} onClick={() => handleItemClick(item, item.type)} className="bg-card p-4 rounded-lg border hover:border-primary hover:shadow-lg transition-all cursor-pointer">
+                            <div className="flex items-center gap-4">
+                                <div className="bg-secondary p-3 rounded-lg">
+                                    {item.type === 'Company'
+                                        ? <Building2 className="h-6 w-6 text-secondary-foreground" />
+                                        : <User className="h-6 w-6 text-secondary-foreground" />
+                                    }
                                 </div>
-                            );
-                        })}
-                        {filteredAndSortedExpenses.length === 0 && (
-                            <div className="text-center py-8 text-muted-foreground">
-                                <p>No expenses match your filters.</p>
+                                <div>
+                                    <h3 className="text-lg font-bold text-foreground truncate">{item.type === 'Company' ? (item as Client).companyName : item.name}</h3>
+                                    <p className="text-muted-foreground text-sm truncate">{item.email}</p>
+                                </div>
                             </div>
-                        )}
-                    </div>
+                        </div>
+                    ))}
                 </div>
             </div>
 
-            {isFormModalOpen && (
-                <ExpenseModal isOpen={isFormModalOpen} onClose={handleCloseFormModal} onSave={handleSave} expense={selectedExpense || undefined} userId={userId} clients={clients} userProfile={userProfile}/>
-            )}
-
-            {selectedExpense && !isFormModalOpen && (
-                <ExpenseDetailModal expense={selectedExpense} clients={clients} onClose={() => setSelectedExpense(null)} onEdit={() => handleOpenFormModal(selectedExpense)} onDelete={handleDelete}/>
+            {isModalOpen && (
+                <ClientDetailModal
+                    item={selectedItem}
+                    itemType={itemType}
+                    userId={userId}
+                    clients={clients}
+                    jobFiles={jobFiles}
+                    onClose={handleCloseModal}
+                    onSave={handleDataChanged}
+                />
             )}
         </>
     );

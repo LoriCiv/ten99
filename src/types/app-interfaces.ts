@@ -1,6 +1,5 @@
 import type { Timestamp, FieldValue } from 'firebase/firestore';
 
-// ✅ 1. ADD THIS NEW EXPORTED INTERFACE
 export interface LineItem {
     description: string;
     quantity: number;
@@ -138,7 +137,6 @@ export interface Invoice {
     invoiceDate: string;
     dueDate: string;
     status: 'draft' | 'sent' | 'paid' | 'overdue' | 'void';
-    // ✅ 2. UPDATE THIS LINE TO USE THE NEW INTERFACE
     lineItems: LineItem[];
     subtotal: number;
     tax?: number;
@@ -149,13 +147,143 @@ export interface Invoice {
     createdAt?: Timestamp | FieldValue;
 }
 
-export interface Expense { id?: string; userId?: string; createdAt?: Timestamp; date: string; category: string; description: string; amount: number; receiptUrl?: string; notes?: string; clientId?: string; isReadOnly?: boolean; }
-export interface Message { id?: string; userId?: string; senderId: string; senderName: string; recipientId: string; subject: string; body: string; isRead: boolean; createdAt: Timestamp | FieldValue; status?: 'new' | 'pending' | 'approved' | 'declined' | 'offer-pending' | 'offer-rescinded' | 'offer-sent' | 'archived-education'; proposedDate?: string; proposedTime?: string; appointmentId?: string; type?: 'standard' | 'application' | 'offer' | 'inbound-offer'; jobPostId?: string; }
-export interface Template { id?: string; userId?: string; name: string; subject: string; body: string; type: 'decline' | 'pending' | 'general' | 'approve'; createdAt?: Timestamp | FieldValue; }
-export interface JobHistoryEntry { title: string; company: string; years: string; }
-export interface EducationEntry { degree: string; institution: string; notes?: string; }
-export interface InvoiceLineItemTemplate { id: string; description: string; unitPrice: number; isTaxable?: boolean; }
-export interface UserProfile { id?: string; userId?: string; name?: string; photoUrl?: string; professionalTitle?: string; bio?: string; zipCode?: string; state?: string; isVirtual: boolean; skills?: string[]; languages?: string[]; jobHistory?: JobHistoryEntry[]; education?: EducationEntry[]; defaultInvoiceNotes?: string; defaultPaymentDetails?: string; estimatedStateTaxRate?: number; defaultTaxRate?: number; address?: string; phone?: string; email?: string; expenseCategories?: string[]; invoiceLineItems?: InvoiceLineItemTemplate[]; sendOverdueReminders?: boolean; monthlyPostCount?: number; postCountResetDate?: string; notifyOnNewMessage?: boolean; notifyOnJobMatch?: boolean; defaultForwardingEmail?: string; }
-export interface JobPosting { id?: string; userId: string; title: string; description: string; jobType?: 'On-site' | 'Virtual' | 'Hybrid'; location?: string; state?: string; zipCode?: string; rate?: string; contactEmail?: string; requiredSkills?: string[]; isFilled: boolean; createdAt?: Timestamp; expiresAt?: Timestamp; pendingApplicantId?: string; startDate?: string; endDate?: string; startTime?: string; endTime?: string; reportCount?: number; }
-export interface Reminder { id?: string; userId?: string; createdAt?: Timestamp; text: string; type: 'one-time' | 'recurring'; frequency?: 'daily' | 'weekly' | 'monthly'; dayOfWeek?: 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday'; dateOfMonth?: number; reminderDate?: string; }
-export interface Mileage { id?: string; userId?: string; createdAt?: Timestamp; date: string; miles: number; purpose: string; startLocation?: string; endLocation?: string; notes?: string; }
+export interface Expense {
+    id?: string;
+    userId?: string;
+    createdAt?: Timestamp;
+    date: string;
+    category: string;
+    description: string;
+    amount: number;
+    receiptUrl?: string;
+    notes?: string;
+    clientId?: string;
+    isReadOnly?: boolean;
+}
+
+export interface Message {
+    id?: string;
+    userId?: string;
+    senderId: string;
+    senderName: string;
+    recipientId: string;
+    subject: string;
+    body: string;
+    isRead: boolean;
+    createdAt: Timestamp | FieldValue;
+    status?: 'new' | 'pending' | 'approved' | 'declined' | 'offer-pending' | 'offer-rescinded' | 'offer-sent' | 'archived-education';
+    proposedDate?: string;
+    proposedTime?: string;
+    appointmentId?: string;
+    type?: 'standard' | 'application' | 'offer' | 'inbound-offer';
+    jobPostId?: string;
+}
+
+export interface Template {
+    id?: string;
+    userId?: string;
+    name: string;
+    subject: string;
+    body: string;
+    type: 'decline' | 'pending' | 'general' | 'approve';
+    createdAt?: Timestamp | FieldValue;
+}
+
+export interface JobHistoryEntry {
+    title: string;
+    company: string;
+    years: string;
+}
+
+export interface EducationEntry {
+    degree: string;
+    institution: string;
+    notes?: string;
+}
+
+export interface InvoiceLineItemTemplate {
+    id: string;
+    description: string;
+    unitPrice: number;
+    isTaxable?: boolean;
+}
+
+export interface UserProfile {
+    id?: string;
+    userId?: string;
+    name?: string;
+    photoUrl?: string;
+    professionalTitle?: string;
+    bio?: string;
+    zipCode?: string;
+    state?: string;
+    isVirtual: boolean;
+    skills?: string[];
+    languages?: string[];
+    jobHistory?: JobHistoryEntry[];
+    education?: EducationEntry[];
+    defaultInvoiceNotes?: string;
+    defaultPaymentDetails?: string;
+    estimatedStateTaxRate?: number;
+    defaultTaxRate?: number;
+    address?: string;
+    phone?: string;
+    email?: string;
+    expenseCategories?: string[];
+    invoiceLineItems?: InvoiceLineItemTemplate[];
+    sendOverdueReminders?: boolean;
+    monthlyPostCount?: number;
+    postCountResetDate?: string;
+    notifyOnNewMessage?: boolean;
+    notifyOnJobMatch?: boolean;
+    defaultForwardingEmail?: string;
+    // ✅ This field was missing
+    inboundEmailAddress?: string;
+}
+
+export interface JobPosting {
+    id?: string;
+    userId: string;
+    title: string;
+    description: string;
+    jobType?: 'On-site' | 'Virtual' | 'Hybrid';
+    location?: string;
+    state?: string;
+    zipCode?: string;
+    rate?: string;
+    contactEmail?: string;
+    requiredSkills?: string[];
+    isFilled: boolean;
+    createdAt?: Timestamp;
+    expiresAt?: Timestamp;
+    pendingApplicantId?: string;
+    startDate?: string;
+    endDate?: string;
+    startTime?: string;
+    endTime?: string;
+    reportCount?: number;
+}
+
+export interface Reminder {
+    id?: string;
+    userId?: string;
+    createdAt?: Timestamp;
+    text: string;
+    type: 'one-time' | 'recurring';
+    frequency?: 'daily' | 'weekly' | 'monthly';
+    dayOfWeek?: 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday';
+    dateOfMonth?: number;
+    reminderDate?: string;
+}
+
+export interface Mileage {
+    id?: string;
+    userId?: string;
+    createdAt?: Timestamp;
+    date: string;
+    miles: number;
+    purpose: string;
+    startLocation?: string;
+    endLocation?: string;
+    notes?: string;
+}

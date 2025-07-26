@@ -1,4 +1,3 @@
-// src/app/dashboard/job-board/new/page.tsx
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -8,26 +7,33 @@ import { addJobPosting, getUserProfile, updateUserProfile } from '@/utils/firest
 import JobPostForm from '@/components/JobPostForm';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
+// ✅ 1. Import useAuth from Clerk
+import { useAuth } from '@clerk/nextjs';
 
-const TEMP_USER_ID = "dev-user-1";
 const POST_LIMIT = 2; // Set the monthly post limit here
 
 export default function NewJobPostPage() {
     const router = useRouter();
+    // ✅ 2. Get the real userId from the hook
+    const { userId } = useAuth();
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
-        const unsub = getUserProfile(TEMP_USER_ID, (profile) => {
-            setUserProfile(profile);
-            setIsLoading(false);
-        });
-        return () => unsub();
-    }, []);
+        // ✅ 3. Fetch the user profile only if we have a userId
+        if (userId) {
+            const unsub = getUserProfile(userId, (profile) => {
+                setUserProfile(profile);
+                setIsLoading(false);
+            });
+            return () => unsub();
+        }
+    }, [userId]); // ✅ 4. Add userId as a dependency
 
     const handleSave = async (data: Partial<JobPosting>) => {
-        if (!userProfile) {
+        // ✅ 5. Use the real userId for all checks and actions
+        if (!userId || !userProfile) {
             alert("Could not verify user profile. Please try again.");
             return;
         }
@@ -49,11 +55,11 @@ export default function NewJobPostPage() {
 
         setIsSubmitting(true);
         try {
-            await addJobPosting(TEMP_USER_ID, data);
+            await addJobPosting(userId, data);
             
             // Update the user's post count
             const newCount = currentPostCount + 1;
-            await updateUserProfile(TEMP_USER_ID, {
+            await updateUserProfile(userId, {
                 monthlyPostCount: newCount,
                 postCountResetDate: currentMonthYear
             });

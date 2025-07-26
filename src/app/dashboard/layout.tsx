@@ -3,14 +3,14 @@
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-// ✅ 1. Import the SignOutButton and LogOut icon
-import { UserButton, SignOutButton } from "@clerk/nextjs";
+// ✅ 1. Import useAuth from Clerk
+import { UserButton, SignOutButton, useAuth } from "@clerk/nextjs";
 import { ThumbsUp, Users, Calendar, FileText, Mail, Settings, Receipt, Award, DollarSign, Menu, X, Briefcase, LogOut } from 'lucide-react';
 import { getMessagesForUser } from '@/utils/firestoreService';
 import type { Message } from '@/types/app-interfaces';
 import Image from 'next/image';
 
-const TEMP_USER_ID = "dev-user-1"; 
+// ✅ 2. The TEMP_USER_ID is now removed
 
 const NavLink = ({ href, icon: Icon, children, count }: { href: string, icon: React.ElementType, children: React.ReactNode, count?: number }) => {
     const pathname = usePathname();
@@ -41,6 +41,8 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
+    // ✅ 3. Get the userId from the useAuth hook
+    const { userId } = useAuth();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [messages, setMessages] = useState<Message[]>([]);
     const unreadCount = useMemo(() => messages.filter(m => !m.isRead).length, [messages]);
@@ -51,12 +53,16 @@ export default function DashboardLayout({
         setIsMobileMenuOpen(false);
     }, [pathname]);
 
+    // ✅ 4. Update useEffect to use the real userId
     useEffect(() => {
-        const unsubscribe = getMessagesForUser(TEMP_USER_ID, (fetchedMessages) => {
+        // Don't try to fetch messages until we know who the user is
+        if (!userId) return;
+
+        const unsubscribe = getMessagesForUser(userId, (fetchedMessages) => {
             setMessages(fetchedMessages);
         });
         return () => unsubscribe();
-    }, []);
+    }, [userId]); // ✅ 5. Add userId to the dependency array
 
     const navItems = [
         { name: 'Dashboard', href: '/dashboard', icon: ThumbsUp },
@@ -85,7 +91,6 @@ export default function DashboardLayout({
                 </NavLink>
             ))}
           </div>
-          {/* ✅ 2. Added the Sign Out button here */}
           <div className="mt-auto">
             <SignOutButton redirectUrl="/">
                 <button className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary transition-all text-base font-medium w-full text-left">
@@ -99,7 +104,6 @@ export default function DashboardLayout({
 
     return (
         <div className="flex min-h-screen bg-background">
-            {/* Desktop Sidebar */}
             <aside className="hidden lg:flex w-64 flex-shrink-0 border-r bg-card p-4 flex-col justify-between">
                 <div>
                     <Link href="/dashboard" className="flex items-center gap-2 mb-8 pl-3">
@@ -113,7 +117,6 @@ export default function DashboardLayout({
                 </div>
             </aside>
 
-            {/* Mobile Flyout Menu */}
             {isMobileMenuOpen && (
                 <div className="lg:hidden fixed inset-0 z-50 bg-black/60" onClick={() => setIsMobileMenuOpen(false)}>
                     <div
