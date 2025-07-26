@@ -81,7 +81,6 @@ export default function DashboardPageContent({ userId }: DashboardPageContentPro
     const [showJobAlert, setShowJobAlert] = useState(true);
     const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
     const [isSubmittingExpense, setIsSubmittingExpense] = useState(false);
-    // ✅ 1. Add state to track reminders dismissed for the current session
     const [dismissedReminders, setDismissedReminders] = useState<string[]>([]);
 
     useEffect(() => {
@@ -138,7 +137,6 @@ export default function DashboardPageContent({ userId }: DashboardPageContentPro
         return weekView.find(day => day.isToday)?.appointments || [];
     }, [weekView]);
 
-    // ✅ 2. Update the logic to filter out dismissed reminders
     const todaysReminders = useMemo(() => {
         const today = new Date();
         const todayFormatted = format(today, 'yyyy-MM-dd');
@@ -195,14 +193,11 @@ export default function DashboardPageContent({ userId }: DashboardPageContentPro
         }
     };
 
-    // ✅ 3. Add the new handler function
     const handleDismissReminder = (reminder: Reminder) => {
         if (!reminder.id) return;
         if (reminder.type === 'one-time') {
-            // Permanently delete one-time reminders
             deleteReminder(userId, reminder.id);
         } else {
-            // Temporarily hide recurring reminders for this session
             setDismissedReminders(prev => [...prev, reminder.id!]);
         }
     };
@@ -255,7 +250,6 @@ export default function DashboardPageContent({ userId }: DashboardPageContentPro
                                     <BellRing className="h-5 w-5" />
                                     <span className="text-sm font-semibold">{reminder.text}</span>
                                 </div>
-                                {/* ✅ 4. Add the delete/dismiss button */}
                                 <button 
                                     onClick={() => handleDismissReminder(reminder)}
                                     className="p-1 rounded-full hover:bg-amber-500/20"
@@ -269,11 +263,17 @@ export default function DashboardPageContent({ userId }: DashboardPageContentPro
                 )}
 
                 <div className="bg-card p-6 rounded-lg border">
-                    <div className="flex justify-between items-center mb-4">
+                    <div className="flex flex-wrap gap-4 justify-between items-center mb-4">
                         <h3 className="text-lg font-semibold text-foreground">Today&apos;s Agenda ({format(new Date(), 'eeee, MMM d')})</h3>
-                        <Link href="/dashboard/appointments" className="flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
-                            View Calendar <ArrowRight size={14} />
-                        </Link>
+                        {/* ✅ THIS IS THE NEW SECTION WITH BOTH LINKS */}
+                        <div className="flex items-center gap-4">
+                             <Link href="/dashboard/appointments/new" className="flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline">
+                                <PlusCircle size={14} /> New Appointment
+                            </Link>
+                            <Link href="/dashboard/appointments" className="flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
+                                View Calendar <ArrowRight size={14} />
+                            </Link>
+                        </div>
                     </div>
                     <div className="space-y-2">
                         {todaysAppointments.length > 0 ? (
