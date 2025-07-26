@@ -23,7 +23,7 @@ import {
     collectionGroup,
     increment
 } from 'firebase/firestore';
-import type { Client, PersonalNetworkContact, JobFile, Appointment, Message, Template, Certification, CEU, UserProfile, Invoice, Expense, JobPosting } from '@/types/app-interfaces';
+import type { Client, PersonalNetworkContact, JobFile, Appointment, Message, Template, Certification, CEU, UserProfile, Invoice, Expense, JobPosting, Reminder, Mileage, Differential } from '@/types/app-interfaces';
 import { v4 as uuidv4 } from 'uuid';
 
 const cleanupObject = <T extends Record<string, unknown>>(data: T): Partial<T> => {
@@ -39,7 +39,7 @@ const cleanupObject = <T extends Record<string, unknown>>(data: T): Partial<T> =
     return cleaned;
 };
 
-// --- REAL-TIME LISTENERS (for Client Components) ---
+// --- REAL-TIME LISTENERS ---
 export const getClients = (userId: string, callback: (data: Client[]) => void) => {
     const q = query(collection(db, `users/${userId}/clients`), orderBy('createdAt', 'desc'));
     return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as Client))); });
@@ -103,16 +103,6 @@ export const getRecentInvoices = (userId: string, callback: (data: Invoice[]) =>
         callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Invoice)));
     });
 };
-export const getRecentJobFiles = (userId: string, callback: (data: JobFile[]) => void) => {
-    const q = query(
-        collection(db, `users/${userId}/jobFiles`),
-        orderBy('createdAt', 'desc'),
-        limit(5)
-    );
-    return onSnapshot(q, (snapshot) => {
-        callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as JobFile)));
-    });
-};
 export const getPriorityJobFiles = (userId: string, callback: (data: JobFile[]) => void) => {
     const q = query(
         collection(db, `users/${userId}/jobFiles`),
@@ -121,6 +111,18 @@ export const getPriorityJobFiles = (userId: string, callback: (data: JobFile[]) 
     );
     return onSnapshot(q, (snapshot) => {
         callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as JobFile)));
+    });
+};
+export const getReminders = (userId: string, callback: (data: Reminder[]) => void) => {
+    const q = query(collection(db, `users/${userId}/reminders`), orderBy('createdAt', 'desc'));
+    return onSnapshot(q, (snapshot) => {
+        callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reminder)));
+    });
+};
+export const getMileage = (userId: string, callback: (data: Mileage[]) => void) => {
+    const q = query(collection(db, `users/${userId}/mileage`), orderBy('date', 'desc'));
+    return onSnapshot(q, (snapshot) => {
+        callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Mileage)));
     });
 };
 
@@ -149,32 +151,6 @@ export const getPublicCertifications = async (userId: string): Promise<Certifica
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Certification));
 };
 
-// --- PUBLIC/SHARED FILE FUNCTIONS ---
-export const createPublicJobFile = async (userId: string, jobFile: JobFile): Promise<string> => { 
-    if (!jobFile.id) throw new Error("Cannot share an unsaved job file."); 
-    const publicData = { 
-        originalUserId: userId, 
-        originalJobFileId: jobFile.id, 
-        jobTitle: jobFile.jobTitle, 
-        clientId: jobFile.clientId || '', 
-        sharedNotes: jobFile.sharedNotes || '', 
-        fileUrl: jobFile.fileUrl || '', 
-        createdAt: serverTimestamp(), 
-    }; 
-    const publicDocRef = await addDoc(collection(db, "publicJobFiles"), publicData); 
-    return publicDocRef.id; 
-};
-export const getPublicJobFile = async (publicId: string): Promise<JobFile | null> => { 
-    const docRef = doc(db, "publicJobFiles", publicId); 
-    const docSnap = await getDoc(docRef); 
-    return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as JobFile : null; 
-};
-export const getClientForJobFile = async (userId: string, clientId: string): Promise<Client | null> => { 
-    const docRef = doc(db, 'users', userId, 'clients', clientId); 
-    const docSnap = await getDoc(docRef); 
-    return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as Client : null; 
-};
-
 // --- WRITE/UPDATE/DELETE FUNCTIONS ---
 export const addClient = (userId: string, clientData: Partial<Client>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/clients`), { ...cleanupObject(clientData), createdAt: serverTimestamp() }); };
 export const updateClient = (userId: string, clientId: string, clientData: Partial<Client>): Promise<void> => { return setDoc(doc(db, `users/${userId}/clients`, clientId), cleanupObject(clientData), { merge: true }); };
@@ -199,7 +175,6 @@ export const addAppointment = async (userId: string, appointmentData: Partial<Ap
     if (appointmentData.recurrence && recurrenceEndDate && appointmentData.date) {
         const batch = writeBatch(db);
         const seriesId = uuidv4();
-        // eslint-disable-next-line prefer-const
         let movingDate = new Date(appointmentData.date + 'T00:00:00');
         const endDate = new Date(recurrenceEndDate + 'T00:00:00');
         while (movingDate <= endDate) {
@@ -225,10 +200,7 @@ export const deleteAppointment = (userId: string, appointmentId: string): Promis
 export const updateMessage = (userId: string, messageId: string, messageData: Partial<Message>): Promise<void> => { const messageRef = doc(db, 'users', userId, 'messages', messageId); return updateDoc(messageRef, cleanupObject(messageData)); };
 export const deleteMessage = (userId: string, messageId: string): Promise<void> => { const messageRef = doc(db, `users/${userId}/messages`, messageId); return deleteDoc(messageRef); };
 export const addMessage = async (userId: string, messageData: Partial<Message>): Promise<string> => {
-    const dataToSave = {
-        ...cleanupObject(messageData),
-        createdAt: serverTimestamp(),
-    };
+    const dataToSave = { ...cleanupObject(messageData), createdAt: serverTimestamp() };
     const docRef = await addDoc(collection(db, `users/${userId}/messages`), dataToSave);
     return docRef.id;
 };
@@ -236,17 +208,13 @@ export const sendAppMessage = async (senderId: string, senderName: string, recip
     const usersRef = collection(db, 'users');
     const q = query(usersRef, where("email", "==", recipientIdOrEmail), limit(1));
     const querySnapshot = await getDocs(q);
-    
     let recipientId = recipientIdOrEmail;
     if (!querySnapshot.empty) {
         recipientId = querySnapshot.docs[0].id;
     }
-
     const messageData: Partial<Message> = { senderId, senderName, recipientId, subject, body, isRead: false, status: 'new', createdAt: serverTimestamp(), type, jobPostId };
-    
     const sentMessageData: Partial<Message> = { ...messageData, isRead: true };
     await addDoc(collection(db, `users/${senderId}/messages`), cleanupObject(sentMessageData));
-
     if (!querySnapshot.empty) {
         await addDoc(collection(db, `users/${recipientId}/messages`), cleanupObject(messageData));
     } else {
@@ -269,7 +237,58 @@ export const addInvoice = async (userId: string, invoiceData: Partial<Invoice>):
 export const updateInvoice = (userId: string, invoiceId: string, invoiceData: Partial<Invoice>): Promise<void> => { const docRef = doc(db, `users/${userId}/invoices`, invoiceId); return setDoc(docRef, cleanupObject(invoiceData), { merge: true }); };
 export const deleteInvoice = (userId: string, invoiceId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/invoices`, invoiceId)); };
 const calculateDurationInHours = (startTime?: string, endTime?: string): number => { if (!startTime || !endTime) return 1; const start = new Date(`1970-01-01T${startTime}`); const end = new Date(`1970-01-01T${endTime}`); const diffMs = end.getTime() - start.getTime(); if (diffMs <= 0) return 1; return parseFloat((diffMs / (1000 * 60 * 60)).toFixed(2)); };
-export const createInvoiceFromAppointment = async (userId: string, appointment: Appointment): Promise<void> => { if (!appointment.clientId || !appointment.id) throw new Error("Appointment must have an ID and be linked to a client."); const clientRef = doc(db, `users/${userId}/clients`, appointment.clientId); const clientSnap = await getDoc(clientRef); if (!clientSnap.exists()) throw new Error("Client not found for this appointment."); const client = clientSnap.data() as Client; const rate = client.rate || 0; const duration = calculateDurationInHours(appointment.time, appointment.endTime); const description = `${appointment.subject || 'Services Rendered'}\nDate: ${appointment.date}`; const invoiceData: Partial<Invoice> = { clientId: appointment.clientId, appointmentId: appointment.id, invoiceDate: new Date().toISOString().split('T')[0], dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], status: 'draft', lineItems: [{ description, quantity: duration, unitPrice: rate, total: duration * rate }], subtotal: duration * rate, total: duration * rate, }; await addInvoice(userId, invoiceData); };
+
+// ✅ 2. This is the fully updated function with differential logic
+export const createInvoiceFromAppointment = async (userId: string, appointment: Appointment): Promise<void> => {
+    if (!appointment.clientId || !appointment.id) {
+        throw new Error("Appointment must have an ID and be linked to a client.");
+    }
+    const clientRef = doc(db, `users/${userId}/clients`, appointment.clientId);
+    const clientSnap = await getDoc(clientRef);
+    if (!clientSnap.exists()) {
+        throw new Error("Client not found for this appointment.");
+    }
+    const client = clientSnap.data() as Client;
+    const rate = client.rate || 0;
+
+    const duration = calculateDurationInHours(appointment.time, appointment.endTime);
+    const description = `${appointment.subject || 'Services Rendered'}\nDate: ${appointment.date}`;
+    
+    const lineItems = [{ 
+        description, 
+        quantity: duration, 
+        unitPrice: rate, 
+        total: duration * rate 
+    }];
+
+    if (client.differentials && client.differentials.length > 0) {
+        client.differentials.forEach(diff => {
+            lineItems.push({
+                description: diff.description,
+                quantity: 1,
+                unitPrice: diff.amount,
+                total: diff.amount
+            });
+        });
+    }
+
+    const subtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
+    const total = subtotal;
+
+    const invoiceData: Partial<Invoice> = {
+        clientId: appointment.clientId,
+        appointmentId: appointment.id,
+        invoiceDate: new Date().toISOString().split('T')[0],
+        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        status: 'draft',
+        lineItems: lineItems,
+        subtotal: subtotal,
+        total: total,
+    };
+
+    await addInvoice(userId, invoiceData);
+};
+
 export const addExpense = (userId: string, expenseData: Partial<Expense>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/expenses`), { ...cleanupObject(expenseData), createdAt: serverTimestamp() }); };
 export const updateExpense = (userId: string, expenseId: string, expenseData: Partial<Expense>): Promise<void> => { return setDoc(doc(db, `users/${userId}/expenses`, expenseId), cleanupObject(expenseData), { merge: true }); };
 export const deleteExpense = (userId: string, expenseId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/expenses`, expenseId)); };
@@ -404,73 +423,105 @@ export const confirmInboundOffer = async (userId: string, message: Message): Pro
     if (!message.id || !message.appointmentId) {
         throw new Error("Cannot confirm offer: The message is missing a linked appointment ID.");
     }
-
     const batch = writeBatch(db);
-
     const messageRef = doc(db, `users/${userId}/messages`, message.id);
     batch.update(messageRef, { status: 'approved' });
-
     const appointmentRef = doc(db, `users/${userId}/appointments`, message.appointmentId);
     const appointmentSnap = await getDoc(appointmentRef);
-
     if (!appointmentSnap.exists()) {
         throw new Error("Could not find the linked appointment to confirm.");
     }
-
     batch.update(appointmentRef, {
         status: 'scheduled',
         subject: appointmentSnap.data().subject.replace('Pending: ', '')
     });
-    
     await batch.commit();
 };
-
 export const acceptInboundOfferPending = async (userId: string, message: Message): Promise<void> => {
     if (!message.id) throw new Error("Message ID is missing.");
-    
     const userProfileSnap = await getDoc(doc(db, `users/${userId}/profile`, 'mainProfile'));
     const userName = userProfileSnap.exists() ? userProfileSnap.data()?.name || "The Freelancer" : "The Freelancer";
-    
     const templatesRef = collection(db, `users/${userId}/templates`);
     const q = query(templatesRef, where("type", "==", "pending"), limit(1));
     const templateSnapshot = await getDocs(q);
-
     if (templateSnapshot.empty) {
         console.warn("No 'pending' template found. Skipping email reply.");
     } else {
         const template = templateSnapshot.docs[0].data() as Template;
         await sendAppMessage(userId, userName, message.senderId, template.subject, template.body);
     }
-    
     await updateDoc(doc(db, `users/${userId}/messages`, message.id), { status: 'pending' });
 };
-
 export const declineInboundOffer = async (userId: string, message: Message): Promise<void> => {
     if (!message.id) throw new Error("Message ID is missing.");
-
     const batch = writeBatch(db);
-
     const messageRef = doc(db, `users/${userId}/messages`, message.id);
     batch.update(messageRef, { status: 'declined' });
-
     if (message.appointmentId) {
         const appointmentRef = doc(db, `users/${userId}/appointments`, message.appointmentId);
         batch.update(appointmentRef, { status: 'canceled' });
     }
-    
     const userProfileSnap = await getDoc(doc(db, `users/${userId}/profile`, 'mainProfile'));
     const userName = userProfileSnap.exists() ? userProfileSnap.data()?.name || "The Freelancer" : "The Freelancer";
-    
     const templatesRef = collection(db, `users/${userId}/templates`);
     const q = query(templatesRef, where("type", "==", "decline"), limit(1));
     const templateSnapshot = await getDocs(q);
-
     if (!templateSnapshot.empty) {
         const template = templateSnapshot.docs[0].data() as Template;
         await sendAppMessage(userId, userName, message.senderId, template.subject, template.body);
     } else {
         console.warn("No 'decline' template found. Skipping email reply.");
     }
+    await batch.commit();
+};
+export const markAsEducation = async (userId: string, message: Message): Promise<void> => {
+    if (!message.id || !message.appointmentId) {
+        throw new Error("Cannot process education event: The message is missing a linked appointment ID.");
+    }
+    const batch = writeBatch(db);
+    const messageRef = doc(db, `users/${userId}/messages`, message.id);
+    batch.update(messageRef, { status: 'archived-education' });
+    const appointmentRef = doc(db, `users/${userId}/appointments`, message.appointmentId);
+    batch.update(appointmentRef, { 
+        status: 'scheduled',
+        eventType: 'education'
+    });
+    await batch.commit();
+};
+export const createEducationAppointmentFromMessage = async (userId: string, message: Message, appointmentData: Partial<Appointment>): Promise<void> => {
+    if (!message.id) {
+        throw new Error("Cannot create event: Message ID is missing.");
+    }
+    const batch = writeBatch(db);
+    
+    const newAppointmentRef = doc(collection(db, `users/${userId}/appointments`));
+    batch.set(newAppointmentRef, { ...cleanupObject(appointmentData), createdAt: serverTimestamp() });
+
+    const messageRef = doc(db, `users/${userId}/messages`, message.id);
+    batch.update(messageRef, {
+        status: 'archived-education',
+        appointmentId: newAppointmentRef.id
+    });
 
     await batch.commit();
+};
+
+// --- REMINDER & MILEAGE FUNCTIONS ---
+export const addReminder = (userId: string, reminderData: Partial<Reminder>): Promise<DocumentReference> => {
+    return addDoc(collection(db, `users/${userId}/reminders`), {
+        ...cleanupObject(reminderData),
+        createdAt: serverTimestamp()
+    });
+};
+export const deleteReminder = (userId: string, reminderId: string): Promise<void> => {
+    return deleteDoc(doc(db, `users/${userId}/reminders`, reminderId));
+};
+export const addMileage = (userId: string, mileageData: Partial<Mileage>): Promise<DocumentReference> => {
+    return addDoc(collection(db, `users/${userId}/mileage`), {
+        ...cleanupObject(mileageData),
+        createdAt: serverTimestamp()
+    });
+};
+export const deleteMileage = (userId: string, mileageId: string): Promise<void> => {
+    return deleteDoc(doc(db, `users/${userId}/mileage`, mileageId));
 };

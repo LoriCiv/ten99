@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import type { Invoice, Client, UserProfile, Appointment } from '@/types/app-interfaces';
-import { getInvoices, getClients, getUserProfile, getAppointments } from '@/utils/firestoreService';
+import type { Invoice, Client, UserProfile } from '@/types/app-interfaces';
+import { getInvoices, getClients, getUserProfile } from '@/utils/firestoreService';
 import Link from 'next/link';
 import { PlusCircle, ArrowUpDown } from 'lucide-react';
 import InvoiceDetailModal from '@/components/InvoiceDetailModal';
@@ -37,7 +37,6 @@ function InvoicesPageInternal() {
     const searchParams = useSearchParams();
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
-    const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
@@ -53,7 +52,6 @@ function InvoicesPageInternal() {
         }
         const unsubInvoices = getInvoices(TEMP_USER_ID, setInvoices);
         const unsubClients = getClients(TEMP_USER_ID, setClients);
-        const unsubAppointments = getAppointments(TEMP_USER_ID, setAppointments);
         const unsubProfile = getUserProfile(TEMP_USER_ID, (profile) => {
             setUserProfile(profile);
             setIsLoading(false);
@@ -62,7 +60,6 @@ function InvoicesPageInternal() {
         return () => {
             unsubInvoices();
             unsubClients();
-            unsubAppointments();
             unsubProfile();
         };
     }, [initialFilter]);
@@ -142,7 +139,6 @@ function InvoicesPageInternal() {
                     {processedInvoices.length > 0 ? (
                         processedInvoices.map(invoice => {
                             const client = clients.find(c => c.id === invoice.clientId);
-                            const appointment = appointments.find(appt => appt.id === invoice.appointmentId);
                             const { borderColor, bgColor, textColor } = getStatusStyles(invoice.status);
                             return (
                                 <div 
@@ -152,10 +148,7 @@ function InvoicesPageInternal() {
                                 >
                                     <div>
                                         <p className="font-bold">#{invoice.invoiceNumber} - {client?.name || 'N/A'}</p>
-                                        {appointment && (
-                                            <p className="text-sm font-medium text-primary/90">Service Date: {format(new Date(appointment.date + 'T00:00:00'), 'MMM d, yyyy')}</p>
-                                        )}
-                                        {/* ✅ FIX: Added the Invoice Date */}
+                                        {/* ✅ FIX: Service Date has been removed */}
                                         <p className="text-sm text-muted-foreground">Invoice Date: {format(new Date(invoice.invoiceDate + 'T00:00:00'), 'MMM d, yyyy')}</p>
                                         <p className="text-sm text-muted-foreground">Due: {format(new Date(invoice.dueDate + 'T00:00:00'), 'MMM d, yyyy')}</p>
                                     </div>

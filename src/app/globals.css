@@ -44,37 +44,23 @@
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
     --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%; /* This is now overridden below, but kept for consistency */
     --ring: 240 4.9% 83.9%;
   }
-}
 
-@layer base {
-  * {
-    @apply border-border;
-  }
   body {
-    @apply bg-background text-foreground;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+  
+  /* ✅ This new rule is the definitive fix */
+  input,
+  textarea,
+  select {
+    background-color: hsl(var(--card)) !important;
+    color: hsl(var(--card-foreground)) !important;
   }
 }
-
-/* In src/app/globals.css */
-
-/* Fix for Chrome browser autofill styles in dark mode */
-input:-webkit-autofill,
-input:-webkit-autofill:hover,
-input:-webkit-autofill:focus,
-input:-webkit-autofill:active {
-    /* This forces the text color to match your theme's text color */
-    -webkit-text-fill-color: hsl(var(--foreground)) !important;
-    
-    /* This is a trick to override the background color */
-    -webkit-box-shadow: 0 0 0px 1000px hsl(var(--background)) inset !important;
-
-    /* A long transition can also help delay the style override */
-    transition: background-color 5000s ease-in-out 0s;
-}
-/* ... (keep your existing global styles) */
 
 /* Custom Styles for the Interactive Calendar */
 .rdp-day_job:not(.rdp-day_outside) {

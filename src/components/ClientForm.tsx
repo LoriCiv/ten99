@@ -1,43 +1,45 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import type { Client } from '@/types/app-interfaces';
-// ✅ Make sure Copy icon is imported
-import { Save, Copy, Loader2 } from 'lucide-react';
-
-const FormLabel = ({ children }: { children: React.ReactNode }) => (<label className="block text-sm font-medium text-muted-foreground mb-1">{children}</label>);
-const Input = (props: React.InputHTMLAttributes<HTMLInputElement>) => (<input {...props} className="w-full mt-1 p-2 bg-background border rounded-md" />);
-const Select = (props: React.SelectHTMLAttributes<HTMLSelectElement>) => (<select {...props} className="w-full mt-1 p-2 bg-background border rounded-md" />);
-const Textarea = (props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => (<textarea {...props} className="w-full mt-1 p-2 bg-background border rounded-md" />);
+import { useState } from 'react';
+import type { Client, Differential } from '@/types/app-interfaces';
+import { Save, Loader2, Plus, Trash2 } from 'lucide-react';
+import { v4 as uuidv4 } from 'uuid';
 
 interface ClientFormProps {
     initialData?: Partial<Client>;
-    onSave: (data: Partial<Client>) => void;
+    onSave: (data: Partial<Client>) => Promise<void>;
     onCancel: () => void;
     isSubmitting: boolean;
-    onDuplicate?: () => void; // The prop for the duplicate handler
+    onDuplicate?: () => void;
 }
 
-export default function ClientForm({ initialData, onSave, onCancel, isSubmitting, onDuplicate }: ClientFormProps) {
+export default function ClientForm({ initialData = {}, onSave, onCancel, isSubmitting, onDuplicate }: ClientFormProps) {
     const [formData, setFormData] = useState<Partial<Client>>({
         clientType: 'business_1099',
         status: 'Active',
-        payFrequency: 'biweekly',
-        ...initialData
+        ...initialData,
     });
 
-    const isEditMode = !!initialData?.id;
-
-    useEffect(() => {
-        if (initialData) {
-            setFormData(initialData);
-        }
-    }, [initialData]);
-
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-        const { name, value, type } = e.target;
-        const finalValue = type === 'number' ? (value === '' ? undefined : parseFloat(value)) : value;
-        setFormData(prev => ({ ...prev, [name]: finalValue }));
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleDifferentialChange = (index: number, field: keyof Differential, value: string | number) => {
+        const newDifferentials = [...(formData.differentials || [])];
+        (newDifferentials[index] as any)[field] = field === 'amount' ? Number(value) : value;
+        setFormData(prev => ({ ...prev, differentials: newDifferentials }));
+    };
+    
+    const addDifferential = () => {
+        const newDifferential: Differential = { id: uuidv4(), description: '', amount: 0 };
+        setFormData(prev => ({ ...prev, differentials: [...(prev.differentials || []), newDifferential] }));
+    };
+    
+    const removeDifferential = (index: number) => {
+        const newDifferentials = [...(formData.differentials || [])];
+        newDifferentials.splice(index, 1);
+        setFormData(prev => ({ ...prev, differentials: newDifferentials }));
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -47,40 +49,47 @@ export default function ClientForm({ initialData, onSave, onCancel, isSubmitting
 
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
-            <h2 className="text-2xl font-bold text-foreground">{isEditMode ? 'Edit Company' : 'New Company Details'}</h2>
-            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 <div><FormLabel>Client Type</FormLabel><Select name="clientType" value={formData.clientType || 'business_1099'} onChange={handleInputChange}><option value="business_1099">Business (1099)</option><option value="individual_1099">Individual (1099)</option><option value="employer_w2">Employer (W2)</option></Select></div>
-                 <div><FormLabel>Status</FormLabel><Select name="status" value={formData.status || 'Active'} onChange={handleInputChange}><option value="Active">Active</option><option value="Inactive">Inactive</option><option value="Lead">Lead</option></Select></div>
-                 <div className="md:col-span-2"><FormLabel>Company Name</FormLabel><Input name="companyName" value={formData.companyName || ''} onChange={handleInputChange} /></div>
-                 <div><FormLabel>Primary Contact Name*</FormLabel><Input name="name" value={formData.name || ''} onChange={handleInputChange} required /></div>
-                 <div><FormLabel>Contact Email</FormLabel><Input type="email" name="email" value={formData.email || ''} onChange={handleInputChange} /></div>
-                 <div><FormLabel>Billing Email</FormLabel><Input type="email" name="billingEmail" value={formData.billingEmail || ''} onChange={handleInputChange} /></div>
-                 <div><FormLabel>Phone</FormLabel><Input type="tel" name="phone" value={formData.phone || ''} onChange={handleInputChange} /></div>
-                 <div className="md:col-span-2"><FormLabel>Website</FormLabel><Input type="url" name="website" value={formData.website || ''} onChange={handleInputChange} /></div>
-                 <div className="md:col-span-2"><FormLabel>Address</FormLabel><Textarea name="address" rows={3} value={formData.address || ''} onChange={handleInputChange} /></div>
+                {/* --- Basic Info --- */}
+                <div className="md:col-span-2"><label className="block text-sm font-medium">Company Name</label><input name="companyName" value={formData.companyName || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" /></div>
+                <div><label className="block text-sm font-medium">Primary Contact Name*</label><input name="name" value={formData.name || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" required /></div>
+                <div><label className="block text-sm font-medium">Primary Contact Title</label><input name="jobTitle" value={formData.jobTitle || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" /></div>
+                <div><label className="block text-sm font-medium">Contact Email</label><input name="email" type="email" value={formData.email || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" /></div>
+                <div><label className="block text-sm font-medium">Billing Email</label><input name="billingEmail" type="email" value={formData.billingEmail || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" /></div>
             </div>
-             <div className="pt-4 border-t border-border/50">
-                 <h4 className="text-lg font-medium mb-2">Financials</h4>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div><FormLabel>{formData.clientType === 'employer_w2' ? 'W2 Base Rate ($)' : '1099 Hourly Rate ($)'}</FormLabel><Input type="number" step="0.01" name="rate" value={formData.rate ?? ''} onChange={handleInputChange} /></div>
-                      {formData.clientType?.includes('1099') && (<div className="md:col-span-2"><FormLabel>Differential Rate Notes</FormLabel><Textarea name="differentials" value={formData.differentials || ''} onChange={handleInputChange} rows={2} placeholder="e.g., Nights: 1.5x"/></div>)}
-                      {formData.clientType === 'employer_w2' && (<><div><FormLabel>Pay Frequency</FormLabel><Select name="payFrequency" value={formData.payFrequency || 'biweekly'} onChange={handleInputChange}><option value="weekly">Weekly</option><option value="biweekly">Bi-weekly</option><option value="semimonthly">Semi-monthly</option><option value="monthly">Monthly</option></Select></div><div><FormLabel>Federal Withholding ($)</FormLabel><Input type="number" step="0.01" name="federalWithholding" value={formData.federalWithholding ?? ''} onChange={handleInputChange} /></div><div><FormLabel>State Withholding ($)</FormLabel><Input type="number" step="0.01" name="stateWithholding" value={formData.stateWithholding ?? ''} onChange={handleInputChange} /></div></>)}
-                 </div>
-             </div>
-             <div className="md:col-span-2"><FormLabel>General Notes</FormLabel><Textarea name="notes" rows={3} value={formData.notes || ''} onChange={handleInputChange} /></div>
 
-            <div className="flex justify-end items-center gap-4 pt-4 border-t">
-                {/* ✅ The Duplicate button, which only shows in edit mode */}
-                {isEditMode && onDuplicate && (
-                    <button type="button" onClick={onDuplicate} className="flex items-center gap-2 bg-amber-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-amber-600 mr-auto">
-                        <Copy size={16}/> Duplicate
-                    </button>
-                )}
-                <button type="button" onClick={onCancel} className="bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg">Cancel</button>
+            {/* --- Payment Details Section --- */}
+            <div className="pt-4 border-t">
+                <h3 className="text-lg font-semibold text-foreground mb-4">Payment Details</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div><label className="block text-sm font-medium">Standard Rate ($/hr)</label><input name="rate" type="number" step="0.01" value={formData.rate || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" /></div>
+                    <div><label className="block text-sm font-medium">Payment Frequency</label><select name="payFrequency" value={formData.payFrequency || 'per_job'} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md"><option value="per_job">Per Job</option><option value="weekly">Weekly</option><option value="biweekly">Bi-Weekly</option><option value="monthly">Monthly</option></select></div>
+                    <div><label className="block text-sm font-medium">Payment Method</label><select name="paymentMethod" value={formData.paymentMethod || 'check'} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md"><option value="check">Check</option><option value="direct_deposit">Direct Deposit</option><option value="virtual">Virtual (Venmo, etc.)</option><option value="cash">Cash</option><option value="other">Other</option></select></div>
+                    <div><label className="block text-sm font-medium">Bank Statement Name</label><input name="bankPostedName" value={formData.bankPostedName || ''} onChange={handleInputChange} placeholder="How it appears on statements" className="w-full mt-1 p-2 bg-background border rounded-md" /></div>
+                </div>
+            </div>
+
+            {/* --- Rate Differentials Section --- */}
+            <div className="pt-4 border-t">
+                <h3 className="text-lg font-semibold text-foreground mb-2">Rate Differentials</h3>
+                <p className="text-sm text-muted-foreground mb-4">Add automatic line items for specific conditions (e.g., weekends, holidays).</p>
+                <div className="space-y-3">
+                    {(formData.differentials || []).map((diff, index) => (
+                        <div key={diff.id} className="flex items-center gap-2 p-2 border rounded-md bg-background/50">
+                            <input value={diff.description} onChange={e => handleDifferentialChange(index, 'description', e.target.value)} placeholder="Description (e.g., Weekend Rate)" className="flex-grow p-2 bg-background border rounded-md" />
+                            <input value={diff.amount} onChange={e => handleDifferentialChange(index, 'amount', e.target.value)} type="number" step="0.01" placeholder="Amount" className="w-28 p-2 bg-background border rounded-md" />
+                            <button type="button" onClick={() => removeDifferential(index)} className="p-2 text-destructive hover:bg-destructive/10 rounded-full"><Trash2 size={16}/></button>
+                        </div>
+                    ))}
+                    <button type="button" onClick={addDifferential} className="flex items-center gap-2 text-sm font-semibold text-primary hover:underline"><Plus size={16}/> Add Differential</button>
+                </div>
+            </div>
+
+            <div className="flex justify-end gap-4 pt-4 border-t">
+                <button type="button" onClick={onCancel} className="bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-secondary/80">Cancel</button>
                 <button type="submit" disabled={isSubmitting} className="bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg flex items-center gap-2 disabled:opacity-50">
-                    {isSubmitting ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>}
-                    {isSubmitting ? 'Saving...' : 'Save Changes'}
+                    {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                    {isSubmitting ? 'Saving...' : 'Save Client'}
                 </button>
             </div>
         </form>

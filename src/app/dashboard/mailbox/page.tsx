@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useMemo, Suspense, ElementType } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { ArrowLeft, Trash2, Search, Check, X as XIcon, Send, RotateCcw, Clock, CalendarCheck, CornerDownLeft, Pencil, PackageOpen, Loader2 } from 'lucide-react';
-import type { Message, JobPosting } from '@/types/app-interfaces';
+import { ArrowLeft, Trash2, Search, Check, X as XIcon, Send, RotateCcw, Clock, CalendarCheck, CornerDownLeft, Pencil, PackageOpen, Loader2, Inbox, SendHorizontal, CheckCircle, Hourglass, BookOpen } from 'lucide-react';
+import type { Message, JobPosting, Appointment } from '@/types/app-interfaces';
 import {
     getMessagesForUser,
     getSentMessagesForUser,
@@ -18,15 +18,20 @@ import {
     getJobPostings,
     declineInboundOffer,
     acceptInboundOfferPending,
-    confirmInboundOffer
+    confirmInboundOffer,
+    markAsEducation,
+    createEducationAppointmentFromMessage // We will add this in the next step
 } from '@/utils/firestoreService';
 import ComposeMessageForm from '@/components/ComposeMessageForm';
 import { Timestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
+import Modal from '@/components/Modal';
 
 const TEMP_USER_ID = "dev-user-1";
 const TEMP_USER_NAME = "Dev User";
+
+type MailboxFolder = 'inbox' | 'sent' | 'approved' | 'pending' | 'education';
 
 function MailboxPageInternal() {
     const searchParams = useSearchParams();
@@ -34,11 +39,14 @@ function MailboxPageInternal() {
     const [jobPostings, setJobPostings] = useState<JobPosting[]>([]);
     const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
     const [isComposing, setIsComposing] = useState(false);
-    const [activeFolder, setActiveFolder] = useState<'inbox' | 'sent'>('inbox');
+    const [activeFolder, setActiveFolder] = useState<MailboxFolder>('inbox');
     const [searchTerm, setSearchTerm] = useState('');
     const [isActionLoading, setIsActionLoading] = useState(false);
     const [composeInitialData, setComposeInitialData] = useState<{recipient: string, subject: string, body: string}>();
     
+    const [isEducationModalOpen, setIsEducationModalOpen] = useState(false);
+    const [educationFormData, setEducationFormData] = useState({ date: '', time: '' });
+
     const initialRecipient = searchParams.get('to');
 
     useEffect(() => {
@@ -49,9 +57,9 @@ function MailboxPageInternal() {
     }, [initialRecipient, isComposing]);
 
     useEffect(() => {
-        const unsubMessages = activeFolder === 'inbox'
-            ? getMessagesForUser(TEMP_USER_ID, setMessages)
-            : getSentMessagesForUser(TEMP_USER_ID, setMessages);
+        const unsubMessages = activeFolder === 'sent'
+            ? getSentMessagesForUser(TEMP_USER_ID, setMessages)
+            : getMessagesForUser(TEMP_USER_ID, setMessages);
         
         const unsubJobs = getJobPostings(setJobPostings);
         
@@ -63,14 +71,27 @@ function MailboxPageInternal() {
     }, [activeFolder]);
 
     const filteredMessages = useMemo(() => {
-        if (!searchTerm) return messages;
+        let items = messages;
+
+        if (activeFolder === 'inbox') {
+            items = messages.filter(m => m.status === 'new' || m.status === undefined);
+        } else if (activeFolder === 'approved') {
+            items = messages.filter(m => m.status === 'approved');
+        } else if (activeFolder === 'pending') {
+            items = messages.filter(m => m.status === 'pending' || m.status === 'offer-pending');
+        } else if (activeFolder === 'education') {
+            items = messages.filter(m => m.status === 'archived-education');
+        }
+        
+        if (!searchTerm) return items;
+
         const lowercasedTerm = searchTerm.toLowerCase();
-        return messages.filter(message => 
+        return items.filter(message => 
             (message.senderName?.toLowerCase() || '').includes(lowercasedTerm) ||
             (message.subject?.toLowerCase() || '').includes(lowercasedTerm) ||
             (message.body?.toLowerCase() || '').includes(lowercasedTerm)
         );
-    }, [messages, searchTerm]);
+    }, [messages, searchTerm, activeFolder]);
 
     const handleSelectMessage = (message: Message) => {
         setSelectedMessage(message);
@@ -149,6 +170,44 @@ function MailboxPageInternal() {
         }
     };
 
+    const handleMarkAsEducation = async () => {
+        if (!selectedMessage) return;
+
+        if (selectedMessage.appointmentId) {
+            await performAction(
+                () => markAsEducation(TEMP_USER_ID, selectedMessage),
+                'archived-education',
+                'Event marked as education and scheduled!'
+            );
+        } else {
+            setEducationFormData({ date: '', time: '' });
+            setIsEducationModalOpen(true);
+        }
+    };
+
+    const handleScheduleEducation = async () => {
+        if (!selectedMessage || !educationFormData.date || !educationFormData.time) {
+            alert("Please provide both a date and a time.");
+            return;
+        }
+        
+        const appointmentData: Partial<Appointment> = {
+            subject: selectedMessage.subject,
+            date: educationFormData.date,
+            time: educationFormData.time,
+            eventType: 'education',
+            status: 'scheduled',
+            notes: `This event was manually scheduled from the following email:\n\n--- Original Email ---\nFrom: ${selectedMessage.senderName}\nSubject: ${selectedMessage.subject}\n\n${selectedMessage.body}`
+        };
+
+        await performAction(
+            () => createEducationAppointmentFromMessage(TEMP_USER_ID, selectedMessage, appointmentData),
+            'archived-education',
+            'Education event scheduled successfully!'
+        );
+        setIsEducationModalOpen(false);
+    };
+
     interface ActionButtonProps {
         onClick: () => void;
         disabled: boolean;
@@ -175,6 +234,21 @@ function MailboxPageInternal() {
 
     const relatedJobPost = selectedMessage?.jobPostId ? jobPostings.find(p => p.id === selectedMessage.jobPostId) : null;
 
+    const FolderButton = ({ folderName, label, icon: Icon, count }: { folderName: MailboxFolder, label: string, icon: ElementType, count?: number }) => (
+        <button 
+            onClick={() => setActiveFolder(folderName)}
+            className={`flex items-center justify-between w-full px-3 py-2 text-sm font-semibold rounded-md transition-colors ${activeFolder === folderName ? 'bg-primary/10 text-primary' : 'hover:bg-muted'}`}
+        >
+            <div className="flex items-center gap-3">
+                <Icon size={18} />
+                <span>{label}</span>
+            </div>
+            {count !== undefined && count > 0 && (
+                <span className="px-2 py-0.5 text-xs rounded-full bg-primary text-primary-foreground">{count}</span>
+            )}
+        </button>
+    );
+
     const messageListComponent = (
         <div className="flex flex-col h-full border-r">
             <div className="p-4 border-b shrink-0">
@@ -184,15 +258,18 @@ function MailboxPageInternal() {
                         <Pencil size={16} /> Compose
                     </button>
                 </div>
-                <div className="flex gap-2 mt-4 border-b">
-                    <button onClick={() => setActiveFolder('inbox')} className={`pb-2 px-2 text-sm font-semibold ${activeFolder === 'inbox' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground'}`}>Inbox ({messages.filter(m => !m.isRead).length})</button>
-                    <button onClick={() => setActiveFolder('sent')} className={`pb-2 px-2 text-sm font-semibold ${activeFolder === 'sent' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground'}`}>Sent</button>
-                </div>
                  <div className="relative mt-4">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <input onChange={(e) => setSearchTerm(e.target.value)} type="text" placeholder="Search..." className="w-full bg-background border rounded-md pl-9 pr-3 py-2 text-sm"/>
                 </div>
             </div>
+            <nav className="p-2 border-b">
+                <FolderButton folderName="inbox" label="Inbox" icon={Inbox} count={messages.filter(m => !m.isRead && m.status === 'new').length} />
+                <FolderButton folderName="sent" label="Sent" icon={SendHorizontal} />
+                <FolderButton folderName="approved" label="Approved Jobs" icon={CheckCircle} />
+                <FolderButton folderName="pending" label="Pending Jobs" icon={Hourglass} />
+                <FolderButton folderName="education" label="Education" icon={BookOpen} />
+            </nav>
             <div className="overflow-y-auto flex-grow">
                 {filteredMessages.length > 0 ? filteredMessages.map(message => (
                     <div key={message.id} onClick={() => handleSelectMessage(message)} className={`p-4 border-b cursor-pointer hover:bg-muted ${selectedMessage?.id === message.id ? 'bg-muted' : ''} ${!message.isRead && activeFolder === 'inbox' ? 'font-bold' : ''}`}>
@@ -202,7 +279,7 @@ function MailboxPageInternal() {
                         </div>
                         <p className="text-sm truncate">{message.subject}</p>
                     </div>
-                )) : <div className="text-center p-8 text-muted-foreground">No messages</div>}
+                )) : <div className="text-center p-8 text-muted-foreground">No messages in this folder</div>}
             </div>
         </div>
     );
@@ -248,6 +325,7 @@ function MailboxPageInternal() {
                                                 <>
                                                     <ActionButton onClick={() => performAction(() => confirmInboundOffer(TEMP_USER_ID, selectedMessage), 'approved', 'Appointment Confirmed!')} disabled={isActionLoading} icon={CalendarCheck} text="Confirm & Book" variant="success"/>
                                                     <ActionButton onClick={() => performAction(() => acceptInboundOfferPending(TEMP_USER_ID, selectedMessage), 'pending', 'Replied to Sender.')} disabled={isActionLoading} icon={Clock} text="Accept Pending" variant="warning"/>
+                                                    <ActionButton onClick={handleMarkAsEducation} disabled={isActionLoading} icon={BookOpen} text="Mark as Education" variant="secondary"/>
                                                     <ActionButton onClick={() => performAction(() => declineInboundOffer(TEMP_USER_ID, selectedMessage), 'declined', 'Declined & Replied.')} disabled={isActionLoading} icon={XIcon} text="Decline" variant="danger"/>
                                                 </>
                                             )}
@@ -257,7 +335,7 @@ function MailboxPageInternal() {
                                         </div>
                                     </>
                                 )}
-                                {['approved', 'declined', 'offer-rescinded', 'pending'].includes(selectedMessage.status || '') && (
+                                {['approved', 'declined', 'offer-rescinded', 'pending', 'archived-education'].includes(selectedMessage.status || '') && (
                                     <p className="text-sm font-semibold text-muted-foreground mt-4">This conversation has been actioned. Status: &apos;{selectedMessage.status}&apos;.</p>
                                 )}
                             </div>
@@ -274,22 +352,60 @@ function MailboxPageInternal() {
     );
 
     return (
-        <div className="h-[calc(100vh-8rem)] bg-card border rounded-lg overflow-hidden">
-            <div className="md:hidden h-full">
-                {selectedMessage || isComposing ? detailComponent : messageListComponent}
+        <>
+            <div className="h-[calc(100vh-8rem)] bg-card border rounded-lg overflow-hidden">
+                <div className="md:hidden h-full">
+                    {selectedMessage || isComposing ? detailComponent : messageListComponent}
+                </div>
+                <div className="hidden md:flex h-full">
+                    <PanelGroup direction="horizontal">
+                        <Panel defaultSize={35} minSize={25}>
+                            {messageListComponent}
+                        </Panel>
+                        <PanelResizeHandle className="w-2 bg-muted hover:bg-primary/20 transition-colors" />
+                        <Panel minSize={30}>
+                            {detailComponent}
+                        </Panel>
+                    </PanelGroup>
+                </div>
             </div>
-            <div className="hidden md:flex h-full">
-                <PanelGroup direction="horizontal">
-                    <Panel defaultSize={35} minSize={25}>
-                        {messageListComponent}
-                    </Panel>
-                    <PanelResizeHandle className="w-2 bg-muted hover:bg-primary/20 transition-colors" />
-                    <Panel minSize={30}>
-                        {detailComponent}
-                    </Panel>
-                </PanelGroup>
-            </div>
-        </div>
+
+            <Modal isOpen={isEducationModalOpen} onClose={() => setIsEducationModalOpen(false)}>
+                <div className="p-6">
+                     <h2 className="text-xl font-bold mb-4">Schedule Education Event</h2>
+                     <p className="text-sm text-muted-foreground mb-4">The AI couldn&apos;t find a date in this email. Please set the date and time for this training/workshop.</p>
+                     <div className="space-y-4">
+                         <div>
+                             <label htmlFor="educationDate" className="block text-sm font-medium">Date</label>
+                             <input 
+                                 type="date" 
+                                 id="educationDate" 
+                                 value={educationFormData.date}
+                                 onChange={(e) => setEducationFormData(prev => ({...prev, date: e.target.value}))}
+                                 className="w-full mt-1 p-2 bg-background border rounded-md"
+                             />
+                         </div>
+                         <div>
+                             <label htmlFor="educationTime" className="block text-sm font-medium">Time</label>
+                             <input 
+                                 type="time" 
+                                 id="educationTime" 
+                                 value={educationFormData.time}
+                                 onChange={(e) => setEducationFormData(prev => ({...prev, time: e.target.value}))}
+                                 className="w-full mt-1 p-2 bg-background border rounded-md"
+                             />
+                         </div>
+                     </div>
+                     <div className="flex justify-end gap-4 mt-6">
+                         <button onClick={() => setIsEducationModalOpen(false)} className="bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-secondary/80">Cancel</button>
+                         <button onClick={handleScheduleEducation} disabled={isActionLoading} className="bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg flex items-center gap-2 disabled:opacity-50">
+                             {isActionLoading ? <Loader2 size={16} className="animate-spin"/> : <CalendarCheck size={16}/>}
+                             Schedule Event
+                         </button>
+                     </div>
+                </div>
+            </Modal>
+        </>
     );
 }
 

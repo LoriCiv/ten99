@@ -5,9 +5,9 @@ import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Client, PersonalNetworkContact, JobFile } from '@/types/app-interfaces';
 import Link from 'next/link';
-// ✅ THE FIX: Removed unused 'PlusCircle' icon
 import { Search, Building2, User } from 'lucide-react';
 import ClientDetailModal from './ClientDetailModal';
+import clsx from 'clsx'; // Import the clsx utility
 
 interface ClientsPageContentProps {
     clients: Client[];
@@ -96,9 +96,38 @@ export default function ClientsPageContent({
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredItems.map(item => (
-                        <div key={`${item.type}-${item.id}`} onClick={() => handleItemClick(item, item.type)} className="bg-card p-6 rounded-lg border hover:border-primary hover:shadow-lg transition-all cursor-pointer">
-                            <h3 className="text-xl font-bold text-foreground truncate">{item.type === 'Company' ? (item as Client).companyName : item.name}</h3>
-                            <p className="text-muted-foreground text-sm">{item.email}</p>
+                        <div 
+                            key={`${item.type}-${item.id}`} 
+                            onClick={() => handleItemClick(item, item.type)} 
+                            className="bg-card rounded-lg border hover:border-primary hover:shadow-lg transition-all cursor-pointer relative overflow-hidden group"
+                        >
+                            <div className={clsx(
+                                'absolute top-0 left-0 h-1.5 w-full',
+                                {
+                                    'bg-blue-500': item.type === 'Company',
+                                    'bg-purple-500': item.type === 'Contact',
+                                }
+                            )}></div>
+                            <div className="p-4 pt-6"> {/* Added more top padding */}
+                                <div className="flex items-center gap-4">
+                                    <div className={clsx(
+                                        'p-3 rounded-lg',
+                                        {
+                                            'bg-blue-100 dark:bg-blue-900/50': item.type === 'Company',
+                                            'bg-purple-100 dark:bg-purple-900/50': item.type === 'Contact',
+                                        }
+                                    )}>
+                                        {item.type === 'Company' 
+                                            ? <Building2 className="h-6 w-6 text-blue-600 dark:text-blue-400" /> 
+                                            : <User className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                                        }
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-bold text-foreground truncate">{item.type === 'Company' ? (item as Client).companyName : item.name}</h3>
+                                        <p className="text-muted-foreground text-sm truncate">{item.email}</p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     ))}
                 </div>

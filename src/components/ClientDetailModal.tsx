@@ -17,17 +17,28 @@ import ClientForm from './ClientForm';
 import ContactForm from './ContactForm';
 import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+    DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import Modal from './Modal';
 
-
-const DetailItem = ({ label, value }: { label: string, value?: string | null }) => (
-    <p><span className="font-semibold text-muted-foreground">{label}:</span> {value || 'N/A'}</p>
-);
+// This is a small helper component for displaying details cleanly
+const DetailItem = ({ label, value, isLink }: { label: string, value?: string | null, isLink?: boolean }) => {
+    if (!value) return null;
+    return (
+        <div className="grid grid-cols-3 gap-2 text-sm">
+            <span className="font-semibold text-muted-foreground col-span-1">{label}</span>
+            {isLink ? (
+                <a href={value} target="_blank" rel="noopener noreferrer" className="col-span-2 text-primary hover:underline truncate">{value}</a>
+            ) : (
+                <span className="col-span-2 text-foreground capitalize">{value.replace(/_/g, ' ')}</span>
+            )}
+        </div>
+    );
+};
 
 interface ClientDetailModalProps {
     item: Client | PersonalNetworkContact | null;
@@ -55,13 +66,9 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
         if (!item || itemType !== 'Company' || !item.id) return [];
         return jobFiles.filter(jf => jf.clientId === item.id);
     }, [jobFiles, item, itemType]);
-
-    if (!item) {
-        return null;
-    }
     
     const handleSave = async (formData: Partial<Client | PersonalNetworkContact>) => {
-        if (!item.id) return;
+        if (!item?.id) return;
         setIsSubmitting(true);
         try {
             if (itemType === 'Company') {
@@ -80,7 +87,7 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
     };
 
     const handleDelete = async () => {
-        if (!item.id) return;
+        if (!item?.id) return;
         const itemName = (item as Client).companyName || item.name;
         if (window.confirm(`Are you sure you want to delete "${itemName}"?`)) {
             try {
@@ -97,7 +104,7 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
     };
     
     const handleConvert = async () => {
-        if (!item.id) return;
+        if (!item?.id) return;
         setIsConverting(true);
         const targetType = itemType === 'Company' ? 'Contact' : 'Company';
         if (window.confirm(`Are you sure you want to convert this ${itemType} to a ${targetType}?`)) {
@@ -122,6 +129,7 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
     };
 
     const handleCopyInfo = () => {
+        if (!item) return;
         const name = (item as Client).companyName || item.name;
         const email = item.email || 'N/A';
         const phone = item.phone || 'N/A';
@@ -129,13 +137,11 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
         navigator.clipboard.writeText(textToCopy).then(() => {
             setIsCopied(true);
             setTimeout(() => setIsCopied(false), 2000);
-        }).catch(() => {
-            alert("Failed to copy information.");
-        });
+        }).catch(() => alert("Failed to copy information."));
     };
     
     const handleDuplicate = () => {
-        if (itemType !== 'Company') return;
+        if (itemType !== 'Company' || !item) return;
         const duplicateData = { ...(item as Client) };
         delete duplicateData.id;
         delete duplicateData.createdAt;
@@ -143,15 +149,15 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
         router.push(`/dashboard/clients/new-company?data=${dataString}`);
     };
 
-    const emailToUse = item.email || (itemType === 'Company' ? (item as Client).billingEmail : '');
+    const emailToUse = item?.email || (itemType === 'Company' ? (item as Client).billingEmail : '');
     const jobFileLink = relevantJobFiles.length === 1 && relevantJobFiles[0].id
         ? `/dashboard/job-files/${relevantJobFiles[0].id}`
-        : `/dashboard/job-files?clientId=${item.id}`;
+        : `/dashboard/job-files?clientId=${item?.id}`;
 
 
     return (
-        <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4">
-            <div className="bg-card rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border">
+        <Modal isOpen={!!item} onClose={onClose}>
+            {item && (
                 <div className="p-6">
                     <div className="flex justify-between items-center mb-4 pb-4 border-b">
                         <h2 className="text-2xl font-bold">{isEditing ? `Edit ${itemType}` : `${itemType} Details`}</h2>
@@ -161,22 +167,64 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
                     {isEditing ? (
                        itemType === 'Company' ? (
                             <ClientForm initialData={item as Client} onSave={handleSave} onCancel={() => setIsEditing(false)} isSubmitting={isSubmitting} onDuplicate={handleDuplicate} />
-                        ) : (
+                       ) : (
                             <ContactForm initialData={item as PersonalNetworkContact} onSave={handleSave} onCancel={() => setIsEditing(false)} isSubmitting={isSubmitting} clients={clients} />
-                        )
+                       )
                     ) : (
-                        <div className="space-y-4">
-                            <h3 className="font-bold text-xl">{(item as Client).companyName || item.name}</h3>
-                            <DetailItem label="Email" value={item.email} />
-                            <DetailItem label="Phone" value={item.phone} />
-                            {itemType === 'Company' && <DetailItem label="Primary Contact" value={(item as Client).name} />}
+                        <div className="space-y-6">
+                            <div>
+                                <h3 className="font-bold text-2xl text-foreground">{(item as Client).companyName || item.name}</h3>
+                                {itemType === 'Company' && <p className="text-sm text-muted-foreground capitalize">{ (item as Client).status} / {(item as Client).clientType?.replace(/_/g, ' ')}</p>}
+                            </div>
+
+                            <div className="space-y-2">
+                                <h4 className="font-semibold text-primary border-b pb-1 mb-2">Contact Information</h4>
+                                {itemType === 'Company' && <DetailItem label="Primary Contact" value={(item as Client).name} />}
+                                {itemType === 'Company' && <DetailItem label="Contact Title" value={(item as Client).jobTitle} />}
+                                <DetailItem label="Email" value={item.email} />
+                                {itemType === 'Company' && <DetailItem label="Billing Email" value={(item as Client).billingEmail} />}
+                                <DetailItem label="Phone" value={item.phone} />
+                                {itemType === 'Company' && <DetailItem label="Address" value={(item as Client).address} />}
+                                {itemType === 'Company' && <DetailItem label="Website" value={(item as Client).website} isLink={true} />}
+                            </div>
                             
-                            <div className="flex justify-end items-center gap-2 pt-4 border-t">
-                                {/* ✅ CORRECTED JOB FILE BUTTON LOGIC */}
+                            {/* ✅ This entire block is now correctly wrapped in a check */}
+                            {itemType === 'Company' && (
+                                <>
+                                    <div className="space-y-2">
+                                        <h4 className="font-semibold text-primary border-b pb-1 mb-2">Payment Details</h4>
+                                        <DetailItem label="Standard Rate" value={(item as Client).rate ? `$${Number((item as Client).rate).toFixed(2)}/hr` : 'N/A'} />
+                                        <DetailItem label="Payment Frequency" value={(item as Client).payFrequency} />
+                                        <DetailItem label="Payment Method" value={(item as Client).paymentMethod} />
+                                        <DetailItem label="Bank Statement Name" value={(item as Client).bankPostedName} />
+                                    </div>
+
+                                    {(item as Client).differentials && ((item as Client).differentials?.length ?? 0) > 0 && (
+                                        <div className="space-y-2">
+                                            <h4 className="font-semibold text-primary border-b pb-1 mb-2">Rate Differentials</h4>
+                                            {(item as Client).differentials?.map(diff => (
+                                                <div key={diff.id} className="flex justify-between text-sm">
+                                                    <span className="text-muted-foreground">{diff.description}</span>
+                                                    <span className="font-semibold text-foreground">${Number(diff.amount).toFixed(2)}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                            
+                            {item.notes && (
+                                <div className="space-y-2">
+                                    <h4 className="font-semibold text-primary border-b pb-1 mb-2">Notes</h4>
+                                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">{item.notes}</p>
+                                </div>
+                            )}
+                            
+                            <div className="flex justify-end items-center gap-2 pt-6 border-t">
                                 {itemType === 'Company' && (
                                     <Button asChild variant="outline">
                                         <Link href={jobFileLink} className="flex items-center gap-2">
-                                            <FileText size={16}/> 
+                                            <FileText size={16}/>
                                             {relevantJobFiles.length > 0 ? `View Files (${relevantJobFiles.length})` : 'Job Files'}
                                         </Link>
                                     </Button>
@@ -185,35 +233,20 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
                                     <Edit size={16}/>Edit
                                 </Button>
                                 <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button variant="outline" size="icon">
-                                            <MoreHorizontal className="h-4 w-4" />
-                                        </Button>
-                                    </DropdownMenuTrigger>
+                                    <DropdownMenuTrigger asChild><Button variant="outline" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
-                                        <DropdownMenuItem onSelect={handleCopyInfo} className="cursor-pointer">
-                                            <ClipboardCopy className="mr-2 h-4 w-4" />
-                                            <span>{isCopied ? 'Copied!' : 'Copy Info'}</span>
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem asChild className="cursor-pointer">
-                                            {emailToUse ? <Link href={`/dashboard/mailbox?to=${emailToUse}`} className="flex items-center w-full"><Mail className="mr-2 h-4 w-4" />Send Message</Link> : <span className="opacity-50 flex items-center w-full"><Mail className="mr-2 h-4 w-4" />Send Message</span>}
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem onSelect={handleConvert} disabled={isConverting} className="cursor-pointer">
-                                            <Repeat className="mr-2 h-4 w-4" />
-                                            <span>{isConverting ? 'Converting...' : 'Convert'}</span>
-                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onSelect={handleCopyInfo} className="cursor-pointer"><ClipboardCopy className="mr-2 h-4 w-4" /><span>{isCopied ? 'Copied!' : 'Copy Info'}</span></DropdownMenuItem>
+                                        <DropdownMenuItem asChild className="cursor-pointer">{emailToUse ? <Link href={`/dashboard/mailbox?to=${emailToUse}`} className="flex items-center w-full"><Mail className="mr-2 h-4 w-4" />Send Message</Link> : <span className="opacity-50 flex items-center w-full"><Mail className="mr-2 h-4 w-4" />Send Message</span>}</DropdownMenuItem>
+                                        <DropdownMenuItem onSelect={handleConvert} disabled={isConverting} className="cursor-pointer"><Repeat className="mr-2 h-4 w-4" /><span>{isConverting ? 'Converting...' : 'Convert'}</span></DropdownMenuItem>
                                         <DropdownMenuSeparator />
-                                        <DropdownMenuItem onSelect={handleDelete} className="cursor-pointer text-destructive focus:text-destructive">
-                                            <Trash2 className="mr-2 h-4 w-4" />
-                                            <span>Delete</span>
-                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onSelect={handleDelete} className="cursor-pointer text-destructive focus:text-destructive"><Trash2 className="mr-2 h-4 w-4" /><span>Delete</span></DropdownMenuItem>
                                     </DropdownMenuContent>
                                 </DropdownMenu>
                             </div>
                         </div>
                     )}
                 </div>
-            </div>
-        </div>
+            )}
+        </Modal>
     );
 }

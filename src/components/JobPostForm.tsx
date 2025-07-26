@@ -4,6 +4,16 @@ import { useState, useEffect } from 'react';
 import type { JobPosting, UserProfile } from '@/types/app-interfaces';
 import { Save, Loader2, X } from 'lucide-react';
 
+const usStates = [
+    "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", "Delaware",
+    "Florida", "Georgia", "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky",
+    "Louisiana", "Maine", "Maryland", "Massachusetts", "Michigan", "Minnesota", "Mississippi",
+    "Missouri", "Montana", "Nebraska", "Nevada", "New Hampshire", "New Jersey", "New Mexico",
+    "New York", "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon", "Pennsylvania",
+    "Rhode Island", "South Carolina", "South Dakota", "Tennessee", "Texas", "Utah", "Vermont",
+    "Virginia", "Washington", "West Virginia", "Wisconsin", "Wyoming"
+];
+
 interface JobPostFormProps {
     onSave: (data: Partial<JobPosting>) => Promise<void>;
     onCancel: () => void;
@@ -56,7 +66,11 @@ export default function JobPostForm({ onSave, onCancel, isSubmitting, userProfil
             alert("Title and Description are required.");
             return;
         }
-        onSave(formData);
+        const dataToSave = {
+            ...formData,
+            location: `${formData.location || ''}, ${formData.state || ''}`
+        };
+        onSave(dataToSave);
     };
 
     return (
@@ -74,7 +88,6 @@ export default function JobPostForm({ onSave, onCancel, isSubmitting, userProfil
                         <input name="title" value={formData.title || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" required />
                     </div>
 
-                    {/* ✅ NEW DATE & TIME FIELDS */}
                     <div>
                         <label className="block text-sm font-medium text-muted-foreground">Start Date</label>
                         <input name="startDate" type="date" value={formData.startDate || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" />
@@ -92,7 +105,6 @@ export default function JobPostForm({ onSave, onCancel, isSubmitting, userProfil
                         <input name="endTime" type="time" value={formData.endTime || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" />
                     </div>
 
-
                     <div>
                         <label className="block text-sm font-medium text-muted-foreground">Job Type</label>
                         <select name="jobType" value={formData.jobType || 'On-site'} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md">
@@ -105,16 +117,31 @@ export default function JobPostForm({ onSave, onCancel, isSubmitting, userProfil
                         <label className="block text-sm font-medium text-muted-foreground">Rate / Pay</label>
                         <input name="rate" value={formData.rate || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" placeholder="e.g., $50/hr, DOE" />
                     </div>
+
                     <div>
-                        <label className="block text-sm font-medium text-muted-foreground">Location (City, State)</label>
-                        <input name="location" value={formData.location || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" />
+                        <label className="block text-sm font-medium text-muted-foreground">City</label>
+                        <input name="location" value={formData.location || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" placeholder="e.g., Atlanta" />
                     </div>
+                    <div>
+                        <label className="block text-sm font-medium text-muted-foreground">State</label>
+                        <select name="state" value={formData.state || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md">
+                            <option value="">Select a State</option>
+                            {usStates.map(state => <option key={state} value={state}>{state}</option>)}
+                        </select>
+                    </div>
+                    
                     <div>
                         <label className="block text-sm font-medium text-muted-foreground">Zip Code (for matching)</label>
                         <input name="zipCode" value={formData.zipCode || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" />
                     </div>
+                    
                      <div className="md:col-span-2">
                         <label className="block text-sm font-medium text-muted-foreground">Required Skills (Tags)</label>
+                        {/* ✅ This is the new reminder text */}
+                        <p className="text-xs text-muted-foreground mt-1">
+                            These tags are how freelancers find your job. Be specific! 
+                            Examples: ASL, Medical, Legal, Spanish, Conference, etc.
+                        </p>
                         <div className="flex flex-wrap items-center gap-2 p-2 border rounded-md bg-background min-h-[42px] mt-1">
                             {(formData.requiredSkills || []).map(tag => (
                                 <div key={tag} className="flex items-center gap-1 bg-secondary text-secondary-foreground text-sm font-medium px-2 py-1 rounded-full">
@@ -125,7 +152,7 @@ export default function JobPostForm({ onSave, onCancel, isSubmitting, userProfil
                             <input type="text" value={skillInput} onChange={(e) => setSkillInput(e.target.value)} onKeyDown={handleTagAdd} placeholder="Type a skill and press Enter" className="flex-grow bg-transparent outline-none p-1"/>
                         </div>
                     </div>
-                    <div className="md:col-span-2">
+                     <div className="md:col-span-2">
                         <label className="block text-sm font-medium text-muted-foreground">Job Description*</label>
                         <textarea name="description" value={formData.description || ''} onChange={handleInputChange} rows={6} className="w-full mt-1 p-2 bg-background border rounded-md" required></textarea>
                     </div>

@@ -10,6 +10,17 @@ import { Save, Loader2, Plus, Trash2, User as UserIcon, ExternalLink } from 'luc
 
 const TEMP_USER_ID = "dev-user-1";
 
+// ✅ 1. Added a list of states for the new dropdown menu
+const usStates = [
+    "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", "Delaware",
+    "Florida", "Georgia", "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky",
+    "Louisiana", "Maine", "Maryland", "Massachusetts", "Michigan", "Minnesota", "Mississippi",
+    "Missouri", "Montana", "Nebraska", "Nevada", "New Hampshire", "New Jersey", "New Mexico",
+    "New York", "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon", "Pennsylvania",
+    "Rhode Island", "South Carolina", "South Dakota", "Tennessee", "Texas", "Utah", "Vermont",
+    "Virginia", "Washington", "West Virginia", "Wisconsin", "Wyoming"
+];
+
 interface ProfileFormProps {
     initialProfile: Partial<UserProfile>;
     onSave: (data: Partial<UserProfile>) => Promise<void>;
@@ -24,7 +35,7 @@ export default function ProfileForm({ initialProfile, onSave, isSubmitting, user
     const [skillInput, setSkillInput] = useState('');
     const [languageInput, setLanguageInput] = useState('');
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, type } = e.target;
         const value = type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value;
         setFormData(prev => ({ ...prev, [name]: value }));
@@ -74,8 +85,7 @@ export default function ProfileForm({ initialProfile, onSave, isSubmitting, user
              <div className="flex items-start gap-6">
                   <div className="relative w-24 h-24 rounded-full bg-muted flex items-center justify-center border shrink-0 overflow-hidden">
                        {formData.photoUrl ? (
-                           // ✅ FIX: Moved objectFit from the style object to be a direct prop
-                           <Image src={formData.photoUrl} alt="Profile" fill objectFit="cover" />
+                           <Image src={formData.photoUrl} alt="Profile" fill style={{ objectFit: 'cover' }} />
                        ) : (
                            <UserIcon className="w-12 h-12 text-muted-foreground" />
                        )}
@@ -89,10 +99,25 @@ export default function ProfileForm({ initialProfile, onSave, isSubmitting, user
                       <label className="block text-sm font-medium text-muted-foreground">Full Name</label>
                       <input name="name" value={formData.name || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" placeholder="e.g., Jane Doe"/>
                   </div>
-                   <div><label className="block text-sm font-medium text-muted-foreground">Professional Title</label><input name="professionalTitle" value={formData.professionalTitle || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" /></div>
-                   <div><label className="block text-sm font-medium text-muted-foreground">Phone Number</label><input type="tel" name="phone" value={formData.phone || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" /></div>
-                   <div className="md:col-span-2"><label className="block text-sm font-medium text-muted-foreground">Address</label><textarea name="address" value={formData.address || ''} onChange={handleInputChange} rows={2} className="w-full mt-1 p-2 bg-background border rounded-md" placeholder="123 Main St, Anytown, USA 12345"></textarea></div>
-                   <div className="flex items-center gap-2 pt-2"><input type="checkbox" name="isVirtual" id="isVirtual" checked={formData.isVirtual || false} onChange={handleInputChange} className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" /><label htmlFor="isVirtual" className="text-sm font-medium text-muted-foreground">Available for virtual work</label></div>
+                 <div><label className="block text-sm font-medium text-muted-foreground">Professional Title</label><input name="professionalTitle" value={formData.professionalTitle || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" /></div>
+                 <div><label className="block text-sm font-medium text-muted-foreground">Phone Number</label><input type="tel" name="phone" value={formData.phone || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" /></div>
+                 <div className="md:col-span-2"><label className="block text-sm font-medium text-muted-foreground">Address</label><textarea name="address" value={formData.address || ''} onChange={handleInputChange} rows={2} className="w-full mt-1 p-2 bg-background border rounded-md" placeholder="123 Main St, Anytown, USA 12345"></textarea></div>
+                 
+                 {/* ✅ 2. This is the new State dropdown */}
+                 <div>
+                    <label className="block text-sm font-medium text-muted-foreground">State</label>
+                    <select name="state" value={formData.state || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md">
+                        <option value="">Select your state</option>
+                        {usStates.map(state => <option key={state} value={state}>{state}</option>)}
+                    </select>
+                 </div>
+
+                 <div>
+                    <label className="block text-sm font-medium text-muted-foreground">Zip Code</label>
+                    <input name="zipCode" value={formData.zipCode || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" />
+                 </div>
+
+                 <div className="flex items-center gap-2 pt-2"><input type="checkbox" name="isVirtual" id="isVirtual" checked={formData.isVirtual || false} onChange={handleInputChange} className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" /><label htmlFor="isVirtual" className="text-sm font-medium text-muted-foreground">Available for virtual work</label></div>
              </div>
 
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t">
@@ -111,18 +136,18 @@ export default function ProfileForm({ initialProfile, onSave, isSubmitting, user
                   <div>
                       <h3 className="text-lg font-semibold mb-2">Job History</h3>
                       <div className="space-y-4">{ (formData.jobHistory || []).map((entry, index) => (<div key={index} className="grid grid-cols-1 gap-2 p-3 border rounded-md bg-background/50 relative">
-                        <input value={entry.title} onChange={e => handleJobHistoryChange(index, 'title', e.target.value)} placeholder="Job Title" className="w-full p-2 bg-background border rounded-md" />
-                        <input value={entry.company} onChange={e => handleJobHistoryChange(index, 'company', e.target.value)} placeholder="Company" className="w-full p-2 bg-background border rounded-md" />
-                        <input value={entry.years} onChange={e => handleJobHistoryChange(index, 'years', e.target.value)} placeholder="Years (e.g., 2020-2023)" className="w-full p-2 bg-background border rounded-md" />
-                        <button type="button" onClick={() => removeJobHistoryEntry(index)} className="absolute -top-2 -right-2 p-1 bg-destructive text-destructive-foreground rounded-full"><Trash2 size={14}/></button>
+                          <input value={entry.title} onChange={e => handleJobHistoryChange(index, 'title', e.target.value)} placeholder="Job Title" className="w-full p-2 bg-background border rounded-md" />
+                          <input value={entry.company} onChange={e => handleJobHistoryChange(index, 'company', e.target.value)} placeholder="Company" className="w-full p-2 bg-background border rounded-md" />
+                          <input value={entry.years} onChange={e => handleJobHistoryChange(index, 'years', e.target.value)} placeholder="Years (e.g., 2020-2023)" className="w-full p-2 bg-background border rounded-md" />
+                          <button type="button" onClick={() => removeJobHistoryEntry(index)} className="absolute -top-2 -right-2 p-1 bg-destructive text-destructive-foreground rounded-full"><Trash2 size={14}/></button>
                       </div>))}<button type="button" onClick={addJobHistoryEntry} className="flex items-center gap-2 text-sm font-semibold text-primary hover:underline mt-2"><Plus size={16}/> Add Job Entry</button></div>
                   </div>
                   <div>
                       <h3 className="text-lg font-semibold mb-2">Education</h3>
                       <div className="space-y-4">{ (formData.education || []).map((entry, index) => (<div key={index} className="grid grid-cols-1 gap-2 p-3 border rounded-md bg-background/50 relative">
-                        <input value={entry.degree} onChange={e => handleEducationChange(index, 'degree', e.target.value)} placeholder="Degree" className="w-full p-2 bg-background border rounded-md" />
-                        <input value={entry.institution} onChange={e => handleEducationChange(index, 'institution', e.target.value)} placeholder="Institution" className="w-full p-2 bg-background border rounded-md" />
-                        <button type="button" onClick={() => removeEducationEntry(index)} className="absolute -top-2 -right-2 p-1 bg-destructive text-destructive-foreground rounded-full"><Trash2 size={14}/></button>
+                          <input value={entry.degree} onChange={e => handleEducationChange(index, 'degree', e.target.value)} placeholder="Degree" className="w-full p-2 bg-background border rounded-md" />
+                          <input value={entry.institution} onChange={e => handleEducationChange(index, 'institution', e.target.value)} placeholder="Institution" className="w-full p-2 bg-background border rounded-md" />
+                          <button type="button" onClick={() => removeEducationEntry(index)} className="absolute -top-2 -right-2 p-1 bg-destructive text-destructive-foreground rounded-full"><Trash2 size={14}/></button>
                       </div>))}<button type="button" onClick={addEducationEntry} className="flex items-center gap-2 text-sm font-semibold text-primary hover:underline mt-2"><Plus size={16}/> Add Education Entry</button></div>
                   </div>
              </div>

@@ -1,13 +1,12 @@
-// src/components/AppointmentDetailModal.tsx
 "use client";
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Appointment, Client, PersonalNetworkContact, JobFile } from '@/types/app-interfaces';
-// ✅ 1. Import our new automation function
 import { updateAppointment, deleteAppointment, createInvoiceFromAppointment } from '@/utils/firestoreService';
 import { X, Edit, Trash2, Building, User, Calendar, FileText, Receipt } from 'lucide-react';
 import AppointmentForm from './AppointmentForm';
+import Modal from './Modal'; // Import our new Modal component
 
 const TEMP_USER_ID = "dev-user-1";
 
@@ -21,12 +20,12 @@ const formatTime = (timeString?: string) => {
 };
 
 interface AppointmentDetailModalProps {
-  appointment: Appointment | null;
-  clients: Client[];
-  contacts: PersonalNetworkContact[];
-  jobFiles: JobFile[];
-  onClose: () => void;
-  onSave: () => void;
+    appointment: Appointment | null;
+    clients: Client[];
+    contacts: PersonalNetworkContact[];
+    jobFiles: JobFile[];
+    onClose: () => void;
+    onSave: () => void;
 }
 
 export default function AppointmentDetailModal({ appointment, clients, contacts, jobFiles, onClose, onSave }: AppointmentDetailModalProps) {
@@ -36,14 +35,12 @@ export default function AppointmentDetailModal({ appointment, clients, contacts,
 
     useEffect(() => { setIsEditing(false); }, [appointment]);
 
-    if (!appointment) return null;
-
-    const client = clients.find(c => c.id === appointment.clientId);
-    const contact = contacts.find(c => c.id === appointment.contactId);
-    const jobFile = jobFiles.find(jf => jf.id === appointment.jobFileId);
+    const client = appointment ? clients.find(c => c.id === appointment.clientId) : null;
+    const contact = appointment ? contacts.find(c => c.id === appointment.contactId) : null;
+    const jobFile = appointment ? jobFiles.find(jf => jf.id === appointment.jobFileId) : null;
 
     const handleDelete = async () => {
-        if (!appointment.id) return;
+        if (!appointment?.id) return;
         if (window.confirm("Are you sure you want to delete this appointment?")) {
             try {
                 await deleteAppointment(TEMP_USER_ID, appointment.id);
@@ -57,24 +54,16 @@ export default function AppointmentDetailModal({ appointment, clients, contacts,
         }
     };
 
-    // ✅ 2. The "Save" function is now much smarter
     const handleEditSave = async (updatedData: Partial<Appointment>) => {
-        if (!appointment.id) return;
+        if (!appointment?.id) return;
         setIsSubmitting(true);
         try {
-            // First, save the status change (or any other edit)
             await updateAppointment(TEMP_USER_ID, appointment.id, updatedData);
             
-            // THEN, check if the new status requires an invoice
             if (updatedData.status === 'canceled-billable') {
-                try {
-                    const fullAppointmentData = { ...appointment, ...updatedData };
-                    await createInvoiceFromAppointment(TEMP_USER_ID, fullAppointmentData as Appointment);
-                    alert("Appointment canceled and a draft invoice has been automatically created.");
-                } catch (invoiceError) {
-                    console.error("Failed to auto-create invoice:", invoiceError);
-                    alert("Appointment was canceled, but failed to create an invoice. Please create one manually.");
-                }
+                const fullAppointmentData = { ...appointment, ...updatedData };
+                await createInvoiceFromAppointment(TEMP_USER_ID, fullAppointmentData as Appointment);
+                alert("Appointment canceled and a draft invoice has been automatically created.");
             } else {
                 alert("Appointment updated!");
             }
@@ -90,8 +79,8 @@ export default function AppointmentDetailModal({ appointment, clients, contacts,
     };
     
     const handleJobFileClick = () => {
-        if (jobFile && jobFile.id) { router.push(`/dashboard/job-files/${jobFile.id}`); } 
-        else if (appointment.id) { router.push(`/dashboard/job-files/new?appointmentId=${appointment.id}&clientId=${appointment.clientId || ''}&subject=${encodeURIComponent(appointment.subject || '')}`); }
+        if (jobFile?.id) { router.push(`/dashboard/job-files/${jobFile.id}`); }
+        else if (appointment?.id) { router.push(`/dashboard/job-files/new?appointmentId=${appointment.id}&clientId=${appointment.clientId || ''}&subject=${encodeURIComponent(appointment.subject || '')}`); }
         onClose();
     };
 
@@ -103,9 +92,9 @@ export default function AppointmentDetailModal({ appointment, clients, contacts,
     };
 
     return (
-        <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4">
-            <div className="bg-card rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border">
-                {isEditing ? (
+        <Modal isOpen={!!appointment} onClose={onClose}>
+            {appointment && (
+                isEditing ? (
                     <AppointmentForm
                         initialData={appointment}
                         clients={clients}
@@ -119,10 +108,10 @@ export default function AppointmentDetailModal({ appointment, clients, contacts,
                     <>
                         <div className="p-6">
                             <div className="flex justify-between items-start">
-                                <h2 className="text-2xl font-bold text-foreground">{appointment.subject}</h2>
+                                <h2 className="text-2xl font-bold">{appointment.subject}</h2>
                                 <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X size={24} /></button>
                             </div>
-                            <div className="flex items-center text-muted-foreground text-sm mt-2">
+                            <div className="flex items-center text-sm mt-2 text-muted-foreground">
                                 <Calendar size={14} className="mr-2"/>
                                 <span>
                                     {new Date(appointment.date + 'T00:00:00').toDateString()}
@@ -134,16 +123,17 @@ export default function AppointmentDetailModal({ appointment, clients, contacts,
                             </div>
                         </div>
                         <div className="px-6 pb-6 space-y-4 border-t pt-4">
-                            {client && <div className="flex items-center text-sm"><Building size={16} className="mr-3 text-primary"/>Linked Client: <span className="font-semibold text-foreground ml-2">{client.companyName || client.name}</span></div>}
-                            {contact && <div className="flex items-center text-sm"><User size={16} className="mr-3 text-primary"/>Linked Contact: <span className="font-semibold text-foreground ml-2">{contact.name}</span></div>}
-                            {jobFile && <div className="flex items-center text-sm"><FileText size={16} className="mr-3 text-primary"/>Linked Job File: <span className="font-semibold text-foreground ml-2">{jobFile.jobTitle}</span></div>}
+                            {client && <div className="flex items-center text-sm"><Building size={16} className="mr-3 text-primary"/>Linked Client: <span className="font-semibold ml-2">{client.companyName || client.name}</span></div>}
+                            {contact && <div className="flex items-center text-sm"><User size={16} className="mr-3 text-primary"/>Linked Contact: <span className="font-semibold ml-2">{contact.name}</span></div>}
+                            {jobFile && <div className="flex items-center text-sm"><FileText size={16} className="mr-3 text-primary"/>Linked Job File: <span className="font-semibold ml-2">{jobFile.jobTitle}</span></div>}
                         </div>
                         <div className="px-6 pb-6">
-                            <h4 className="font-semibold text-foreground mb-2">Notes</h4>
-                            <p className="text-muted-foreground text-sm p-3 bg-background rounded-md min-h-[80px] whitespace-pre-wrap">{appointment.notes || 'No notes for this appointment.'}</p>
+                            <h4 className="font-semibold mb-2">Notes</h4>
+                            <div className="text-sm p-3 bg-background rounded-md min-h-[80px] whitespace-pre-wrap">
+                                {appointment.notes || <span className="text-muted-foreground">No notes for this appointment.</span>}
+                            </div>
                         </div>
-
-                        <div className="p-6 flex justify-end gap-2 bg-background/50 border-t flex-wrap">
+                        <div className="p-6 flex justify-end gap-2 bg-muted/50 border-t flex-wrap">
                            {(appointment.status === 'completed' || appointment.status === 'canceled-billable') ? (
                                 <button onClick={handleCreateInvoiceClick} className="flex items-center gap-2 bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700">
                                     <Receipt size={16}/> Create Invoice
@@ -157,8 +147,8 @@ export default function AppointmentDetailModal({ appointment, clients, contacts,
                             <button onClick={() => setIsEditing(true)} className="bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg flex items-center gap-2"><Edit size={16}/>Edit</button>
                         </div>
                     </>
-                )}
-            </div>
-        </div>
+                )
+            )}
+        </Modal>
     );
 }

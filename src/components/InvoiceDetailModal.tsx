@@ -1,4 +1,3 @@
-// src/components/InvoiceDetailModal.tsx
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -13,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import InvoiceForm from './InvoiceForm';
+import Modal from './Modal';
 
 const TEMP_USER_ID = "dev-user-1";
 
@@ -32,12 +32,10 @@ export default function InvoiceDetailModal({ invoice, clients, userProfile, onCl
         setIsEditing(false);
     }, [invoice]);
 
-    if (!invoice) return null;
-
-    const client = clients.find(c => c.id === invoice.clientId);
+    const client = invoice ? clients.find(c => c.id === invoice.clientId) : null;
 
     const handleUpdate = async (data: Partial<Invoice>) => {
-        if (!invoice.id) return;
+        if (!invoice?.id) return;
         setIsSubmitting(true);
         try {
             await updateInvoice(TEMP_USER_ID, invoice.id, data);
@@ -53,7 +51,7 @@ export default function InvoiceDetailModal({ invoice, clients, userProfile, onCl
     };
 
     const handleDelete = async () => {
-        if (!invoice.id) return;
+        if (!invoice?.id) return;
         if (window.confirm("Are you sure you want to delete this invoice?")) {
             try {
                 await deleteInvoice(TEMP_USER_ID, invoice.id);
@@ -68,12 +66,12 @@ export default function InvoiceDetailModal({ invoice, clients, userProfile, onCl
     };
 
     const handleMarkAsPaid = async () => {
-        if (!invoice.id) return;
+        if (!invoice?.id) return;
         if (window.confirm("Are you sure you want to mark this invoice as paid?")) {
              try {
-                await updateInvoice(TEMP_USER_ID, invoice.id, { 
+                await updateInvoice(TEMP_USER_ID, invoice.id, {
                     status: 'paid',
-                    paymentDate: new Date().toISOString().split('T')[0] 
+                    paymentDate: new Date().toISOString().split('T')[0]
                 });
                 alert("Invoice marked as paid!");
                 onSave();
@@ -149,9 +147,9 @@ export default function InvoiceDetailModal({ invoice, clients, userProfile, onCl
     };
 
     return (
-        <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4">
-            <div className="bg-card rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col border">
-                {isEditing ? (
+        <Modal isOpen={!!invoice} onClose={onClose} className="max-w-4xl">
+            {invoice && (
+                isEditing ? (
                     <div className="p-4 sm:p-6 lg:p-8 flex-1 overflow-y-auto">
                         <InvoiceForm
                             initialData={invoice}
@@ -160,7 +158,7 @@ export default function InvoiceDetailModal({ invoice, clients, userProfile, onCl
                             clients={clients}
                             isSubmitting={isSubmitting}
                             userProfile={userProfile}
-                            nextInvoiceNumber={invoice.invoiceNumber} 
+                            nextInvoiceNumber={invoice.invoiceNumber}
                         />
                     </div>
                 ) : (
@@ -172,8 +170,7 @@ export default function InvoiceDetailModal({ invoice, clients, userProfile, onCl
                             <div className="p-6 sm:p-8">
                                 <div className="flex justify-between items-start mb-6 pb-6 border-b pr-8">
                                     <div>
-                                        {/* ✅ UPDATED: Prioritizes your Full Name */}
-                                        <h2 className="text-2xl font-bold text-foreground">{userProfile?.name || userProfile?.professionalTitle || 'Your Name'}</h2>
+                                        <h2 className="text-2xl font-bold">{userProfile?.name || userProfile?.professionalTitle || 'Your Name'}</h2>
                                         <p className="text-sm text-muted-foreground">{userProfile?.email}</p>
                                         {userProfile?.address && <p className="text-sm text-muted-foreground whitespace-pre-line">{userProfile.address}</p>}
                                         {userProfile?.phone && <p className="text-sm text-muted-foreground">{userProfile.phone}</p>}
@@ -210,7 +207,7 @@ export default function InvoiceDetailModal({ invoice, clients, userProfile, onCl
                                     {invoice.lineItems.map((item, index) => (
                                         <div key={index} className="grid grid-cols-5 md:grid-cols-12 gap-2 py-3 border-b">
                                             <div className="col-span-3 md:col-span-6 text-sm">
-                                                <p className="font-medium text-foreground whitespace-pre-line">{item.description}</p>
+                                                <p className="font-medium whitespace-pre-line">{item.description}</p>
                                                 <p className="text-muted-foreground md:hidden">{item.quantity} x ${item.unitPrice.toFixed(2)}</p>
                                             </div>
                                             <div className="hidden md:block col-span-2 text-center text-sm">{item.quantity}</div>
@@ -224,13 +221,13 @@ export default function InvoiceDetailModal({ invoice, clients, userProfile, onCl
                                     <div className="w-full max-w-xs space-y-2 text-right">
                                         <p className="flex justify-between"><span>Subtotal:</span> <span>${(invoice.subtotal || 0).toFixed(2)}</span></p>
                                         <p className="flex justify-between"><span>Tax:</span> <span>${(invoice.tax || 0).toFixed(2)}</span></p>
-                                        <p className="flex justify-between font-bold text-lg text-foreground pt-2 border-t"><span>Amount Due:</span> <span>${(invoice.total || 0).toFixed(2)}</span></p>
+                                        <p className="flex justify-between font-bold text-lg pt-2 border-t"><span>Amount Due:</span> <span>${(invoice.total || 0).toFixed(2)}</span></p>
                                     </div>
                                 </div>
                             </div>
                         </div>
                         
-                        <div className="p-4 flex justify-end items-center gap-2 bg-background/50 border-t sticky bottom-0">
+                        <div className="p-4 flex justify-end items-center gap-2 bg-muted/50 border-t sticky bottom-0">
                             {(invoice.status === 'sent' || invoice.status === 'overdue' || invoice.status === 'draft') && (
                                 <Button onClick={handleMarkAsPaid} className="flex items-center gap-2 bg-green-600 hover:bg-green-700">
                                     <CheckCircle size={16}/>Mark as Paid
@@ -268,8 +265,8 @@ export default function InvoiceDetailModal({ invoice, clients, userProfile, onCl
                             </DropdownMenu>
                         </div>
                     </>
-                )}
-            </div>
-        </div>
+                )
+            )}
+        </Modal>
     );
 }

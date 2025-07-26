@@ -1,16 +1,8 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import type { Invoice, Client, UserProfile } from '@/types/app-interfaces';
+import type { Invoice, Client, UserProfile, LineItem } from '@/types/app-interfaces';
 import { PlusCircle, Trash2, Save, Loader2 } from 'lucide-react';
-
-interface LineItem {
-    description: string;
-    quantity: number;
-    unitPrice: number;
-    total: number;
-    isTaxable?: boolean;
-}
 
 interface InvoiceFormProps {
     onSave: (data: Partial<Invoice>) => Promise<void>;
@@ -29,17 +21,18 @@ export default function InvoiceForm({ onSave, onCancel, clients = [], initialDat
     const [selectedItemId, setSelectedItemId] = useState('');
 
     useEffect(() => {
-        const initialLineItems = initialData?.lineItems?.length ? initialData.lineItems : [{ description: '', quantity: 1, unitPrice: 0, total: 0, isTaxable: true }];
+        const initialLineItems = initialData?.lineItems?.length ? initialData.lineItems : [{ description: '', quantity: 1, unitPrice: 0, total: 0, isTaxable: false }];
         setLineItems(initialLineItems);
         setFormData({
             status: 'draft',
             invoiceDate: new Date().toISOString().split('T')[0],
             dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
             ...initialData,
+            invoiceNumber: initialData?.invoiceNumber || nextInvoiceNumber,
             tax: initialData?.tax ?? userProfile?.defaultTaxRate ?? 0,
         });
-    }, [initialData, userProfile]);
-
+    }, [initialData, userProfile, nextInvoiceNumber]);
+    
     useEffect(() => {
         const subtotal = lineItems.reduce((sum, item) => sum + (item.total || 0), 0);
         const taxableSubtotal = lineItems.filter(item => item.isTaxable).reduce((sum, item) => sum + (item.total || 0), 0);
@@ -47,6 +40,38 @@ export default function InvoiceForm({ onSave, onCancel, clients = [], initialDat
         const total = subtotal + taxAmount;
         setFormData(prev => ({ ...prev, subtotal, total }));
     }, [lineItems, formData.tax]);
+    
+    useEffect(() => {
+        if (!isEditMode && formData.clientId) {
+            const selectedClient = clients.find(c => c.id === formData.clientId);
+            if (selectedClient) {
+                const newLineItems: LineItem[] = [];
+                const rate = Number(selectedClient.rate) || 0;
+
+                newLineItems.push({
+                    description: 'Services Rendered',
+                    quantity: 1,
+                    unitPrice: rate,
+                    total: rate,
+                    isTaxable: false 
+                });
+
+                if (selectedClient.differentials && selectedClient.differentials.length > 0) {
+                    selectedClient.differentials.forEach(diff => {
+                        const amount = Number(diff.amount) || 0;
+                        newLineItems.push({
+                            description: diff.description,
+                            quantity: 1,
+                            unitPrice: amount,
+                            total: amount,
+                            isTaxable: false
+                        });
+                    });
+                }
+                setLineItems(newLineItems);
+            }
+        }
+    }, [formData.clientId, clients, isEditMode]);
     
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value, type } = e.target;
@@ -62,8 +87,8 @@ export default function InvoiceForm({ onSave, onCancel, clients = [], initialDat
             item.isTaxable = value;
         } else if (field === 'description' && typeof value === 'string') {
             item.description = value;
-        } else if ((field === 'quantity' || field === 'unitPrice') && (typeof value === 'string' || typeof value === 'number')) {
-            item[field] = parseFloat(String(value)) || 0;
+        } else if ((field === 'quantity' || field === 'unitPrice')) {
+            (item as any)[field] = parseFloat(String(value)) || 0;
         }
 
         item.total = (item.quantity || 0) * (item.unitPrice || 0);
@@ -71,7 +96,7 @@ export default function InvoiceForm({ onSave, onCancel, clients = [], initialDat
         setLineItems(updatedItems);
     };
 
-    const addLineItem = () => { setLineItems([...lineItems, { description: '', quantity: 1, unitPrice: 0, total: 0, isTaxable: true }]); };
+    const addLineItem = () => { setLineItems([...lineItems, { description: '', quantity: 1, unitPrice: 0, total: 0, isTaxable: false }]); };
     const removeLineItem = (index: number) => { const updatedItems = lineItems.filter((_, i) => i !== index); setLineItems(updatedItems); };
     
     const handleAddPredefinedItem = () => {
@@ -79,7 +104,7 @@ export default function InvoiceForm({ onSave, onCancel, clients = [], initialDat
         const itemTemplate = userProfile?.invoiceLineItems?.find(item => item.id === selectedItemId);
         if (itemTemplate) {
             const newItems = [...lineItems];
-            const newItem = { ...itemTemplate, quantity: 1, total: itemTemplate.unitPrice };
+            const newItem: LineItem = { ...itemTemplate, quantity: 1, total: itemTemplate.unitPrice, isTaxable: itemTemplate.isTaxable ?? false };
             if (newItems.length === 1 && !newItems[0].description && (newItems[0].unitPrice === 0)) {
                 newItems[0] = newItem;
             } else {
@@ -102,14 +127,14 @@ export default function InvoiceForm({ onSave, onCancel, clients = [], initialDat
         <div className="bg-card p-4 sm:p-6 rounded-lg shadow-lg border">
             <div className="flex justify-between items-start mb-6 pb-6 border-b">
                 <div>
-                    <h2 className="text-2xl font-bold text-foreground">{userProfile?.professionalTitle || 'Your Name'}</h2>
+                    <h2 className="text-2xl font-bold text-foreground">{userProfile?.name || 'Your Name'}</h2>
                     <p className="text-sm text-muted-foreground">{userProfile?.email || ''}</p>
                     {userProfile?.address && <p className="text-sm text-muted-foreground whitespace-pre-line">{userProfile.address}</p>}
                     {userProfile?.phone && <p className="text-sm text-muted-foreground">{userProfile.phone}</p>}
                 </div>
                 <div className="text-right">
                     <h3 className="text-3xl font-bold text-muted-foreground">INVOICE</h3>
-                    <p className="text-sm"># {isEditMode ? formData.invoiceNumber : nextInvoiceNumber}</p>
+                    <p className="text-sm"># {formData.invoiceNumber || nextInvoiceNumber}</p>
                 </div>
             </div>
 
@@ -163,50 +188,41 @@ export default function InvoiceForm({ onSave, onCancel, clients = [], initialDat
                     </div>
                 </div>
 
-                {/* ✅ RESPONSIVE LINE ITEMS SECTION */}
+                {/* ✅ UPDATED LINE ITEMS SECTION */}
                 <div className="space-y-4 pt-6 border-t">
-                    {/* Desktop Headers: Hidden on mobile */}
                     <div className="hidden md:grid md:grid-cols-12 gap-2 text-sm font-semibold text-muted-foreground px-2">
                         <div className="col-span-5">DESCRIPTION</div>
-                        <div className="col-span-2 text-center">HOURS/QTY</div>
-                        <div className="col-span-2 text-right">RATE/PRICE</div>
+                        <div className="col-span-1 text-center">QTY</div>
+                        <div className="col-span-2 text-right">RATE</div>
                         <div className="col-span-2 text-right">AMOUNT</div>
-                        <div className="col-span-1"></div> {/* Spacer for checkbox/delete */}
+                        <div className="col-span-2 text-center">ACTIONS</div>
                     </div>
 
-                    {/* Line Items Loop */}
                     {lineItems.map((item, index) => (
-                        <div key={index} className="bg-background/50 p-4 rounded-lg space-y-4 md:p-0 md:bg-transparent md:space-y-0 md:grid md:grid-cols-12 md:gap-2 md:items-start border-b md:border-0 pb-4 md:pb-2">
-                            
+                        <div key={index} className="bg-background/50 p-4 rounded-lg space-y-4 md:p-0 md:bg-transparent md:space-y-0 md:grid md:grid-cols-12 md:gap-3 md:items-start border md:border-0 pb-4 md:pb-2">
                             <div className="md:col-span-5">
                                 <label className="text-sm font-medium text-muted-foreground md:hidden">Description</label>
-                                <textarea rows={3} placeholder="Service, product, or expense" value={item.description} onChange={e => handleLineItemChange(index, 'description', e.target.value)} className="w-full p-2 border rounded-md bg-background" />
+                                <textarea rows={2} placeholder="Service, product, or expense" value={item.description} onChange={e => handleLineItemChange(index, 'description', e.target.value)} className="w-full p-2 border rounded-md bg-background" />
                             </div>
-
-                            <div className="grid grid-cols-2 gap-4 md:contents">
-                                <div className="md:col-span-2 flex flex-col">
-                                    <label className="text-sm font-medium text-muted-foreground md:hidden text-center">Hours/Qty</label>
-                                    <input type="number" step="0.01" placeholder="1" value={item.quantity} onChange={e => handleLineItemChange(index, 'quantity', e.target.value)} className="w-full p-2 border rounded-md bg-background text-center" />
-                                </div>
-                                <div className="md:col-span-2 flex flex-col">
-                                    <label className="text-sm font-medium text-muted-foreground md:hidden text-right">Rate/Price</label>
-                                    <input type="number" step="0.01" placeholder="0.00" value={item.unitPrice} onChange={e => handleLineItemChange(index, 'unitPrice', e.target.value)} className="w-full p-2 border rounded-md bg-background text-right" />
-                                </div>
+                            <div className="md:col-span-1">
+                                <label className="text-sm font-medium text-muted-foreground md:hidden">Qty</label>
+                                <input type="number" step="0.01" value={item.quantity} onChange={e => handleLineItemChange(index, 'quantity', e.target.value)} className="w-full p-2 border rounded-md bg-background text-center" />
                             </div>
-                            
-                            <div className="md:col-span-2 flex flex-col">
-                                <label className="text-sm font-medium text-muted-foreground md:hidden text-right">Amount</label>
-                                <p className="w-full p-2 text-right font-medium h-10 flex items-center justify-end">${item.total.toFixed(2)}</p>
+                            <div className="md:col-span-2">
+                                <label className="text-sm font-medium text-muted-foreground md:hidden">Rate</label>
+                                <input type="number" step="0.01" value={item.unitPrice} onChange={e => handleLineItemChange(index, 'unitPrice', e.target.value)} className="w-full p-2 border rounded-md bg-background text-right" />
                             </div>
-                            
-                            <div className="flex justify-between items-center pt-2 border-t md:border-0 md:pt-0 md:col-span-1 md:h-full md:items-center">
-                                <div className="flex items-center gap-2">
-                                    <label htmlFor={`isTaxable-${index}`} className="text-sm font-medium text-muted-foreground">Taxable</label>
+                            <div className="md:col-span-2 flex flex-col items-end">
+                                <label className="text-sm font-medium text-muted-foreground md:hidden">Amount</label>
+                                <p className="w-full p-2 text-right font-medium h-10 flex items-center justify-end">${Number(item.total || 0).toFixed(2)}</p>
+                            </div>
+                            <div className="md:col-span-2 flex justify-center items-center h-full gap-2 pt-2 border-t md:border-0 md:pt-0">
+                                <div className="flex items-center gap-1">
+                                    <label htmlFor={`isTaxable-${index}`} className="text-xs font-medium text-muted-foreground">Tax</label>
                                     <input id={`isTaxable-${index}`} type="checkbox" checked={!!item.isTaxable} onChange={e => handleLineItemChange(index, 'isTaxable', e.target.checked)} className="h-4 w-4"/>
                                 </div>
-                                <button type="button" onClick={() => removeLineItem(index)} className="p-1 text-muted-foreground hover:text-destructive md:absolute md:right-0 md:top-0">
+                                <button type="button" onClick={() => removeLineItem(index)} className="p-2 text-muted-foreground hover:text-destructive rounded-full hover:bg-destructive/10">
                                     <Trash2 size={16}/>
-                                    <span className="sr-only">Remove Item</span>
                                 </button>
                             </div>
                         </div>

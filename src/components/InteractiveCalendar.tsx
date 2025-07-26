@@ -1,12 +1,26 @@
 "use client";
 
-import React from 'react';
-import { DayPicker } from 'react-day-picker';
+import React, { ComponentProps } from 'react';
+import { DayPicker, DayContent } from 'react-day-picker';
 import 'react-day-picker/dist/style.css'; 
 import '@/styles/calendar.css'; 
 import { Download, LocateFixed } from 'lucide-react';
 import * as ics from 'ics';
 import type { Appointment } from '@/types/app-interfaces';
+import { format } from 'date-fns';
+
+function CustomDayContent(props: ComponentProps<typeof DayContent>) {
+  return (
+    <div className="relative w-full h-full flex flex-col items-center justify-center">
+      <span>{format(props.date, "d")}</span>
+      <div className="absolute bottom-1 flex items-center space-x-1">
+        {props.activeModifiers.job && <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>}
+        {props.activeModifiers.personal && <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>}
+        {props.activeModifiers.billing && <div className="w-1.5 h-1.5 rounded-full bg-purple-500"></div>}
+      </div>
+    </div>
+  );
+}
 
 interface InteractiveCalendarProps {
   appointments: Appointment[];
@@ -32,13 +46,6 @@ export default function InteractiveCalendar({
     job: jobDays,
     personal: personalDays,
     billing: billingDays,
-  };
-
-  const modifiersClassNames = {
-    job: 'job-day',
-    personal: 'personal-day',
-    billing: 'billing-day',
-    selected: 'selected-day',
   };
 
   const handleExport = () => {
@@ -98,7 +105,12 @@ export default function InteractiveCalendar({
         onMonthChange={onMonthChange}
         showOutsideDays
         modifiers={modifiers}
-        modifiersClassNames={modifiersClassNames}
+        components={{
+          DayContent: CustomDayContent
+        }}
+        modifiersClassNames={{
+            selected: 'selected-day'
+        }}
       />
       <div className="w-full flex justify-between items-center mt-4 pt-4 border-t border-border/50 px-4 pb-2">
         <button onClick={handleGoToToday} className="flex items-center gap-2 font-semibold text-muted-foreground hover:text-primary transition-colors"><LocateFixed size={16} /> Go to Today</button>

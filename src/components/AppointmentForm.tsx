@@ -40,8 +40,9 @@ export default function AppointmentForm({
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
         
+        // ✅ 1. Updated the type definition to include 'education'
         if (name === 'eventType') {
-            setFormState(prev => ({ ...prev, eventType: value as 'job' | 'personal' | 'billing' }));
+            setFormState(prev => ({ ...prev, eventType: value as 'job' | 'personal' | 'billing' | 'education' }));
         } else if (name === 'status') {
             setFormState(prev => ({ ...prev, status: value as 'pending' | 'scheduled' | 'completed' | 'canceled' | 'canceled-billable' }));
         } else {
@@ -79,6 +80,8 @@ export default function AppointmentForm({
                         <option value="job">Job / Appointment</option>
                         <option value="personal">Personal Event</option>
                         <option value="billing">Billing Reminder</option>
+                        {/* ✅ 2. Added the new "Education" option */}
+                        <option value="education">Education / Training</option>
                     </select>
                 </div>
 
@@ -134,11 +137,11 @@ export default function AppointmentForm({
                     )}
                 </div>
 
-                {(formState.eventType === 'job' || formState.eventType === 'personal') && (
+                {/* ✅ 3. Updated this logic to include 'education' so it behaves like a personal event */}
+                {(formState.eventType === 'job' || formState.eventType === 'personal' || formState.eventType === 'education') && (
                     <>
                         <div className="md:col-span-2">
                             <label className="block text-sm font-medium text-muted-foreground">Location Type</label>
-                            {/* ✅ THE FIX: Replaced 'any' with a specific type assertion */}
                             <select name="locationType" value={locationType} onChange={(e) => setLocationType(e.target.value as 'physical' | 'virtual' | '')} className="w-full mt-1 p-2 border rounded-md bg-background">
                                 <option value="">Not Specified</option>
                                 <option value="physical">Physical Address</option>

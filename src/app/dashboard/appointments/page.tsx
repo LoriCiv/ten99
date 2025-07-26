@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import { Search, PlusCircle, ChevronDown, MapPin, Video, CheckCircle, Clock, AlertTriangle, XCircle, Calendar, HelpCircle, List } from 'lucide-react';
+// ✅ 1. Import the BookOpen icon
+import { Search, PlusCircle, ChevronDown, MapPin, Video, CheckCircle, Clock, AlertTriangle, XCircle, Calendar, HelpCircle, List, BookOpen } from 'lucide-react';
 import type { Appointment, Client, PersonalNetworkContact, JobFile } from '@/types/app-interfaces';
 import { getAppointments, getClients, getPersonalNetwork, getJobFiles } from '@/utils/firestoreService';
 import { format } from 'date-fns';
@@ -11,14 +12,24 @@ import InteractiveCalendar from '@/components/InteractiveCalendar';
 
 const TEMP_USER_ID = "dev-user-1";
 
-const statusInfo: { [key: string]: { borderColor: string, bgColor: string, icon: React.ElementType, keyColor: string, label: string } } = {
-    'scheduled': { borderColor: 'border-l-blue-500', bgColor: 'hover:bg-blue-500/10', icon: Calendar, keyColor: 'bg-blue-400', label: 'Scheduled' },
-    'pending': { borderColor: 'border-l-yellow-500', bgColor: 'hover:bg-yellow-500/10', icon: Clock, keyColor: 'bg-yellow-400', label: 'Pending' },
-    'completed': { borderColor: 'border-l-green-500', bgColor: 'hover:bg-green-500/10', icon: CheckCircle, keyColor: 'bg-green-400', label: 'Completed' },
-    'canceled': { borderColor: 'border-l-gray-400', bgColor: 'hover:bg-gray-500/10', icon: XCircle, keyColor: 'bg-gray-400', label: 'Canceled' },
-    'canceled-billable': { borderColor: 'border-l-red-500', bgColor: 'hover:bg-red-500/10', icon: AlertTriangle, keyColor: 'bg-red-400', label: 'Canceled (Billable)' },
-    'pending-confirmation': { borderColor: 'border-l-orange-500', bgColor: 'hover:bg-orange-500/10', icon: HelpCircle, keyColor: 'bg-orange-400', label: 'Pending Confirmation' }
+// This object defines colors and icons based on the event's STATUS
+const statusInfo: { [key: string]: { icon: React.ElementType, keyColor: string, label: string } } = {
+    'scheduled': { icon: Calendar, keyColor: 'bg-blue-400', label: 'Scheduled' },
+    'pending': { icon: Clock, keyColor: 'bg-yellow-400', label: 'Pending' },
+    'completed': { icon: CheckCircle, keyColor: 'bg-green-400', label: 'Completed' },
+    'canceled': { icon: XCircle, keyColor: 'bg-gray-400', label: 'Canceled' },
+    'canceled-billable': { icon: AlertTriangle, keyColor: 'bg-red-400', label: 'Canceled (Billable)' },
+    'pending-confirmation': { icon: HelpCircle, keyColor: 'bg-orange-400', label: 'Pending Confirmation' }
 };
+
+// ✅ 2. This new object defines colors and icons based on the event's TYPE
+const eventTypeInfo: { [key: string]: { borderColor: string, bgColor: string, icon: React.ElementType, keyColor: string, label: string } } = {
+    'job': { borderColor: 'border-l-blue-500', bgColor: 'hover:bg-blue-500/10', icon: Calendar, keyColor: 'bg-blue-400', label: 'Job' },
+    'personal': { borderColor: 'border-l-pink-500', bgColor: 'hover:bg-pink-500/10', icon: Calendar, keyColor: 'bg-pink-400', label: 'Personal' },
+    'billing': { borderColor: 'border-l-green-500', bgColor: 'hover:bg-green-500/10', icon: Calendar, keyColor: 'bg-green-400', label: 'Billing' },
+    'education': { borderColor: 'border-l-purple-500', bgColor: 'hover:bg-purple-500/10', icon: BookOpen, keyColor: 'bg-purple-400', label: 'Education' }
+};
+
 
 const formatTime = (timeString?: string) => {
     if (!timeString) return '';
@@ -29,11 +40,12 @@ const formatTime = (timeString?: string) => {
     return `${formattedHour}:${minutes} ${ampm}`;
 };
 
-// ✅ A new component to render each item in the list view
 const AppointmentListItem = ({ appointment, clientName }: { appointment: Appointment, clientName: string }) => {
-    const { keyColor } = statusInfo[appointment.status] || { keyColor: 'bg-gray-400' };
+    const statusStyle = statusInfo[appointment.status] || { keyColor: 'bg-gray-400' };
+    const typeStyle = eventTypeInfo[appointment.eventType] || { keyColor: 'bg-gray-400' };
+    
     return (
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-center p-4">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-center p-4">
             <div className="md:col-span-1">
                 <p className="font-semibold">{format(new Date(appointment.date + 'T00:00:00'), 'MMM d, yyyy')}</p>
                 <p className="text-xs text-muted-foreground">{formatTime(appointment.time)}</p>
@@ -43,13 +55,17 @@ const AppointmentListItem = ({ appointment, clientName }: { appointment: Appoint
                 <p className="text-xs text-primary">{clientName}</p>
             </div>
             <div className="md:col-span-1">
-                 <span className="inline-flex items-center gap-2 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
-                    <span className={`w-2 h-2 rounded-full ${keyColor}`}></span>
+                <span className="inline-flex items-center gap-2 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
+                    <span className={`w-2 h-2 rounded-full ${statusStyle.keyColor}`}></span>
                     {statusInfo[appointment.status]?.label || 'Unknown'}
                 </span>
             </div>
-            <div className="md:col-span-1 text-right">
-                <span className="text-sm font-mono text-muted-foreground capitalize">{appointment.eventType}</span>
+            {/* ✅ 3. Updated list view to show event type with color */}
+            <div className="md:col-span-2 text-right">
+                 <span className="inline-flex items-center gap-2 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
+                    <span className={`w-2 h-2 rounded-full ${typeStyle.keyColor}`}></span>
+                    {eventTypeInfo[appointment.eventType]?.label || 'Event'}
+                </span>
             </div>
         </div>
     );
@@ -65,9 +81,9 @@ export default function AppointmentsPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isKeyOpen, setIsKeyOpen] = useState(true);
+    const [isKeyOpen, setIsKeyOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
-    const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar'); // ✅ State to manage the view
+    const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
 
     useEffect(() => {
         setIsLoading(true);
@@ -103,7 +119,6 @@ export default function AppointmentsPage() {
         });
     }, [allAppointments, searchTerm, clients]);
     
-    // ✅ Create a sorted list for the List View
     const sortedAppointments = useMemo(() => {
         return [...filteredAppointments].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [filteredAppointments]);
@@ -143,7 +158,6 @@ export default function AppointmentsPage() {
                         <h1 className="text-3xl font-bold text-foreground">Appointments</h1>
                         <p className="text-muted-foreground mt-1">View and manage your schedule.</p>
                     </div>
-                    {/* ✅ New container for the view toggle and new event button */}
                     <div className="flex items-center gap-4">
                         <div className="flex items-center p-1 bg-muted rounded-lg">
                             <button onClick={() => setViewMode('calendar')} className={`px-3 py-1 text-sm font-semibold rounded-md transition-colors flex items-center gap-2 ${viewMode === 'calendar' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}>
@@ -166,7 +180,6 @@ export default function AppointmentsPage() {
                     </div>
                 </div>
                 
-                {/* ✅ Conditional rendering for Calendar View */}
                 {viewMode === 'calendar' && (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         <div className="lg:col-span-2">
@@ -180,6 +193,9 @@ export default function AppointmentsPage() {
                                 </button>
                                 {isKeyOpen && (
                                     <div className="pt-2 mt-2 border-t space-y-2 animate-in fade-in-0">
+                                        <p className="text-xs font-semibold text-muted-foreground uppercase">Event Type</p>
+                                        {Object.values(eventTypeInfo).map((type) => (<div key={type.label} className="flex items-center gap-2 text-sm"><div className={`w-3 h-3 rounded-full ${type.keyColor} border`}></div> {type.label}</div>))}
+                                        <p className="text-xs font-semibold text-muted-foreground uppercase pt-2">Status</p>
                                         {Object.values(statusInfo).map((status) => (<div key={status.label} className="flex items-center gap-2 text-sm"><div className={`w-3 h-3 rounded-full ${status.keyColor} border`}></div> {status.label}</div>))}
                                     </div>
                                 )}
@@ -188,11 +204,16 @@ export default function AppointmentsPage() {
                             <div className="space-y-3 h-[60vh] overflow-y-auto pr-2">
                                 {appointmentsForSelectedDay.length > 0 ? (
                                     appointmentsForSelectedDay.map(appt => {
-                                        const { borderColor, bgColor, icon: StatusIcon } = statusInfo[appt.status] || { borderColor: 'border-l-gray-500', bgColor: 'hover:bg-gray-500/10', icon: HelpCircle };
+                                        // ✅ 4. Use eventType for colors and status for the icon
+                                        const { borderColor, bgColor, icon: TypeIcon } = eventTypeInfo[appt.eventType] || { borderColor: 'border-l-gray-500', bgColor: 'hover:bg-gray-500/10', icon: Calendar };
+                                        const { icon: StatusIcon } = statusInfo[appt.status] || { icon: HelpCircle };
                                         const clientName = clients.find(c => c.id === appt.clientId)?.companyName || clients.find(c => c.id === appt.clientId)?.name;
                                         return (
                                             <div key={appt.id} onClick={() => handleAppointmentClick(appt)} className={`p-4 rounded-lg bg-card border border-l-4 ${borderColor} ${bgColor} cursor-pointer transition-all space-y-1`}>
-                                                <div className="flex justify-between items-start"><p className="font-bold text-foreground">{appt.subject}</p><StatusIcon className="h-4 w-4 text-muted-foreground" /></div>
+                                                <div className="flex justify-between items-start">
+                                                    <p className="font-bold text-foreground flex items-center gap-2"><TypeIcon size={14} /> {appt.subject}</p>
+                                                    <StatusIcon className="h-4 w-4 text-muted-foreground" />
+                                                </div>
                                                 <p className="text-sm text-muted-foreground">{formatTime(appt.time)}{appt.endTime && ` - ${formatTime(appt.endTime)}`}</p>
                                                 <div className="flex flex-col gap-1 pt-1">{clientName && (<p className="text-sm text-primary/80 font-medium">{clientName}</p>)}{appt.locationType === 'virtual' && (<div className="flex items-center gap-2 text-xs text-muted-foreground"><Video size={14} /><span>Virtual</span></div>)}{appt.locationType === 'physical' && appt.city && appt.state && (<div className="flex items-center gap-2 text-xs text-muted-foreground"><MapPin size={14} /><span>{appt.city}, {appt.state}</span></div>)}</div>
                                             </div>
@@ -204,14 +225,13 @@ export default function AppointmentsPage() {
                     </div>
                 )}
                 
-                {/* ✅ Conditional rendering for List View */}
                 {viewMode === 'list' && (
                     <div className="bg-card rounded-lg border">
-                        <div className="p-4 border-b grid grid-cols-1 md:grid-cols-5 gap-4 text-xs font-semibold text-muted-foreground uppercase">
+                        <div className="p-4 border-b grid grid-cols-1 md:grid-cols-6 gap-4 text-xs font-semibold text-muted-foreground uppercase">
                             <span className="md:col-span-1">Date & Time</span>
                             <span className="md:col-span-2">Subject & Client</span>
                             <span className="md:col-span-1">Status</span>
-                            <span className="md:col-span-1 text-right">Type</span>
+                            <span className="md:col-span-2 text-right">Type</span>
                         </div>
                         <div className="divide-y divide-border">
                             {sortedAppointments.map(appt => (
