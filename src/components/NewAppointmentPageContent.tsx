@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { Appointment, Client, PersonalNetworkContact, JobFile } from '@/types/app-interfaces';
 import { getClients, getPersonalNetwork, getJobFiles, addAppointment, getAppointments, addClient } from '@/utils/firestoreService';
@@ -8,11 +8,13 @@ import AppointmentForm from '@/components/AppointmentForm';
 import Link from 'next/link';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 
+// Define the props the component will accept
 interface NewAppointmentPageContentProps {
     userId: string;
 }
 
-function NewAppointmentPageContent({ userId }: NewAppointmentPageContentProps) {
+// Accept the userId as a prop
+export default function NewAppointmentPageContent({ userId }: NewAppointmentPageContentProps) {
     const router = useRouter();
     const searchParams = useSearchParams();
 
@@ -59,28 +61,24 @@ function NewAppointmentPageContent({ userId }: NewAppointmentPageContentProps) {
 
         setIsParsing(true);
         setAiMessage('AI is parsing the text...');
-        setPrefilledData(undefined); // Clear previous results
+        setPrefilledData(undefined);
 
         const clientListForAI = clients.map(c => ({ id: c.id, name: c.companyName || c.name }));
 
         const prompt = `
-You are an intelligent scheduling assistant for an application called Ten99. Your task is to parse unstructured text about a job or appointment and convert it into a structured JSON object.
+You are an intelligent scheduling assistant. Parse the text below and convert it into a structured JSON object adhering to the schema.
 
 CONTEXT:
 - Today's Date: ${new Date().toLocaleDateString()}
 - Existing Clients List: ${JSON.stringify(clientListForAI)}
 
 INSTRUCTIONS:
-1. Analyze the 'TEXT TO PARSE' below.
-2. Extract the relevant details for an appointment. Infer a 'subject' if one is not explicitly provided.
-3. Format the extracted data into a JSON object that strictly adheres to the following schema.
-4. **Date and Time:**
-    - Convert all dates to 'YYYY-MM-DD' format.
-    - Convert all times to 24-hour 'HH:mm' format.
-5. **Client Matching:**
-    - If the text mentions a company name that closely matches a name in the 'Existing Clients List', use the corresponding 'id' for the 'clientId' field in the JSON output.
-    - If no suitable client is found, do NOT create a 'clientId'. Instead, create a 'newClientName' field with the parsed company name.
-6. **Output:** Respond with ONLY the valid JSON object. Do not include any explanatory text, markdown formatting like \`\`\`json, or any other characters outside the JSON object itself.
+1.  Analyze the 'TEXT TO PARSE' below.
+2.  Extract details, inferring a 'subject' if needed. Look for "Situation:", "Job#", "City Name:", "Site Zip Code:".
+3.  **Company Name:** Find the company name in the "From:" line (e.g., "From: GISN <...>").
+4.  **Client Matching:** If a parsed company name matches an existing client, use their 'id' for 'clientId'. Otherwise, create a 'newClientName' field.
+5.  **Formatting:** Dates must be 'YYYY-MM-DD', and times must be 24-hour 'HH:mm'.
+6.  **Output:** Respond with ONLY the valid JSON object.
 
 JSON SCHEMA:
 {
@@ -91,12 +89,36 @@ JSON SCHEMA:
   "clientId": "string" | null,
   "newClientName": "string" | null,
   "jobNumber": "string" | null,
-  "notes": "string | null",
-  "address": "string | null",
+  "notes": "string" | null,
+  "address": "string" | null,
   "city": "string" | null,
   "state": "string" | null,
-  "zip": "string" | null",
+  "zip": "string" | null,
   "locationType": "physical" | "virtual" | null
+}
+
+EXAMPLE:
+---
+TEXT TO PARSE:
+From: GISN <request@gisn.info>
+Date: Sat, Jul 26, 2025 at 12:01 PM
+Job# 1137445 Session# 5090723
+Situation: Onsite(Teamed): School Improvement Plan Stake Holder Meeting
+City Name: Cave Springs
+Site Zip Code: 30124
+---
+EXPECTED JSON OUTPUT:
+{
+  "subject": "Onsite(Teamed): School Improvement Plan Stake Holder Meeting",
+  "date": "2025-07-26",
+  "time": "12:01",
+  "endTime": null,
+  "newClientName": "GISN",
+  "jobNumber": "1137445",
+  "notes": "Session# 5090723",
+  "city": "Cave Springs",
+  "zip": "30124",
+  "locationType": "physical"
 }
 ---
 
@@ -121,38 +143,25 @@ ${pastedText}
                 body: JSON.stringify(payload)
             });
 
-            if (!response.ok) {
-                const errorBody = await response.text();
-                console.error("API Error Response Body:", errorBody);
-                throw new Error(`API request failed: ${response.status} ${response.statusText}`);
-            }
-
+            if (!response.ok) { throw new Error(`API request failed: ${response.status} ${response.statusText}`); }
             const result = await response.json();
+            if (!result.candidates?.length) { throw new Error("AI response was empty or blocked."); }
             
-            if (!result.candidates || result.candidates.length === 0) {
-                throw new Error("AI response was empty or blocked. Check safety settings in Google AI Studio if this persists.");
-            }
-
             const rawText = result.candidates[0].content.parts[0].text;
-            
             const jsonStart = rawText.indexOf('{');
             const jsonEnd = rawText.lastIndexOf('}');
-            if (jsonStart === -1 || jsonEnd === -1) {
-                console.error("Invalid response from AI:", rawText);
-                throw new Error("No valid JSON object found in AI response.");
-            }
+            if (jsonStart === -1 || jsonEnd === -1) { throw new Error("No valid JSON object found in AI response."); }
             
             const jsonString = rawText.substring(jsonStart, jsonEnd + 1);
             const parsedJson = JSON.parse(jsonString);
 
             if (parsedJson.newClientName && !parsedJson.clientId) {
-                const newClientData: Partial<Client> = {
+                const newClientRef = await addClient(userId, {
                     companyName: parsedJson.newClientName,
                     name: parsedJson.newClientName,
                     status: 'Active',
                     clientType: 'business_1099'
-                };
-                const newClientRef = await addClient(userId, newClientData);
+                });
                 parsedJson.clientId = newClientRef.id;
             }
             
@@ -161,7 +170,7 @@ ${pastedText}
 
         } catch (error) {
             console.error("AI Parsing Error:", error);
-            setAiMessage("Error parsing AI response. Check console for details.");
+            setAiMessage(`Error parsing AI response. ${error instanceof Error ? error.message : ''}`);
         } finally {
             setIsParsing(false);
         }
@@ -170,33 +179,29 @@ ${pastedText}
     const handleSaveAppointment = async (appointmentData: Partial<Appointment>, recurrenceEndDate?: string) => {
         setIsSubmitting(true);
         if (!appointmentData.date || !appointmentData.time) {
-            alert("Date and Time are required to check for conflicts.");
+            alert("Date and Time are required.");
             setIsSubmitting(false);
             return;
         }
 
         try {
             const newStart = new Date(`${appointmentData.date}T${appointmentData.time}`);
-            const newEnd = appointmentData.endTime
-                ? new Date(`${appointmentData.date}T${appointmentData.endTime}`)
-                : new Date(newStart.getTime() + 60 * 60 * 1000);
+            const newEnd = appointmentData.endTime ? new Date(`${appointmentData.date}T${appointmentData.endTime}`) : new Date(newStart.getTime() + 60 * 60 * 1000);
 
             const conflict = allAppointments.find(existing => {
-                if (!existing.date || !existing.time || existing.id === appointmentData.id) return false;
-                if (existing.date !== appointmentData.date) return false;
+                if (!existing.date || !existing.time || existing.id === appointmentData.id || existing.date !== appointmentData.date) return false;
                 const existStart = new Date(`${existing.date}T${existing.time}`);
                 const existEnd = existing.endTime ? new Date(`${existing.date}T${existing.endTime}`) : new Date(existStart.getTime() + 60 * 60 * 1000);
                 return newStart < existEnd && newEnd > existStart;
             });
 
             if (conflict) {
-                alert(`⚠️ Conflict: "${conflict.subject}" at ${conflict.time}. Please choose a different time.`);
+                alert(`⚠️ Conflict: "${conflict.subject}" at ${conflict.time}.`);
                 setIsSubmitting(false);
                 return;
             }
             
             await addAppointment(userId, appointmentData, recurrenceEndDate);
-
             alert("✅ Appointment Saved!");
             router.push('/dashboard/appointments');
         } catch (error) {
@@ -254,14 +259,5 @@ ${pastedText}
                 </div>
             </div>
         </div>
-    );
-}
-
-// Wrapper component to handle Suspense
-export default function NewAppointmentPageWrapper({ userId }: { userId: string }) {
-    return (
-        <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading...</div>}>
-            <NewAppointmentPageContent userId={userId} />
-        </Suspense>
     );
 }

@@ -1,13 +1,13 @@
-import NewAppointmentPageWrapper from '@/components/NewAppointmentPageContent';
-import { auth } from "@clerk/nextjs/server";
-import { redirect } from 'next/navigation';
+import { Suspense } from 'react';
+import NewAppointmentPageContent from '@/components/NewAppointmentPageContent';
 
-export default async function NewAppointmentPage() {
-  const { userId } = await auth();
+// This is our temporary user ID for development
+const TEMP_USER_ID = "dev-user-1";
 
-  if (!userId) {
-    redirect('/sign-in');
-  }
-
-  return <NewAppointmentPageWrapper userId={userId} />;
+export default function NewAppointmentPage() {
+    return (
+        <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading...</div>}>
+            <NewAppointmentPageContent userId={TEMP_USER_ID} />
+        </Suspense>
+    );
 }
