@@ -18,6 +18,23 @@ const defaultTermsText = `This contract incorporates pre-negotiated terms...`;
 const defaultPaymentText = `Payment can be made via:\n- Venmo: @YourUsername...`;
 const DEFAULT_EXPENSE_CATEGORIES = ['Travel', 'Equipment', 'Supplies', 'Professional Development', 'Other'];
 
+// ✅ Default templates for new users
+const defaultTemplates = [
+    {
+        name: 'Decline Offer (Default)',
+        subject: 'Update regarding your offer for: {{jobTitle}}',
+        body: 'Hello {{clientName}},\n\nThank you for the offer for the "{{jobTitle}}" position. Unfortunately, I am unable to accept at this time.\n\nI appreciate you considering me and wish you the best in finding a suitable candidate.\n\nSincerely,\n{{yourName}}',
+        type: 'decline' as const
+    },
+    {
+        name: 'Accept Pending (Default)',
+        subject: 'Regarding your offer for: {{jobTitle}}',
+        body: 'Hello {{clientName}},\n\nThank you for the offer for the "{{jobTitle}}" position. I am very interested and will review the details shortly.\n\nPlease expect a final confirmation from me soon.\n\nBest,\n{{yourName}}',
+        type: 'pending' as const
+    }
+];
+
+
 const HowToTab = () => {
     const featureSections = [
         { title: "Schedule", features: [ { icon: ThumbsUp, name: "Dashboard", description: "Your at-a-glance command center for upcoming events, inbox items, and job alerts." }, { icon: Calendar, name: "Appointments", description: "A full calendar and list view of your entire schedule, color-coded by event type." }, { icon: Mail, name: "Mailbox", description: "The magic inbox. Forward client emails here to automatically create appointments and organize your work." } ] },
@@ -84,6 +101,20 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
     const [newReminder, setNewReminder] = useState<Partial<Reminder>>({ type: 'one-time', text: '' });
 
     useEffect(() => {
+        const setupNewUser = async () => {
+            if (initialTemplates.length === 0) {
+                try {
+                    for (const template of defaultTemplates) {
+                        await addTemplate(userId, template);
+                    }
+                    router.refresh();
+                } catch (error) {
+                    console.error("Failed to create default templates:", error);
+                }
+            }
+        };
+
+        setupNewUser();
         setTemplates(initialTemplates);
         setReminders(initialReminders);
         if (initialProfile) {
@@ -95,7 +126,7 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
                 invoiceLineItems: initialProfile.invoiceLineItems || [],
             });
         }
-    }, [initialTemplates, initialProfile, initialReminders]);
+    }, [initialTemplates, initialProfile, initialReminders, userId, router]);
 
     const handleSaveSettings = async (dataToSave: Partial<UserProfile>) => {
         setIsSubmitting(true);
@@ -478,9 +509,7 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
                                     </button>
                                 </div>
                             </div>
-
                             <hr className="my-8" />
-
                             <div>
                                 <div className="flex justify-between items-center mb-4">
                                     <div>
