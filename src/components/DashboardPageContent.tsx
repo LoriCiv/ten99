@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import { getAppointments, getMessagesForUser, getJobPostings, getPriorityJobFiles, getUserProfile, getClients, addExpense, getReminders } from '@/utils/firestoreService';
+import { getAppointments, getMessagesForUser, getJobPostings, getPriorityJobFiles, getUserProfile, getClients, addExpense, getReminders, deleteReminder } from '@/utils/firestoreService';
 import type { Appointment, JobFile, UserProfile, Message, JobPosting, Client, Expense, Reminder } from '@/types/app-interfaces';
 import Link from 'next/link';
-import { Calendar, FileText, DollarSign, ArrowRight, Inbox, AlertCircle, X, Bell, PlusCircle, BellRing } from 'lucide-react';
+import { Calendar, FileText, ArrowRight, Inbox, AlertCircle, X, Bell, PlusCircle, BellRing, Trash2 } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, isToday } from 'date-fns';
 import Modal from '@/components/Modal';
 import ExpenseForm from '@/components/ExpenseForm';
@@ -27,9 +27,9 @@ const ActionCard = ({ title, children, icon: Icon, link }: { title: string, chil
                 {title}
             </h3>
             {link && (
-               <Link href={link} className="flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
-                   View All <ArrowRight size={14} />
-               </Link>
+                <Link href={link} className="flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
+                    View All <ArrowRight size={14} />
+                </Link>
             )}
         </div>
         <div className="flex-grow">
@@ -65,12 +65,11 @@ const AgendaItem = ({ appointment, jobFile }: { appointment: Appointment, jobFil
     );
 };
 
-// ✅ 1. Update the props to receive a userId
 interface DashboardPageContentProps {
   userId: string;
 }
 
-export default function DashboardPageContent({ userId }: DashboardPageContentProps) { // ✅ 2. Receive userId as a prop
+export default function DashboardPageContent({ userId }: DashboardPageContentProps) {
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [priorityJobFiles, setPriorityJobFiles] = useState<JobFile[]>([]);
@@ -82,9 +81,12 @@ export default function DashboardPageContent({ userId }: DashboardPageContentPro
     const [showJobAlert, setShowJobAlert] = useState(true);
     const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
     const [isSubmittingExpense, setIsSubmittingExpense] = useState(false);
+    // ✅ 1. Add state to track reminders dismissed for the current session
+    const [dismissedReminders, setDismissedReminders] = useState<string[]>([]);
 
     useEffect(() => {
-        // ✅ 3. Use the real userId for all data fetching
+        if (!userId) return;
+        setIsLoading(true);
         const unsubProfile = getUserProfile(userId, setUserProfile);
         const unsubAppointments = getAppointments(userId, setAppointments);
         const unsubJobFiles = getPriorityJobFiles(userId, setPriorityJobFiles);
@@ -93,7 +95,7 @@ export default function DashboardPageContent({ userId }: DashboardPageContentPro
         const unsubClients = getClients(userId, setClients);
         const unsubReminders = getReminders(userId, setReminders);
         
-        setTimeout(() => setIsLoading(false), 1000);
+        setTimeout(() => setIsLoading(false), 500);
 
         return () => {
             unsubProfile();
@@ -104,7 +106,7 @@ export default function DashboardPageContent({ userId }: DashboardPageContentPro
             unsubClients();
             unsubReminders();
         };
-    }, [userId]); // ✅ 4. Add userId to the dependency array
+    }, [userId]);
 
     const upcomingAppointments = useMemo(() => {
         const today = new Date();
@@ -136,6 +138,7 @@ export default function DashboardPageContent({ userId }: DashboardPageContentPro
         return weekView.find(day => day.isToday)?.appointments || [];
     }, [weekView]);
 
+    // ✅ 2. Update the logic to filter out dismissed reminders
     const todaysReminders = useMemo(() => {
         const today = new Date();
         const todayFormatted = format(today, 'yyyy-MM-dd');
@@ -143,6 +146,9 @@ export default function DashboardPageContent({ userId }: DashboardPageContentPro
         const dateOfMonth = today.getDate();
 
         return reminders.filter(reminder => {
+            if (dismissedReminders.includes(reminder.id!)) {
+                return false;
+            }
             if (reminder.type === 'one-time') {
                 return reminder.reminderDate === todayFormatted;
             }
@@ -156,7 +162,7 @@ export default function DashboardPageContent({ userId }: DashboardPageContentPro
             }
             return false;
         });
-    }, [reminders]);
+    }, [reminders, dismissedReminders]);
 
     const inboxStats = useMemo(() => {
         const unreadCount = messages.filter(m => !m.isRead).length;
@@ -178,7 +184,6 @@ export default function DashboardPageContent({ userId }: DashboardPageContentPro
     const handleAddExpense = async (data: Partial<Expense>) => {
         setIsSubmittingExpense(true);
         try {
-            // ✅ 5. Use the real userId to add an expense
             await addExpense(userId, data);
             alert("Expense added successfully!");
             setIsExpenseModalOpen(false);
@@ -190,13 +195,25 @@ export default function DashboardPageContent({ userId }: DashboardPageContentPro
         }
     };
 
+    // ✅ 3. Add the new handler function
+    const handleDismissReminder = (reminder: Reminder) => {
+        if (!reminder.id) return;
+        if (reminder.type === 'one-time') {
+            // Permanently delete one-time reminders
+            deleteReminder(userId, reminder.id);
+        } else {
+            // Temporarily hide recurring reminders for this session
+            setDismissedReminders(prev => [...prev, reminder.id!]);
+        }
+    };
+
     if (isLoading) {
         return <div className="p-8 text-center text-muted-foreground">Loading your dashboard...</div>;
     }
 
     return (
         <>
-            <div className="space-y-8">
+            <div className="p-4 sm:p-6 lg:p-8 space-y-6">
                 {showJobAlert && matchingJobs.length > 0 && (
                     <div className="bg-primary/10 border border-primary/20 text-primary-foreground p-4 rounded-lg flex items-center justify-between animate-in fade-in-0">
                         <div className="flex items-center gap-3">
@@ -233,9 +250,19 @@ export default function DashboardPageContent({ userId }: DashboardPageContentPro
                 {todaysReminders.length > 0 && (
                     <div className="bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 p-4 rounded-lg space-y-2">
                         {todaysReminders.map(reminder => (
-                            <div key={reminder.id} className="flex items-center gap-3">
-                                <BellRing className="h-5 w-5" />
-                                <span className="text-sm font-semibold">{reminder.text}</span>
+                            <div key={reminder.id} className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <BellRing className="h-5 w-5" />
+                                    <span className="text-sm font-semibold">{reminder.text}</span>
+                                </div>
+                                {/* ✅ 4. Add the delete/dismiss button */}
+                                <button 
+                                    onClick={() => handleDismissReminder(reminder)}
+                                    className="p-1 rounded-full hover:bg-amber-500/20"
+                                    title={reminder.type === 'one-time' ? 'Delete Reminder' : 'Dismiss for today'}
+                                >
+                                    <X className="h-4 w-4" />
+                                </button>
                             </div>
                         ))}
                     </div>
@@ -272,10 +299,7 @@ export default function DashboardPageContent({ userId }: DashboardPageContentPro
                                 <p className={`text-center text-xs mb-2 ${day.isToday ? 'text-primary/80' : 'text-muted-foreground'}`}>{format(day.date, 'd')}</p>
                                 <div className="space-y-1">
                                     {day.appointments.length > 0 ? day.appointments.map(appt => (
-                                        <div key={appt.id} className={clsx(
-                                            "text-xs bg-card p-1.5 rounded border-l-2",
-                                            statusColors[appt.status] || 'border-gray-400'
-                                        )}>
+                                        <div key={appt.id} className={clsx( "text-xs bg-card p-1.5 rounded border-l-2", statusColors[appt.status] || 'border-gray-400' )}>
                                             <p className="font-semibold truncate">{appt.subject}</p>
                                         </div>
                                     )) : (
@@ -287,7 +311,7 @@ export default function DashboardPageContent({ userId }: DashboardPageContentPro
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <ActionCard title="Inbox Summary" icon={Inbox} link="/dashboard/mailbox">
                            <div className="space-y-2">
                                 <div className="flex items-center justify-between text-sm">
