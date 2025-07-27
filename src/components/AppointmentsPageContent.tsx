@@ -1,3 +1,5 @@
+// src/components/AppointmentsPageContent.tsx
+
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
@@ -9,6 +11,7 @@ import Link from 'next/link';
 import AppointmentDetailModal from '@/components/AppointmentDetailModal';
 import InteractiveCalendar from '@/components/InteractiveCalendar';
 
+// --- Helper objects and functions (no changes here) ---
 const statusInfo: { [key: string]: { icon: React.ElementType, keyColor: string, label: string } } = {
     'scheduled': { icon: Calendar, keyColor: 'bg-blue-400', label: 'Scheduled' },
     'pending': { icon: Clock, keyColor: 'bg-yellow-400', label: 'Pending' },
@@ -63,6 +66,7 @@ const AppointmentListItem = ({ appointment, clientName }: { appointment: Appoint
         </div>
     );
 };
+// --- End of helpers ---
 
 interface AppointmentsPageContentProps {
     userId: string;
@@ -75,7 +79,7 @@ export default function AppointmentsPageContent({ userId }: AppointmentsPageCont
     const [jobFiles, setJobFiles] = useState<JobFile[]>([]);
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(true); // Start in loading state
     const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isKeyOpen, setIsKeyOpen] = useState(false);
@@ -83,23 +87,29 @@ export default function AppointmentsPageContent({ userId }: AppointmentsPageCont
     const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
 
     useEffect(() => {
+        // This component now fetches all its own data after it mounts in the browser.
+        // This is safe because FirebaseProvider has already authenticated the user.
+        if (!userId) return;
+
         setIsLoading(true);
-        const unsubAppointments = getAppointments(userId, setAllAppointments);
+        const unsubAppointments = getAppointments(userId, (data) => {
+            setAllAppointments(data);
+            setIsLoading(false); // Stop loading once appointments are fetched
+        });
         const unsubClients = getClients(userId, setClients);
         const unsubContacts = getPersonalNetwork(userId, setContacts);
         const unsubJobFiles = getJobFiles(userId, setJobFiles);
         
-        const timer = setTimeout(() => setIsLoading(false), 1000);
-
+        // This is the cleanup function that runs when the component is unmounted
         return () => {
             unsubAppointments();
             unsubClients();
             unsubContacts();
             unsubJobFiles();
-            clearTimeout(timer);
         };
     }, [userId]);
 
+    // --- All the memoization and handler functions remain the same ---
     const filteredAppointments = useMemo(() => {
         const lowercasedTerm = searchTerm.toLowerCase();
         if (!lowercasedTerm) return allAppointments;
@@ -142,6 +152,7 @@ export default function AppointmentsPageContent({ userId }: AppointmentsPageCont
             })
             .sort((a, b) => a.time.localeCompare(b.time)),
     [filteredAppointments, selectedDate]);
+    // --- End of handlers ---
 
     if (isLoading) {
         return <div className="p-8 text-center text-muted-foreground">Loading Calendar...</div>;
