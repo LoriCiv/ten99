@@ -10,8 +10,8 @@ import { format } from 'date-fns';
 import Link from 'next/link';
 import AppointmentDetailModal from '@/components/AppointmentDetailModal';
 import InteractiveCalendar from '@/components/InteractiveCalendar';
+import { useFirebase } from './FirebaseProvider'; // Import the hook
 
-// --- Helper objects and functions (no changes here) ---
 const statusInfo: { [key: string]: { icon: React.ElementType, keyColor: string, label: string } } = {
     'scheduled': { icon: Calendar, keyColor: 'bg-blue-400', label: 'Scheduled' },
     'pending': { icon: Clock, keyColor: 'bg-yellow-400', label: 'Pending' },
@@ -20,14 +20,12 @@ const statusInfo: { [key: string]: { icon: React.ElementType, keyColor: string, 
     'canceled-billable': { icon: AlertTriangle, keyColor: 'bg-red-400', label: 'Canceled (Billable)' },
     'pending-confirmation': { icon: HelpCircle, keyColor: 'bg-orange-400', label: 'Pending Confirmation' }
 };
-
 const eventTypeInfo: { [key: string]: { borderColor: string, bgColor: string, icon: React.ElementType, keyColor: string, label: string } } = {
     'job': { borderColor: 'border-l-blue-500', bgColor: 'hover:bg-blue-500/10', icon: Calendar, keyColor: 'bg-blue-400', label: 'Job' },
     'personal': { borderColor: 'border-l-pink-500', bgColor: 'hover:bg-pink-500/10', icon: Calendar, keyColor: 'bg-pink-400', label: 'Personal' },
     'billing': { borderColor: 'border-l-green-500', bgColor: 'hover:bg-green-500/10', icon: Calendar, keyColor: 'bg-green-400', label: 'Billing' },
     'education': { borderColor: 'border-l-purple-500', bgColor: 'hover:bg-purple-500/10', icon: BookOpen, keyColor: 'bg-purple-400', label: 'Education' }
 };
-
 const formatTime = (timeString?: string) => {
     if (!timeString) return '';
     const [hours, minutes] = timeString.split(':');
@@ -36,50 +34,32 @@ const formatTime = (timeString?: string) => {
     const formattedHour = hour % 12 || 12;
     return `${formattedHour}:${minutes} ${ampm}`;
 };
-
 const AppointmentListItem = ({ appointment, clientName }: { appointment: Appointment, clientName: string }) => {
     const statusStyle = statusInfo[appointment.status] || { keyColor: 'bg-gray-400' };
     const typeStyle = eventTypeInfo[appointment.eventType] || { keyColor: 'bg-gray-400' };
-    
     return (
         <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-center p-4">
-            <div className="md:col-span-1">
-                <p className="font-semibold">{format(new Date(appointment.date + 'T00:00:00'), 'MMM d, yyyy')}</p>
-                <p className="text-xs text-muted-foreground">{formatTime(appointment.time)}</p>
-            </div>
-            <div className="md:col-span-2">
-                <p className="font-semibold text-foreground">{appointment.subject}</p>
-                <p className="text-xs text-primary">{clientName}</p>
-            </div>
-            <div className="md:col-span-1">
-                <span className="inline-flex items-center gap-2 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
-                    <span className={`w-2 h-2 rounded-full ${statusStyle.keyColor}`}></span>
-                    {statusInfo[appointment.status]?.label || 'Unknown'}
-                </span>
-            </div>
-            <div className="md:col-span-2 text-right">
-                <span className="inline-flex items-center gap-2 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
-                    <span className={`w-2 h-2 rounded-full ${typeStyle.keyColor}`}></span>
-                    {eventTypeInfo[appointment.eventType]?.label || 'Event'}
-                </span>
-            </div>
+            <div className="md:col-span-1"><p className="font-semibold">{format(new Date(appointment.date + 'T00:00:00'), 'MMM d, yyyy')}</p><p className="text-xs text-muted-foreground">{formatTime(appointment.time)}</p></div>
+            <div className="md:col-span-2"><p className="font-semibold text-foreground">{appointment.subject}</p><p className="text-xs text-primary">{clientName}</p></div>
+            <div className="md:col-span-1"><span className="inline-flex items-center gap-2 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground"><span className={`w-2 h-2 rounded-full ${statusStyle.keyColor}`}></span>{statusInfo[appointment.status]?.label || 'Unknown'}</span></div>
+            <div className="md:col-span-2 text-right"><span className="inline-flex items-center gap-2 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground"><span className={`w-2 h-2 rounded-full ${typeStyle.keyColor}`}></span>{eventTypeInfo[appointment.eventType]?.label || 'Event'}</span></div>
         </div>
     );
 };
-// --- End of helpers ---
 
 interface AppointmentsPageContentProps {
     userId: string;
 }
 
 export default function AppointmentsPageContent({ userId }: AppointmentsPageContentProps) {
+    const { isFirebaseAuthenticated } = useFirebase();
     const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
     const [contacts, setContacts] = useState<PersonalNetworkContact[]>([]);
     const [jobFiles, setJobFiles] = useState<JobFile[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-    const [isLoading, setIsLoading] = useState(true); // Start in loading state
     const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isKeyOpen, setIsKeyOpen] = useState(false);
@@ -87,72 +67,38 @@ export default function AppointmentsPageContent({ userId }: AppointmentsPageCont
     const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
 
     useEffect(() => {
-        // This component now fetches all its own data after it mounts in the browser.
-        // This is safe because FirebaseProvider has already authenticated the user.
-        if (!userId) return;
+        if (isFirebaseAuthenticated) {
+            const unsubAppointments = getAppointments(userId, (data) => {
+                setAllAppointments(data);
+                setIsLoading(false);
+            });
+            const unsubClients = getClients(userId, setClients);
+            const unsubContacts = getPersonalNetwork(userId, setContacts);
+            const unsubJobFiles = getJobFiles(userId, setJobFiles);
+            return () => {
+                unsubAppointments();
+                unsubClients();
+                unsubContacts();
+                unsubJobFiles();
+            };
+        }
+    }, [userId, isFirebaseAuthenticated]);
 
-        setIsLoading(true);
-        const unsubAppointments = getAppointments(userId, (data) => {
-            setAllAppointments(data);
-            setIsLoading(false); // Stop loading once appointments are fetched
-        });
-        const unsubClients = getClients(userId, setClients);
-        const unsubContacts = getPersonalNetwork(userId, setContacts);
-        const unsubJobFiles = getJobFiles(userId, setJobFiles);
-        
-        // This is the cleanup function that runs when the component is unmounted
-        return () => {
-            unsubAppointments();
-            unsubClients();
-            unsubContacts();
-            unsubJobFiles();
-        };
-    }, [userId]);
-
-    // --- All the memoization and handler functions remain the same ---
     const filteredAppointments = useMemo(() => {
         const lowercasedTerm = searchTerm.toLowerCase();
         if (!lowercasedTerm) return allAppointments;
-        
         return allAppointments.filter(appt => {
             const client = clients.find(c => c.id === appt.clientId);
             const clientName = client?.companyName || client?.name || '';
-            return (
-                appt.subject?.toLowerCase().includes(lowercasedTerm) ||
-                appt.notes?.toLowerCase().includes(lowercasedTerm) ||
-                appt.address?.toLowerCase().includes(lowercasedTerm) ||
-                clientName.toLowerCase().includes(lowercasedTerm)
-            );
+            return (appt.subject?.toLowerCase().includes(lowercasedTerm) || appt.notes?.toLowerCase().includes(lowercasedTerm) || appt.address?.toLowerCase().includes(lowercasedTerm) || clientName.toLowerCase().includes(lowercasedTerm));
         });
     }, [allAppointments, searchTerm, clients]);
     
-    const sortedAppointments = useMemo(() => {
-        return [...filteredAppointments].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [filteredAppointments]);
-
-    const handleAppointmentClick = (appointment: Appointment) => {
-        setSelectedAppointment(appointment);
-        setIsModalOpen(true);
-    };
-
-    const handleCloseModal = () => {
-        setIsModalOpen(false);
-        setSelectedAppointment(null);
-    };
-    
-    const handleDataSaved = () => {
-        console.log("Data saved, UI will update automatically via listeners.");
-    };
-
-    const appointmentsForSelectedDay = useMemo(() => 
-        filteredAppointments
-            .filter(appt => {
-                const apptDate = new Date(appt.date + 'T00:00:00');
-                return apptDate.toDateString() === selectedDate.toDateString();
-            })
-            .sort((a, b) => a.time.localeCompare(b.time)),
-    [filteredAppointments, selectedDate]);
-    // --- End of handlers ---
+    const sortedAppointments = useMemo(() => [...filteredAppointments].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [filteredAppointments]);
+    const handleAppointmentClick = (appointment: Appointment) => { setSelectedAppointment(appointment); setIsModalOpen(true); };
+    const handleCloseModal = () => { setIsModalOpen(false); setSelectedAppointment(null); };
+    const handleDataSaved = () => console.log("Data saved, UI will update automatically via listeners.");
+    const appointmentsForSelectedDay = useMemo(() => filteredAppointments.filter(appt => new Date(appt.date + 'T00:00:00').toDateString() === selectedDate.toDateString()).sort((a, b) => a.time.localeCompare(b.time)), [filteredAppointments, selectedDate]);
 
     if (isLoading) {
         return <div className="p-8 text-center text-muted-foreground">Loading Calendar...</div>;
