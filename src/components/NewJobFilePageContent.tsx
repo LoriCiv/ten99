@@ -91,6 +91,7 @@ function NewJobFilePageContent({ userId }: NewJobFilePageContentProps) {
                 appointments={appointments}
                 initialData={prefilledData}
                 isSubmitting={isSubmitting}
+                userId={userId} // ✅ THIS LINE WAS ADDED
             />
         </div>
     );

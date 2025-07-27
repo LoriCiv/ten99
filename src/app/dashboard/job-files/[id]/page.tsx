@@ -1,7 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { getJobFile, getClientForJobFile } from '@/utils/firestoreService';
-// ✅ FIX: Corrected the import to match your filename
-import JobFileDetailContent from '@/components/JobFileDetailPageContent'; 
+// ✅ THE FIX: Replaced the alias path with a direct relative path.
+import JobFileDetailContent from '../../../../components/JobFileDetailContent'; 
 import { notFound, redirect } from 'next/navigation';
 import { Suspense } from 'react';
 

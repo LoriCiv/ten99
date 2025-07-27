@@ -76,6 +76,7 @@ export interface Appointment {
     seriesId?: string;
 }
 
+// --- THIS IS THE CORRECTED INTERFACE ---
 export interface JobFile {
     id?: string;
     userId?: string;
@@ -87,14 +88,18 @@ export interface JobFile {
     tags?: string[];
     startDate?: string;
     endDate?: string;
-    priority?: number;
+    priority?: 0 | 1 | 2;
     publicId?: string;
     isShared?: boolean;
     status?: 'upcoming' | 'in-progress' | 'completed' | 'on-hold';
     sharedNotes?: string;
     privateNotes?: string;
+    originalUserId?: string;
+    fileUrl?: string;
+    // This is the missing property that fixes the errors
     attachments?: { name: string; url: string; }[];
 }
+// --- END OF CORRECTION ---
 
 export interface Certification {
     id?: string;

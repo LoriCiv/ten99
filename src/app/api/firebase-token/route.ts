@@ -1,23 +1,25 @@
 // src/app/api/firebase-token/route.ts
 
-// 👇 Import 'NextRequest' here
 import { type NextRequest, NextResponse } from 'next/server';
 import { getAuth } from '@clerk/nextjs/server';
 import admin from 'firebase-admin';
 
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY as string);
-
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
+// This function will initialize the Firebase Admin SDK only when needed.
+function initializeFirebaseAdmin() {
+  if (!admin.apps.length) {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY as string);
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+  }
 }
 
-// 👇 Use the 'NextRequest' type here
-export async function GET(request: NextRequest) { 
+export async function GET(request: NextRequest) {
   try {
-    const { userId } = getAuth(request);
+    // Initialize Firebase Admin right before we use it.
+    initializeFirebaseAdmin();
 
+    const { userId } = getAuth(request);
     if (!userId) {
       return new NextResponse("Unauthorized", { status: 401 });
     }

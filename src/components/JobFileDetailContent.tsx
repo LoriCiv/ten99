@@ -34,6 +34,7 @@ export default function JobFileDetailContent({ initialJobFile, initialClient, us
             const { id, createdAt, ...dataToUpdate } = jobFile;
             await updateJobFile(userId, id, dataToUpdate);
             setIsEditing(false);
+            router.refresh();
         } catch (error) {
             console.error("Error updating job file:", error);
             alert("Failed to update job file.");
@@ -69,7 +70,11 @@ export default function JobFileDetailContent({ initialJobFile, initialClient, us
             const downloadURL = await uploadFile(userId, selectedFile);
             const newAttachment = { name: selectedFile.name, url: downloadURL };
             const updatedAttachments = [...(jobFile.attachments || []), newAttachment];
-            await updateJobFile(userId, jobFile.id, { attachments: updatedAttachments });
+            
+            // Explicitly create the object to update to satisfy TypeScript
+            const updateData: Partial<JobFile> = { attachments: updatedAttachments };
+            await updateJobFile(userId, jobFile.id, updateData);
+
             setJobFile(prev => ({ ...prev, attachments: updatedAttachments }));
             setSelectedFile(null);
         } catch (error) {
@@ -80,7 +85,7 @@ export default function JobFileDetailContent({ initialJobFile, initialClient, us
         }
     };
 
-    const handleSetPriority = async (newPriority: number) => {
+    const handleSetPriority = async (newPriority: 0 | 1 | 2) => {
         if (!jobFile.id) return;
         const finalPriority = jobFile.priority === newPriority ? 0 : newPriority;
         try {
@@ -115,11 +120,11 @@ export default function JobFileDetailContent({ initialJobFile, initialClient, us
                     </div>
                     <div className="flex items-center gap-2">
                         <div className="flex">
-                           {[1, 2].map(p => (
-                                <button key={p} onClick={() => handleSetPriority(p)}>
+                            {[1, 2].map((p) => (
+                                <button key={p} onClick={() => handleSetPriority(p as 1 | 2)}>
                                     <Star size={20} className={jobFile.priority && jobFile.priority >= p ? 'text-yellow-400 fill-current' : 'text-muted-foreground'}/>
                                 </button>
-                           ))}
+                            ))}
                         </div>
                         {isEditing ? (
                             <>
@@ -140,13 +145,13 @@ export default function JobFileDetailContent({ initialJobFile, initialClient, us
                 <div className="mt-6 pt-6 border-t">
                     <h3 className="text-lg font-semibold mb-4">Private Notes</h3>
                     {isEditing ? (
-                         <textarea
+                       <textarea
                             name="privateNotes"
                             value={jobFile.privateNotes || ''}
                             onChange={handleInputChange}
                             rows={10}
                             className="w-full p-3 bg-background border rounded-md"
-                         />
+                       />
                     ) : (
                         <div className="prose dark:prose-invert max-w-none p-3 bg-background rounded-md min-h-[100px] whitespace-pre-wrap">
                             {jobFile.privateNotes || <span className="text-muted-foreground">No private notes for this job file.</span>}
@@ -157,7 +162,8 @@ export default function JobFileDetailContent({ initialJobFile, initialClient, us
                 <div className="mt-6 pt-6 border-t">
                     <h3 className="text-lg font-semibold mb-4">Attachments</h3>
                     <div className="space-y-3">
-                        {(jobFile.attachments || []).map((file, index) => (
+                        {/* ✅ FIX: Added explicit types for 'file' and 'index' to remove "implicit any" errors */}
+                        {(jobFile.attachments || []).map((file: { url: string; name: string }, index: number) => (
                             <a key={index} href={file.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-background rounded-md border hover:border-primary">
                                 <Paperclip size={16} />
                                 <span className="font-medium text-primary underline">{file.name}</span>
@@ -167,7 +173,7 @@ export default function JobFileDetailContent({ initialJobFile, initialClient, us
                     <div className="mt-4 flex items-center gap-4">
                         <input type="file" onChange={handleFileChange} className="text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"/>
                         <button onClick={handleFileUpload} disabled={!selectedFile || isUploading} className="flex items-center gap-2 bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg disabled:opacity-50">
-                             {isUploading ? <Loader2 className="animate-spin" size={16}/> : <Upload size={16}/>} Upload
+                               {isUploading ? <Loader2 className="animate-spin" size={16}/> : <Upload size={16}/>} Upload
                         </button>
                     </div>
                 </div>
