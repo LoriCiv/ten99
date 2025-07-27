@@ -1,63 +1,77 @@
 // src/components/FirebaseProvider.tsx
-'use client';
 
-import { useAuth } from '@clerk/nextjs';
-import { createContext, useContext, useEffect, useState } from 'react';
-import { auth as firebaseAuth } from '@/lib/firebase';
-import { signInWithCustomToken, onAuthStateChanged, User } from 'firebase/auth';
+"use client";
 
-// 1. Create a context to hold the Firebase auth state ("the green light")
-const FirebaseContext = createContext<{ user: User | null; isFirebaseAuthenticated: boolean }>({
-  user: null,
-  isFirebaseAuthenticated: false,
-});
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { signInWithCustomToken } from "firebase/auth";
+import { auth as firebaseClientAuth } from "@/lib/firebase"; // Your client-side firebase config
+import { useUser } from "@clerk/nextjs";
 
-// 2. Create a custom hook to easily check the light's status
-export const useFirebase = () => useContext(FirebaseContext);
+// Define the shape of the context data
+interface FirebaseContextType {
+  isFirebaseAuthenticated: boolean;
+}
 
-export function FirebaseProvider({ children }: { children: React.ReactNode }) {
-  const { getToken, isSignedIn } = useAuth();
-  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+// Create the context
+const FirebaseContext = createContext<FirebaseContextType | undefined>(undefined);
+
+// The Provider component
+export function FirebaseProvider({ children }: { children: ReactNode }) {
   const [isFirebaseAuthenticated, setIsFirebaseAuthenticated] = useState(false);
+  const { isSignedIn, isLoaded } = useUser(); // Clerk's hook
 
   useEffect(() => {
-    const signIn = async () => {
+    // Only run this effect when Clerk has loaded and there's a signed-in user
+    if (!isLoaded || !isSignedIn) {
+      return;
+    }
+
+    // If we're already authenticated, don't do it again
+    if (isFirebaseAuthenticated) {
+      return;
+    }
+
+    const signInToFirebase = async () => {
       try {
-        const clerkToken = await getToken({ template: 'integration_firebase' });
-        if (clerkToken) {
-          const res = await fetch('/api/firebase-token', {
-            headers: { Authorization: `Bearer ${clerkToken}` },
-          });
-          if (!res.ok) {
-            console.error("Failed to fetch Firebase token from API", res.status);
-            setIsFirebaseAuthenticated(false); // Keep the light red
-            return;
-          }
-          const { firebaseToken } = await res.json();
-          await signInWithCustomToken(firebaseAuth, firebaseToken);
+        console.log("Clerk user loaded. Attempting to fetch Firebase token...");
+        // Fetch the custom token from our API route
+        const response = await fetch("/api/firebase-token");
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to fetch Firebase token");
         }
+
+        const { firebaseToken } = await response.json();
+        
+        // Sign in to Firebase on the client with the custom token
+        await signInWithCustomToken(firebaseClientAuth, firebaseToken);
+        
+        console.log("✅ Firebase authentication successful!");
+        // Set our "green light" to true
+        setIsFirebaseAuthenticated(true);
       } catch (error) {
-        console.error("Error signing into Firebase:", error);
-        setIsFirebaseAuthenticated(false); // Keep the light red
+        console.error("🔥 Firebase sign-in error:", error);
+        setIsFirebaseAuthenticated(false);
       }
     };
 
-    if (isSignedIn) {
-      signIn();
-    }
+    signInToFirebase();
 
-    // This is the official listener from Firebase. It tells us the exact moment the user is logged in.
-    const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
-      setFirebaseUser(user);
-      setIsFirebaseAuthenticated(!!user); // The light turns green HERE
-    });
-
-    return () => unsubscribe(); // Cleanup on unmount
-  }, [isSignedIn, getToken]);
+  }, [isLoaded, isSignedIn, isFirebaseAuthenticated]);
 
   return (
-    <FirebaseContext.Provider value={{ user: firebaseUser, isFirebaseAuthenticated }}>
+    <FirebaseContext.Provider value={{ isFirebaseAuthenticated }}>
       {children}
     </FirebaseContext.Provider>
   );
 }
+
+// The hook that pages will use to check for the "green light"
+export const useFirebase = () => {
+  const context = useContext(FirebaseContext);
+  if (context === undefined) {
+    throw new Error("useFirebase must be used within a FirebaseProvider");
+  }
+  return context;
+};

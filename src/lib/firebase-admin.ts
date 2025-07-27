@@ -1,38 +1,35 @@
+// src/lib/firebase-admin.ts
+
 import admin from 'firebase-admin';
-// ✅ FIX: Removed unused 'getApp' from this line
-import { getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import { getStorage } from 'firebase-admin/storage';
-import { getAuth } from 'firebase-admin/auth';
 
-const getFirebaseCredentials = () => {
-  const encodedKey = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
-  if (!encodedKey) {
-    throw new Error('FIREBASE_SERVICE_ACCOUNT_BASE64 environment variable not set.');
+/**
+ * Initializes the Firebase Admin SDK if it hasn't been already.
+ * This function is safe to call multiple times.
+ */
+export function initializeFirebaseAdmin() {
+  // Check if the app is already initialized to prevent errors
+  if (admin.apps.length > 0) {
+    return;
   }
-  const jsonKey = Buffer.from(encodedKey, 'base64').toString('utf-8');
-  return JSON.parse(jsonKey);
-};
 
-if (!getApps().length) {
+  // Ensure the environment variable is set
+  const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  if (!serviceAccountKey) {
+    throw new Error('FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set.');
+  }
+
   try {
-    initializeApp({
-      credential: admin.credential.cert(getFirebaseCredentials()),
-      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    // Parse the JSON key from the environment variable
+    const serviceAccount = JSON.parse(serviceAccountKey);
+
+    // Initialize the app with the service account credentials
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
     });
     console.log("Firebase Admin SDK initialized successfully.");
-  } catch (error) { // ✅ FIX: Changed 'error: any' to the safer default 'error'
-    if (error instanceof Error) {
-        console.error("Firebase Admin SDK initialization error:", error.stack);
-    } else {
-        console.error("Firebase Admin SDK initialization error:", error);
-    }
-    throw new Error("Failed to initialize Firebase Admin SDK");
+  } catch (error) {
+    console.error("Error parsing FIREBASE_SERVICE_ACCOUNT_KEY or initializing Firebase Admin:", error);
+    // Re-throw the error to be caught by the calling function
+    throw new Error("Failed to initialize Firebase Admin SDK.");
   }
 }
-
-const db = getFirestore();
-const auth = getAuth();
-const storage = getStorage();
-
-export { db, auth, storage };

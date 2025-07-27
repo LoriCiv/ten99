@@ -1,35 +1,30 @@
 // src/app/api/firebase-token/route.ts
 
-import { type NextRequest, NextResponse } from 'next/server';
-import { getAuth } from '@clerk/nextjs/server';
-import admin from 'firebase-admin';
-
-// This is the final, correct initialization logic
-function initializeFirebaseAdmin() {
-  if (!admin.apps.length) {
-    // It will now read the plain JSON key we uploaded via the CLI
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY as string);
-
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
-  }
-}
+import { NextRequest, NextResponse } from 'next/server';
+import { getAuth as getClerkAuth } from '@clerk/nextjs/server';
+import { getAuth as getFirebaseAuth } from 'firebase-admin/auth';
+import { initializeFirebaseAdmin } from '@/lib/firebase-admin';
 
 export async function GET(request: NextRequest) {
   try {
+    // 1. Initialize the Firebase Admin SDK using our helper.
+    //    This is safe to call on every request.
     initializeFirebaseAdmin();
 
-    const { userId } = getAuth(request);
+    // 2. Get the Clerk user from the incoming request.
+    const { userId } = getClerkAuth(request);
     if (!userId) {
-      return new NextResponse("Unauthorized", { status: 401 });
+      return new NextResponse(JSON.stringify({ error: "Unauthorized: No user ID found in Clerk session" }), { status: 401 });
     }
 
-    const firebaseToken = await admin.auth().createCustomToken(userId);
+    // 3. Create a custom Firebase token for the authenticated user.
+    const firebaseToken = await getFirebaseAuth().createCustomToken(userId);
+
+    // 4. Send the token back to the client.
     return NextResponse.json({ firebaseToken });
 
-  } catch (error: any) {
-    console.error('Error in /api/firebase-token:', error.message);
-    return new NextResponse("Internal Server Error", { status: 500 });
+  } catch (error) {
+    console.error('Error in /api/firebase-token:', error);
+    return new NextResponse(JSON.stringify({ error: "Internal Server Error" }), { status: 500 });
   }
 }
