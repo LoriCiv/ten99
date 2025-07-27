@@ -1,9 +1,21 @@
+// src/components/SettingsPageContent.tsx
+
 "use client";
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Template, UserProfile, InvoiceLineItemTemplate, Reminder } from '@/types/app-interfaces';
-import { addTemplate, updateTemplate, deleteTemplate, updateUserProfile, addReminder, deleteReminder } from '@/utils/firestoreService';
+import { 
+    addTemplate, 
+    updateTemplate, 
+    deleteTemplate, 
+    updateUserProfile, 
+    addReminder, 
+    deleteReminder,
+    getTemplates,
+    getUserProfile,
+    getReminders
+} from '@/utils/firestoreService';
 import TemplateFormModal from './TemplateFormModal';
 import ProfileForm from './ProfileForm';
 import { ThemeToggle } from './ThemeToggle';
@@ -18,7 +30,6 @@ const defaultTermsText = `This contract incorporates pre-negotiated terms...`;
 const defaultPaymentText = `Payment can be made via:\n- Venmo: @YourUsername...`;
 const DEFAULT_EXPENSE_CATEGORIES = ['Travel', 'Equipment', 'Supplies', 'Professional Development', 'Other'];
 
-// ✅ Default templates for new users
 const defaultTemplates = [
     {
         name: 'Decline Offer (Default)',
@@ -33,7 +44,6 @@ const defaultTemplates = [
         type: 'pending' as const
     }
 ];
-
 
 const HowToTab = () => {
     const featureSections = [
@@ -80,60 +90,71 @@ const HowToTab = () => {
     );
 };
 
-
 interface SettingsPageContentProps {
-    initialTemplates: Template[];
-    initialProfile: UserProfile | null;
-    initialReminders: Reminder[];
     userId: string;
 }
 
-export default function SettingsPageContent({ initialTemplates, initialProfile, initialReminders, userId }: SettingsPageContentProps) {
+export default function SettingsPageContent({ userId }: SettingsPageContentProps) {
     const router = useRouter();
-    const [templates, setTemplates] = useState<Template[]>(initialTemplates);
-    const [profile, setProfile] = useState<Partial<UserProfile>>(initialProfile || {});
+    const [templates, setTemplates] = useState<Template[]>([]);
+    const [profile, setProfile] = useState<Partial<UserProfile>>({});
+    const [reminders, setReminders] = useState<Reminder[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+
     const [activeTab, setActiveTab] = useState<'profile' | 'notifications' | 'expenses' | 'invoicing' | 'inbox' | 'howto' | 'reminders'>('profile');
     const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
     const [editingTemplate, setEditingTemplate] = useState<Partial<Template> | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    
-    const [reminders, setReminders] = useState<Reminder[]>(initialReminders);
     const [newReminder, setNewReminder] = useState<Partial<Reminder>>({ type: 'one-time', text: '' });
 
     useEffect(() => {
-        const setupNewUser = async () => {
-            if (initialTemplates.length === 0) {
-                try {
-                    for (const template of defaultTemplates) {
-                        await addTemplate(userId, template);
-                    }
-                    router.refresh();
-                } catch (error) {
-                    console.error("Failed to create default templates:", error);
-                }
-            }
-        };
+        if (!userId) return;
 
-        setupNewUser();
-        setTemplates(initialTemplates);
-        setReminders(initialReminders);
-        if (initialProfile) {
-            setProfile({
-                ...initialProfile,
-                expenseCategories: initialProfile.expenseCategories || DEFAULT_EXPENSE_CATEGORIES,
-                defaultInvoiceNotes: initialProfile.defaultInvoiceNotes || defaultTermsText,
-                defaultPaymentDetails: initialProfile.defaultPaymentDetails || defaultPaymentText,
-                invoiceLineItems: initialProfile.invoiceLineItems || [],
-            });
-        }
-    }, [initialTemplates, initialProfile, initialReminders, userId, router]);
+        setIsLoading(true);
+
+        const unsubProfile = getUserProfile(userId, (profileData) => {
+            if (profileData) {
+                setProfile({
+                    ...profileData,
+                    expenseCategories: profileData.expenseCategories || DEFAULT_EXPENSE_CATEGORIES,
+                    defaultInvoiceNotes: profileData.defaultInvoiceNotes || defaultTermsText,
+                    defaultPaymentDetails: profileData.defaultPaymentDetails || defaultPaymentText,
+                    invoiceLineItems: profileData.invoiceLineItems || [],
+                });
+            }
+            setIsLoading(false);
+        });
+
+        const unsubTemplates = getTemplates(userId, (templateData) => {
+            setTemplates(templateData);
+            if (templateData.length === 0) {
+                const setupNewUser = async () => {
+                    try {
+                        for (const template of defaultTemplates) {
+                            await addTemplate(userId, template);
+                        }
+                    } catch (error) {
+                        console.error("Failed to create default templates:", error);
+                    }
+                };
+                setupNewUser();
+            }
+        });
+
+        const unsubReminders = getReminders(userId, setReminders);
+
+        return () => {
+            unsubProfile();
+            unsubTemplates();
+            unsubReminders();
+        };
+    }, [userId]);
 
     const handleSaveSettings = async (dataToSave: Partial<UserProfile>) => {
         setIsSubmitting(true);
         try {
             await updateUserProfile(userId, dataToSave);
             alert("Settings saved successfully!");
-            router.refresh();
         } catch (error) {
             console.error("Error saving settings:", error);
             alert("Failed to save settings.");
@@ -152,16 +173,15 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
             else { await addTemplate(userId, data); }
             alert("Template saved!");
             handleCloseTemplateModal();
-            router.refresh();
         } catch (error) { console.error("Error saving template:", error); alert("Failed to save template.");
         } finally { setIsSubmitting(false); }
     };
+
     const handleDeleteTemplate = async (id: string) => {
         if (window.confirm("Are you sure?")) {
             try {
                 await deleteTemplate(userId, id);
                 alert("Template deleted.");
-                router.refresh();
             } catch (error) { console.error("Error deleting template:", error); alert("Failed to delete template."); }
         }
     };
@@ -174,10 +194,12 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
             newCategoryInput.value = '';
         }
     };
+
     const handleDeleteCategory = (categoryToDelete: string) => {
         if (DEFAULT_EXPENSE_CATEGORIES.includes(categoryToDelete)) { return alert("Default categories cannot be deleted."); }
         setProfile(p => ({ ...p, expenseCategories: (p.expenseCategories || []).filter(cat => cat !== categoryToDelete) }));
     };
+
     const handleMoveCategory = (index: number, direction: 'up' | 'down') => {
         const newCategories = [...(profile.expenseCategories || [])];
         const item = newCategories.splice(index, 1)[0];
@@ -185,6 +207,7 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
         newCategories.splice(newIndex, 0, item);
         setProfile(p => ({...p, expenseCategories: newCategories}));
     };
+
     const handleAddLineItem = () => {
         const descInput = document.getElementById('newItemDesc') as HTMLInputElement;
         const priceInput = document.getElementById('newItemPrice') as HTMLInputElement;
@@ -197,9 +220,11 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
             descInput.value = ''; priceInput.value = ''; taxableInput.checked = true;
         }
     };
+
     const handleDeleteLineItem = (id: string) => {
         setProfile(p => ({...p, invoiceLineItems: (p.invoiceLineItems || []).filter(item => item.id !== id)}));
     };
+
     const handleToggleLineItemTaxable = (id: string) => {
         setProfile(p => ({ ...p, invoiceLineItems: (p.invoiceLineItems || []).map(item =>
             item.id === id ? { ...item, isTaxable: !item.isTaxable } : item
@@ -215,7 +240,6 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
         try {
             await addReminder(userId, newReminder);
             setNewReminder({ type: 'one-time', text: '' });
-            router.refresh();
         } catch (error) {
             console.error("Error saving reminder:", error);
             alert("Failed to save reminder.");
@@ -228,13 +252,16 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
         if (window.confirm("Are you sure you want to delete this reminder?")) {
             try {
                 await deleteReminder(userId, id);
-                router.refresh();
             } catch (error) {
                 console.error("Error deleting reminder:", error);
                 alert("Failed to delete reminder.");
             }
         }
     };
+
+    if (isLoading) {
+        return <div className="p-8 text-center text-muted-foreground">Loading Settings...</div>;
+    }
 
     return (
         <>
@@ -256,16 +283,12 @@ export default function SettingsPageContent({ initialTemplates, initialProfile, 
                 <div className="mt-6">
                     {activeTab === 'profile' && (
                         <div className="space-y-8">
-                            {profile ? (
-                                <ProfileForm
-                                    initialProfile={profile}
-                                    onSave={handleSaveSettings}
-                                    isSubmitting={isSubmitting}
-                                    userId={userId}
-                                />
-                            ) : (
-                                <div>Loading Profile...</div>
-                            )}
+                            <ProfileForm
+                                initialProfile={profile}
+                                onSave={handleSaveSettings}
+                                isSubmitting={isSubmitting}
+                                userId={userId}
+                            />
                             <div className="max-w-2xl pt-8 border-t">
                                 <h2 className="text-xl font-semibold">Appearance</h2>
                                 <p className="text-muted-foreground text-sm mt-1">Customize the look and feel of the app.</p>
