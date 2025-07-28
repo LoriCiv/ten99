@@ -88,7 +88,6 @@ export const getAllCEUs = (userId: string, callback: (data: CEU[]) => void) => {
         callback(ceus);
     });
 };
-// ✅ Corrected getUserProfile to point to the root user document
 export const getUserProfile = (userId: string, callback: (data: UserProfile | null) => void) => { 
     const docRef = doc(db, `users/${userId}`); 
     return onSnapshot(docRef, (docSnap) => { 
@@ -125,7 +124,7 @@ export const getCeusForCertification = (userId: string, certId: string, callback
     });
 };
 
-// --- SERVER-SIDE DATA FETCHERS ---
+// --- ONE-TIME DATA FETCHERS ---
 export const getJobFile = async (userId: string, jobFileId: string): Promise<JobFile | null> => {
     const docRef = doc(db, `users/${userId}/jobFiles`, jobFileId);
     const docSnap = await getDoc(docRef);
@@ -232,25 +231,59 @@ export const updateAppointment = (userId: string, appointmentId: string, appoint
 export const deleteAppointment = (userId: string, appointmentId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/appointments`, appointmentId)); };
 export const updateMessage = (userId: string, messageId: string, messageData: Partial<Message>): Promise<void> => { const messageRef = doc(db, 'users', userId, 'messages', messageId); return updateDoc(messageRef, cleanupObject(messageData)); };
 export const deleteMessage = (userId: string, messageId: string): Promise<void> => { const messageRef = doc(db, `users/${userId}/messages`, messageId); return deleteDoc(messageRef); };
-export const sendAppMessage = async (senderId: string, senderName: string, recipientIdOrEmail: string, subject: string, body: string, type: Message['type'] = 'standard', jobPostId?: string): Promise<void> => {
-    const senderProfile = await getProfileData(senderId);
-    const senderEmail = senderProfile?.email || 'noreply@ten99.app';
-    const usersRef = collection(db, 'users');
-    const q = query(usersRef, where("email", "==", recipientIdOrEmail), limit(1));
-    const querySnapshot = await getDocs(q);
-    let recipientId = recipientIdOrEmail;
-    if (!querySnapshot.empty) { recipientId = querySnapshot.docs[0].id; }
-    const messageData: Partial<Message> = { senderId, senderName, recipientId, subject, body, isRead: false, status: 'new', createdAt: serverTimestamp(), type, jobPostId };
-    const sentMessageData: Partial<Message> = { ...messageData, isRead: true };
+export const sendAppMessage = async (senderId: string, senderName: string, recipients: string[], subject: string, body: string, type: Message['type'] = 'standard', jobPostId?: string): Promise<void> => {
+    const senderProfile = await getDoc(doc(db, `users/${senderId}`));
+    const senderEmail = senderProfile.exists() ? senderProfile.data().email : 'noreply@ten99.app';
+
+    const internalRecipients: string[] = [];
+    const externalRecipients: string[] = [];
+
+    for (const recipient of recipients) {
+        if (recipient.includes('@')) {
+            const usersRef = collection(db, 'users');
+            const q = query(usersRef, where("email", "==", recipient), limit(1));
+            const querySnapshot = await getDocs(q);
+            if (!querySnapshot.empty) {
+                internalRecipients.push(querySnapshot.docs[0].id);
+            } else {
+                externalRecipients.push(recipient);
+            }
+        } else {
+            internalRecipients.push(recipient);
+        }
+    }
+
+    for (const recipientId of internalRecipients) {
+        const messageData: Partial<Message> = { senderId, senderName, recipientId, subject, body, isRead: false, status: 'new', createdAt: serverTimestamp(), type, jobPostId };
+        await addDoc(collection(db, `users/${recipientId}/messages`), cleanupObject(messageData));
+    }
+
+    const sentMessageData: Partial<Message> = { 
+        senderId, 
+        senderName, 
+        recipientId: recipients.join(', '), 
+        subject, 
+        body, 
+        isRead: true, 
+        status: 'new', 
+        createdAt: serverTimestamp(), 
+        type, 
+        jobPostId 
+    };
     await addDoc(collection(db, `users/${senderId}/messages`), cleanupObject(sentMessageData));
-    if (!querySnapshot.empty) { 
-        await addDoc(collection(db, `users/${recipientId}/messages`), cleanupObject(messageData)); 
-    } else { 
-        await fetch('/api/send-email', { 
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify({ fromName: senderName, to: recipientIdOrEmail, subject, html: `<p>${body.replace(/\n/g, '<br>')}</p>`, replyToEmail: senderEmail }), 
-        }); 
+
+    if (externalRecipients.length > 0) {
+        await fetch('/api/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userId: senderId,
+                to: externalRecipients,
+                subject,
+                html: `<p>${body.replace(/\n/g, '<br>')}</p>`,
+                replyToEmail: senderEmail
+            }),
+        });
     }
 };
 export const addTemplate = (userId: string, templateData: Partial<Template>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/templates`), { ...cleanupObject(templateData), createdAt: serverTimestamp() }); };
@@ -284,7 +317,6 @@ export const createInvoiceFromAppointment = async (userId: string, appointment: 
             lineItems.push({ description: diff.description, quantity: 1, unitPrice: diff.amount, total: diff.amount, isTaxable: true });
         });
     }
-    // ✅ This is the corrected line
     const subtotal = lineItems.reduce((sum, lineItem) => sum + lineItem.total, 0);
     const total = subtotal; 
     const invoiceData: Partial<Invoice> = {
@@ -331,7 +363,7 @@ export const sendJobApplicationMessage = async (applicantId: string, applicantPr
     if (applicantId === jobPost.userId) { throw new Error("You cannot apply to your own job posting."); }
     const applicantName = applicantProfile.name || 'A freelancer';
     const profileUrl = `${window.location.origin}/profile/${applicantId}`;
-    await sendAppMessage(applicantId, applicantName, jobPost.userId, `Application for: ${jobPost.title}`, `${applicantName} has applied for your job posting, "${jobPost.title}".\n\nYou can view their public profile here:\n${profileUrl}`, 'application', jobPost.id);
+    await sendAppMessage(applicantId, applicantName, [jobPost.userId], `Application for: ${jobPost.title}`, `${applicantName} has applied for your job posting, "${jobPost.title}".\n\nYou can view their public profile here:\n${profileUrl}`, 'application', jobPost.id);
 };
 export const sendJobOffer = async (applicationMessage: Message): Promise<void> => {
     if (!applicationMessage.id || !applicationMessage.jobPostId) throw new Error("Message is not a valid application.");
@@ -345,11 +377,11 @@ export const sendJobOffer = async (applicationMessage: Message): Promise<void> =
     const originalMessageRef = doc(db, 'users', applicationMessage.recipientId, 'messages', applicationMessage.id);
     batch.update(originalMessageRef, { status: 'offer-pending' });
     await batch.commit();
-    await sendAppMessage(applicationMessage.recipientId, "Job Poster", applicationMessage.senderId, `Job Offer for: ${jobPost.title}`, `Congratulations! You have been offered the job for "${jobPost.title}". Please review the offer and accept or decline it from your mailbox.`, 'offer', jobPost.id);
+    await sendAppMessage(applicationMessage.recipientId, "Job Poster", [applicationMessage.senderId], `Job Offer for: ${jobPost.title}`, `Congratulations! You have been offered the job for "${jobPost.title}". Please review the offer and accept or decline it from your mailbox.`, 'offer', jobPost.id);
 };
 export const declineJobApplication = async (applicationMessage: Message): Promise<void> => {
     if (!applicationMessage.id) return;
-    await sendAppMessage(applicationMessage.recipientId, "Job Poster", applicationMessage.senderId, `Regarding your application for: ${applicationMessage.subject.replace('Application for: ', '')}`, `Thank you for your interest. Unfortunately, another candidate has been selected. We wish you the best in your job search.`);
+    await sendAppMessage(applicationMessage.recipientId, "Job Poster", [applicationMessage.senderId], `Regarding your application for: ${applicationMessage.subject.replace('Application for: ', '')}`, `Thank you for your interest. Unfortunately, another candidate has been selected. We wish you the best in your job search.`);
     const originalMessageRef = doc(db, 'users', applicationMessage.recipientId, 'messages', applicationMessage.id);
     await updateDoc(originalMessageRef, { status: 'declined' });
 };
@@ -366,7 +398,7 @@ export const acceptJobOffer = async (offerMessage: Message): Promise<void> => {
     await batch.commit();
     const newAppointmentData: Partial<Appointment> = { subject: jobPost.title, date: new Date().toISOString().split('T')[0], time: '09:00', status: 'pending-confirmation', locationType: jobPost.jobType === 'Virtual' ? 'virtual' : 'physical', address: jobPost.location, notes: `This appointment was created from your successful application... Please confirm or update the date and time.`, };
     await addAppointment(offerMessage.recipientId, newAppointmentData);
-    await sendAppMessage(offerMessage.recipientId, "Ten99 System", jobPost.userId, `Offer Accepted: ${jobPost.title}`, `${offerMessage.senderName} has accepted your offer for "${jobPost.title}". An event has been added to their calendar for confirmation.`);
+    await sendAppMessage(offerMessage.recipientId, "Ten99 System", [jobPost.userId], `Offer Accepted: ${jobPost.title}`, `${offerMessage.senderName} has accepted your offer for "${jobPost.title}". An event has been added to their calendar for confirmation.`);
 };
 export const declineJobOffer = async (offerMessage: Message): Promise<void> => {
     if (!offerMessage.id || !offerMessage.jobPostId || offerMessage.type !== 'offer') throw new Error("Invalid offer message.");
@@ -374,7 +406,7 @@ export const declineJobOffer = async (offerMessage: Message): Promise<void> => {
     await updateDoc(jobPostRef, { pendingApplicantId: '' });
     const offerMessageRef = doc(db, 'users', offerMessage.recipientId, 'messages', offerMessage.id);
     await updateDoc(offerMessageRef, { status: 'declined' });
-    await sendAppMessage(offerMessage.recipientId, "Ten99 System", offerMessage.senderId, `Offer Declined: ${offerMessage.subject.replace('Job Offer for: ', '')}`, `The applicant has declined your offer. The job post "${offerMessage.subject.replace('Job Offer for: ', '')}" has been made available for other applicants.`);
+    await sendAppMessage(offerMessage.recipientId, "Ten99 System", [offerMessage.senderId], `Offer Declined: ${offerMessage.subject.replace('Job Offer for: ', '')}`, `The applicant has declined your offer. The job post "${offerMessage.subject.replace('Job Offer for: ', '')}" has been made available for other applicants.`);
 };
 export const rescindJobOffer = async (applicationMessage: Message): Promise<void> => {
     if (!applicationMessage.id || !applicationMessage.jobPostId) return;
@@ -382,7 +414,7 @@ export const rescindJobOffer = async (applicationMessage: Message): Promise<void
     await updateDoc(jobPostRef, { pendingApplicantId: '' });
     const originalMessageRef = doc(db, 'users', applicationMessage.recipientId, 'messages', applicationMessage.id);
     await updateDoc(originalMessageRef, { status: 'offer-rescinded' });
-    await sendAppMessage(applicationMessage.recipientId, "Job Poster", applicationMessage.senderId, `Offer Rescinded for: ${applicationMessage.subject.replace('Application for: ', '')}`, `The job offer for "${applicationMessage.subject.replace('Application for: ', '')}" has been rescinded.`);
+    await sendAppMessage(applicationMessage.recipientId, "Job Poster", [applicationMessage.senderId], `Offer Rescinded for: ${applicationMessage.subject.replace('Application for: ', '')}`, `The job offer for "${applicationMessage.subject.replace('Application for: ', '')}" has been rescinded.`);
 };
 export const reportJobPost = async (postId: string): Promise<void> => {
     if (!postId) return;
@@ -410,7 +442,7 @@ export const acceptInboundOfferPending = async (userId: string, message: Message
     const q = query(templatesRef, where("type", "==", "pending"), limit(1));
     const templateSnapshot = await getDocs(q);
     if (templateSnapshot.empty) { console.warn("No 'pending' template found. Skipping email reply."); }
-    else { const template = templateSnapshot.docs[0].data() as Template; await sendAppMessage(userId, userName, message.senderId, template.subject, template.body); }
+    else { const template = templateSnapshot.docs[0].data() as Template; await sendAppMessage(userId, userName, [message.senderId], template.subject, template.body); }
     await updateDoc(doc(db, `users/${userId}/messages`, message.id), { status: 'pending' });
 };
 export const declineInboundOffer = async (userId: string, message: Message): Promise<void> => {
@@ -427,7 +459,7 @@ export const declineInboundOffer = async (userId: string, message: Message): Pro
     const templatesRef = collection(db, `users/${userId}/templates`);
     const q = query(templatesRef, where("type", "==", "decline"), limit(1));
     const templateSnapshot = await getDocs(q);
-    if (!templateSnapshot.empty) { const template = templateSnapshot.docs[0].data() as Template; await sendAppMessage(userId, userName, message.senderId, template.subject, template.body); }
+    if (!templateSnapshot.empty) { const template = templateSnapshot.docs[0].data() as Template; await sendAppMessage(userId, userName, [message.senderId], template.subject, template.body); }
     else { console.warn("No 'decline' template found. Skipping email reply."); }
     await batch.commit();
 };

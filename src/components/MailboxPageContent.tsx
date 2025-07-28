@@ -1,433 +1,497 @@
-// src/components/MailboxPageContent.tsx
+// src/utils/firestoreService.ts
 
-"use client";
-
-import { useState, useEffect, useMemo, Suspense, ElementType } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { ArrowLeft, Trash2, Search, Check, X as XIcon, Send, RotateCcw, Clock, CalendarCheck, CornerDownLeft, Pencil, PackageOpen, Loader2, Inbox, SendHorizontal, CheckCircle, Hourglass, BookOpen, ThumbsUp, Info } from 'lucide-react';
-import type { Message, JobPosting, Appointment, UserProfile } from '@/types/app-interfaces';
+import { db, storage } from '@/lib/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import {
-    getMessagesForUser,
-    getSentMessagesForUser,
-    sendAppMessage,
-    updateMessage,
-    deleteMessage,
-    sendJobOffer,
-    declineJobApplication,
-    rescindJobOffer,
-    acceptJobOffer,
-    declineJobOffer,
-    getJobPostings,
-    declineInboundOffer,
-    acceptInboundOfferPending,
-    confirmInboundOffer,
-    createEducationAppointmentFromMessage,
-    getUserProfile
-} from '@/utils/firestoreService';
-import ComposeMessageForm from '@/components/ComposeMessageForm';
-import { Timestamp } from 'firebase/firestore';
-import { format } from 'date-fns';
-import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import Modal from '@/components/Modal';
-import { useFirebase } from './FirebaseProvider'; // ✅ 1. Import our hook
+    collection,
+    onSnapshot,
+    query,
+    orderBy,
+    addDoc,
+    doc,
+    updateDoc,
+    deleteDoc,
+    serverTimestamp,
+    writeBatch,
+    getDoc,
+    setDoc,
+    where,
+    getDocs,
+    limit,
+    Timestamp,
+    runTransaction,
+    DocumentReference,
+    QueryDocumentSnapshot,
+    collectionGroup,
+    increment
+} from 'firebase/firestore';
+import type { Client, PersonalNetworkContact, JobFile, Appointment, Message, Template, Certification, CEU, UserProfile, Invoice, Expense, JobPosting, Reminder, Mileage, LineItem } from '@/types/app-interfaces';
+import { v4 as uuidv4 } from 'uuid';
 
-type MailboxFolder = 'inbox' | 'sent' | 'approved' | 'pending' | 'education';
-
-// ✅ New component for confirmation dialogs
-const ConfirmationModal = ({ title, message, onConfirm, onCancel }: { title: string, message: string, onConfirm: () => void, onCancel: () => void }) => (
-    <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4">
-        <div className="bg-card rounded-lg shadow-xl w-full max-w-md border p-6 text-center">
-            <h3 className="text-lg font-bold text-foreground">{title}</h3>
-            <p className="text-muted-foreground my-4">{message}</p>
-            <div className="flex justify-center gap-4">
-                <button onClick={onCancel} className="bg-muted text-muted-foreground font-semibold py-2 px-4 rounded-lg hover:bg-muted/80">Cancel</button>
-                <button onClick={onConfirm} className="bg-destructive text-destructive-foreground font-semibold py-2 px-4 rounded-lg hover:bg-destructive/90">Confirm</button>
-            </div>
-        </div>
-    </div>
-);
-
-function MailboxPageInternal({ userId }: { userId: string }) {
-    const { isFirebaseAuthenticated } = useFirebase(); // ✅ 2. Get the "Green Light"
-    const searchParams = useSearchParams();
-    const [messages, setMessages] = useState<Message[]>([]);
-    const [jobPostings, setJobPostings] = useState<JobPosting[]>([]);
-    const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    
-    const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
-    const [isComposing, setIsComposing] = useState(false);
-    const [activeFolder, setActiveFolder] = useState<MailboxFolder>('inbox');
-    const [searchTerm, setSearchTerm] = useState('');
-    const [isActionLoading, setIsActionLoading] = useState(false);
-    const [composeInitialData, setComposeInitialData] = useState<{recipient: string, subject: string, body: string}>();
-    const [isEducationModalOpen, setIsEducationModalOpen] = useState(false);
-    const [educationFormData, setEducationFormData] = useState({ date: '', time: '' });
-    
-    const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
-    const [confirmation, setConfirmation] = useState<{ title: string, message: string, onConfirm: () => void } | null>(null);
-
-    const initialRecipient = searchParams.get('to');
-
-    useEffect(() => {
-        if (initialRecipient && !isComposing) { 
-            setComposeInitialData({ recipient: initialRecipient, subject: '', body: ''});
-            setIsComposing(true); 
+const cleanupObject = <T extends Record<string, unknown>>(data: T): Partial<T> => {
+    const cleaned: Partial<T> = {};
+    for (const key in data) {
+        const value = data[key];
+        if (Array.isArray(value)) {
+            cleaned[key] = value;
+        } else if (value !== undefined && value !== null && value !== '') {
+            cleaned[key] = value;
         }
-    }, [initialRecipient, isComposing]);
+    }
+    return cleaned;
+};
 
-    // ✅ 3. This useEffect now waits for the Green Light before fetching data
-    useEffect(() => {
-        if (isFirebaseAuthenticated) {
-            console.log("✅ Mailbox page is authenticated, fetching data...");
-            const unsubMessages = activeFolder === 'sent'
-                ? getSentMessagesForUser(userId, setMessages)
-                : getMessagesForUser(userId, setMessages);
-            
-            const unsubJobs = getJobPostings(setJobPostings);
-            const unsubProfile = getUserProfile(userId, (profile) => {
-                setUserProfile(profile);
-                setIsLoading(false); // Stop loading once all data is here
-            });
-            
-            setSelectedMessage(null);
-            return () => {
-                unsubMessages();
-                unsubJobs();
-                unsubProfile();
-            };
+const serializeData = <T extends object>(doc: T | null): T | null => {
+    if (!doc) return null;
+    const data: { [key: string]: any } = { ...doc };
+    for (const key in data) {
+        if (data[key] instanceof Timestamp) {
+            data[key] = data[key].toDate().toISOString();
         }
-    }, [isFirebaseAuthenticated, activeFolder, userId]);
+    }
+    return data as T;
+};
 
-    const showStatusMessage = (type: 'success' | 'error', text: string) => {
-        setStatusMessage({ type, text });
-        setTimeout(() => setStatusMessage(null), 5000);
-    };
+// --- REAL-TIME LISTENERS ---
+export const getClients = (userId: string, callback: (data: Client[]) => void) => {
+    const q = query(collection(db, `users/${userId}/clients`), orderBy('createdAt', 'desc'));
+    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as Client))); });
+};
+export const getPersonalNetwork = (userId: string, callback: (data: PersonalNetworkContact[]) => void) => {
+    const q = query(collection(db, `users/${userId}/personalNetwork`), orderBy('createdAt', 'desc'));
+    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as PersonalNetworkContact))); });
+};
+export const getJobFiles = (userId: string, callback: (data: JobFile[]) => void) => {
+    const q = query(collection(db, `users/${userId}/jobFiles`));
+    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as JobFile))); });
+};
+export const getAppointments = (userId: string, callback: (data: Appointment[]) => void) => {
+    const q = query(collection(db, `users/${userId}/appointments`), orderBy('date', 'desc'));
+    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as Appointment))); });
+};
+export const getMessagesForUser = (userId: string, callback: (data: Message[]) => void) => {
+    const messagesRef = collection(db, 'users', userId, 'messages');
+    const q = query(messagesRef, where('recipientId', '==', userId), orderBy('createdAt', 'desc'));
+    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as Message))); });
+};
+export const getSentMessagesForUser = (userId: string, callback: (data: Message[]) => void) => {
+    const messagesRef = collection(db, 'users', userId, 'messages');
+    const q = query(messagesRef, where('senderId', '==', userId), orderBy('createdAt', 'desc'));
+    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as Message))); });
+};
+export const getTemplates = (userId: string, callback: (data: Template[]) => void) => { const q = query(collection(db, `users/${userId}/templates`), orderBy('createdAt', 'desc')); return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Template))); }); };
+export const getCertifications = (userId: string, callback: (data: Certification[]) => void) => { const q = query(collection(db, `users/${userId}/certifications`), orderBy('createdAt', 'desc')); return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Certification))); }); };
+export const getAllCEUs = (userId: string, callback: (data: CEU[]) => void) => {
+    const ceusQuery = query(collectionGroup(db, 'ceus'), where('userId', '==', userId));
+    return onSnapshot(ceusQuery, (snapshot) => {
+        const ceus = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CEU));
+        callback(ceus);
+    });
+};
+export const getUserProfile = (userId: string, callback: (data: UserProfile | null) => void) => { 
+    const docRef = doc(db, `users/${userId}`); 
+    return onSnapshot(docRef, (docSnap) => { 
+        if (docSnap.exists()) { 
+            callback({ id: docSnap.id, ...docSnap.data() } as UserProfile); 
+        } else { 
+            callback(null); 
+        } 
+    }); 
+};
+export const getInvoices = (userId: string, callback: (data: Invoice[]) => void) => { const q = query(collection(db, `users/${userId}/invoices`), orderBy('invoiceDate', 'desc')); return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Invoice))); }); };
+export const getExpenses = (userId: string, callback: (data: Expense[]) => void) => { const q = query(collection(db, `users/${userId}/expenses`), orderBy('date', 'desc')); return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Expense))); }); };
+export const getJobPostings = (callback: (data: JobPosting[]) => void) => {
+    const now = new Date();
+    const q = query(collection(db, 'jobPostings'), where('expiresAt', '>', now), orderBy('expiresAt', 'asc'));
+    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as JobPosting))) });
+};
+export const getReminders = (userId: string, callback: (data: Reminder[]) => void) => {
+    const q = query(collection(db, `users/${userId}/reminders`), orderBy('createdAt', 'desc'));
+    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reminder))); });
+};
+export const getMileage = (userId: string, callback: (data: Mileage[]) => void) => {
+    const q = query(collection(db, `users/${userId}/mileage`), orderBy('date', 'desc'));
+    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Mileage))); });
+};
+export const getPriorityJobFiles = (userId: string, callback: (data: JobFile[]) => void) => {
+    const q = query(collection(db, `users/${userId}/jobFiles`), where('priority', '==', 2), orderBy('createdAt', 'desc'));
+    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as JobFile))); });
+};
+export const getCeusForCertification = (userId: string, certId: string, callback: (data: CEU[]) => void) => {
+    const q = query(collection(db, `users/${userId}/ceus`), where('certificationId', '==', certId));
+    return onSnapshot(q, (snapshot) => {
+        callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CEU)));
+    });
+};
 
-    const filteredMessages = useMemo(() => {
-        let items = messages;
-        if (activeFolder === 'inbox') { items = messages.filter(m => m.status === 'new' || m.status === undefined); } 
-        else if (activeFolder === 'approved') { items = messages.filter(m => m.status === 'approved'); } 
-        else if (activeFolder === 'pending') { items = messages.filter(m => m.status === 'pending' || m.status === 'offer-pending'); } 
-        else if (activeFolder === 'education') { items = messages.filter(m => m.status === 'archived-education'); }
-        if (!searchTerm) return items;
-        const lowercasedTerm = searchTerm.toLowerCase();
-        return items.filter(message => 
-            (message.senderName?.toLowerCase() || '').includes(lowercasedTerm) ||
-            (message.subject?.toLowerCase() || '').includes(lowercasedTerm) ||
-            (message.body?.toLowerCase() || '').includes(lowercasedTerm)
-        );
-    }, [messages, searchTerm, activeFolder]);
+// --- ONE-TIME DATA FETCHERS ---
+export const getJobFile = async (userId: string, jobFileId: string): Promise<JobFile | null> => {
+    const docRef = doc(db, `users/${userId}/jobFiles`, jobFileId);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) { return { id: docSnap.id, ...docSnap.data() } as JobFile; }
+    return null;
+};
+export const getProfileData = async (userId: string): Promise<UserProfile | null> => {
+    const docRef = doc(db, `users/${userId}`);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) { return serializeData({ id: docSnap.id, ...docSnap.data() } as UserProfile); }
+    return null;
+};
+export const getTemplatesData = async (userId: string): Promise<Template[]> => {
+    const q = query(collection(db, `users/${userId}/templates`), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => serializeData({ id: doc.id, ...doc.data() } as Template)).filter((item): item is Template => item !== null);
+};
+export const getRemindersData = async (userId: string): Promise<Reminder[]> => {
+    const q = query(collection(db, `users/${userId}/reminders`), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => serializeData({ id: doc.id, ...doc.data() } as Reminder)).filter((item): item is Reminder => item !== null);
+};
+export const getPublicUserProfile = async (userId: string): Promise<UserProfile | null> => { const docRef = doc(db, `users/${userId}`); const docSnap = await getDoc(docRef); if (docSnap.exists()) { return { id: docSnap.id, ...docSnap.data() } as UserProfile; } return null; };
+export const getCertificationsData = async (userId: string): Promise<Certification[]> => {
+    const q = query(collection(db, `users/${userId}/certifications`), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => serializeData({ id: doc.id, ...doc.data() } as Certification)).filter((item): item is Certification => item !== null);
+};
+export const getAllCEUsData = async (userId: string): Promise<CEU[]> => {
+    const ceusQuery = query(collectionGroup(db, 'ceus'), where('userId', '==', userId));
+    const snapshot = await getDocs(ceusQuery);
+    return snapshot.docs.map(doc => serializeData({ id: doc.id, ...doc.data() } as CEU)).filter((item): item is CEU => item !== null);
+};
+export const getJobPostingsData = async (): Promise<JobPosting[]> => {
+    const now = new Date();
+    const q = query(collection(db, 'jobPostings'), where('expiresAt', '>', now), orderBy('expiresAt', 'asc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => serializeData({ id: doc.id, ...doc.data() } as JobPosting)).filter((item): item is JobPosting => item !== null);
+};
+export const getClientForJobFile = async (userId: string, clientId: string): Promise<Client | null> => { 
+    const docRef = doc(db, 'users', userId, 'clients', clientId); 
+    const docSnap = await getDoc(docRef); 
+    return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as Client : null; 
+};
 
-    const handleSelectMessage = (message: Message) => {
-        setSelectedMessage(message);
-        setIsComposing(false);
-        if (activeFolder === 'inbox' && !message.isRead && message.id && userId) {
-            updateMessage(userId, message.id, { isRead: true });
-        }
-    };
-
-    const handleCompose = () => {
-        setComposeInitialData(undefined);
-        setSelectedMessage(null);
-        setIsComposing(true);
-    };
-    
-    const handleReply = () => {
-        if (!selectedMessage || !selectedMessage.createdAt || !(selectedMessage.createdAt instanceof Timestamp)) return;
-        const dateString = selectedMessage.createdAt.toDate().toLocaleString();
-        const quotedBody = `\n\n--- On ${dateString}, ${selectedMessage.senderName} wrote: ---\n> ${selectedMessage.body.replace(/\n/g, '\n> ')}`;
-        setComposeInitialData({
-            recipient: selectedMessage.senderId,
-            subject: `Re: ${selectedMessage.subject}`,
-            body: quotedBody
-        });
-        setSelectedMessage(null);
-        setIsComposing(true);
-    };
-
-    const handleSend = async (to: string, subject: string, body: string) => {
-        if (!userId || !userProfile) return false;
-        setIsActionLoading(true);
-        try {
-            await sendAppMessage(userId, userProfile.name || "A Ten99 User", to, subject, body);
-            showStatusMessage("success", "Message sent!");
-            setIsComposing(false);
-            setActiveFolder('sent');
-            return true;
-        } catch (error) {
-            console.error("Error sending message:", error);
-            showStatusMessage("error", `Failed to send message: ${error instanceof Error ? error.message : 'Unknown error'}`);
-            return false;
-        } finally {
-            setIsActionLoading(false);
-        }
-    };
-    
-    const handleDelete = () => {
-        if (!selectedMessage || !selectedMessage.id || !userId) return;
-        setConfirmation({
-            title: "Delete Message?",
-            message: "Are you sure you want to permanently delete this message?",
-            onConfirm: async () => {
-                try {
-                    await deleteMessage(userId, selectedMessage.id!);
-                    showStatusMessage("success", "Message deleted.");
-                    setSelectedMessage(null);
-                } catch (error) {
-                    console.error("Error deleting message:", error);
-                    showStatusMessage("error", "Failed to delete message.");
-                }
-                setConfirmation(null);
+// --- WRITE/UPDATE/DELETE FUNCTIONS ---
+export const addClient = (userId: string, clientData: Partial<Client>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/clients`), { ...cleanupObject(clientData), createdAt: serverTimestamp() }); };
+export const updateClient = (userId: string, clientId: string, clientData: Partial<Client>): Promise<void> => { return setDoc(doc(db, `users/${userId}/clients`, clientId), cleanupObject(clientData), { merge: true }); };
+export const deleteClient = (userId: string, clientId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/clients`, clientId)); };
+export const addPersonalNetworkContact = (userId: string, contactData: Partial<PersonalNetworkContact>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/personalNetwork`), { ...cleanupObject(contactData), createdAt: serverTimestamp() }); };
+export const updatePersonalNetworkContact = (userId: string, contactId: string, contactData: Partial<PersonalNetworkContact>): Promise<void> => { const docRef = doc(db, `users/${userId}/personalNetwork`, contactId); return setDoc(docRef, cleanupObject(contactData), { merge: true }); };
+export const deletePersonalNetworkContact = (userId: string, contactId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/personalNetwork`, contactId)); };
+export const addJobFile = (userId: string, jobFileData: Partial<JobFile>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/jobFiles`), { ...cleanupObject(jobFileData), createdAt: serverTimestamp(), updatedAt: serverTimestamp() }); };
+export const updateJobFile = (userId: string, jobFileId: string, jobFileData: Partial<JobFile>): Promise<void> => { const dataToSave = { ...cleanupObject(jobFileData), updatedAt: serverTimestamp() }; return updateDoc(doc(db, `users/${userId}/jobFiles`, jobFileId), dataToSave); };
+export const deleteJobFile = (userId: string, jobFileId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/jobFiles`, jobFileId)); };
+export const createPublicJobFile = async (userId: string, jobFile: JobFile): Promise<string | null> => {
+    if (!jobFile.id) return null;
+    const jobFileRef = doc(db, 'users', userId, 'jobFiles', jobFile.id);
+    if (jobFile.publicId) {
+        await updateDoc(jobFileRef, { isShared: true });
+        return jobFile.publicId;
+    }
+    const newPublicId = uuidv4();
+    await updateDoc(jobFileRef, {
+        isShared: true,
+        publicId: newPublicId,
+        originalUserId: userId
+    });
+    return newPublicId;
+};
+export const uploadFile = async (userId: string, file: File): Promise<string> => {
+    if (!file) { throw new Error("No file provided for upload."); }
+    const filePath = `users/${userId}/uploads/${uuidv4()}-${file.name}`;
+    const storageRef = ref(storage, filePath);
+    await uploadBytes(storageRef, file);
+    return await getDownloadURL(storageRef);
+};
+export const addAppointment = async (userId: string, appointmentData: Partial<Appointment>, recurrenceEndDate?: string): Promise<string | void> => {
+    const dataToSave = { ...cleanupObject(appointmentData), createdAt: serverTimestamp() };
+    if (appointmentData.recurrence && recurrenceEndDate && appointmentData.date) {
+        const batch = writeBatch(db);
+        const seriesId = uuidv4();
+        let movingDate = new Date(appointmentData.date + 'T00:00:00');
+        const endDate = new Date(recurrenceEndDate + 'T00:00:00');
+        while (movingDate <= endDate) {
+            const newDocRef = doc(collection(db, `users/${userId}/appointments`));
+            const appointmentForDate = { ...dataToSave, date: movingDate.toISOString().split('T')[0], seriesId: seriesId };
+            batch.set(newDocRef, appointmentForDate);
+            switch (appointmentData.recurrence) {
+                case 'daily': movingDate.setDate(movingDate.getDate() + 1); break;
+                case 'weekly': movingDate.setDate(movingDate.getDate() + 7); break;
+                case 'biweekly': movingDate.setDate(movingDate.getDate() + 14); break;
+                case 'monthly': movingDate.setMonth(movingDate.getMonth() + 1); break;
+                default: movingDate.setDate(endDate.getDate() + 1); break;
             }
-        });
-    };
-
-    const performAction = async (actionLogic: () => Promise<void>, successMessage: string) => {
-        if (!selectedMessage?.id) return;
-        setIsActionLoading(true);
-        try {
-            await actionLogic();
-            showStatusMessage("success", successMessage);
-            setSelectedMessage(null);
-        } catch (error) {
-            console.error("Mailbox action failed:", error);
-            showStatusMessage("error", `Action failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        } finally {
-            setIsActionLoading(false);
         }
-    };
-    
-    const handleMarkAsEducation = async () => {
-        if (!selectedMessage || !userId) return;
-        if (selectedMessage.proposedDate && selectedMessage.proposedTime) {
-             await performAction(() => createEducationAppointmentFromMessage(userId, selectedMessage, {
-                eventType: 'education',
-                status: 'scheduled',
-                subject: selectedMessage.subject,
-                date: selectedMessage.proposedDate!,
-                time: selectedMessage.proposedTime!,
-             }), 'Event marked as education and scheduled!');
+        await batch.commit();
+    } else {
+        const docRef = await addDoc(collection(db, `users/${userId}/appointments`), dataToSave);
+        return docRef.id;
+    }
+};
+export const updateAppointment = (userId: string, appointmentId: string, appointmentData: Partial<Appointment>): Promise<void> => { const appointmentRef = doc(db, `users/${userId}/appointments`, appointmentId); return updateDoc(appointmentRef, cleanupObject(appointmentData)); };
+export const deleteAppointment = (userId: string, appointmentId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/appointments`, appointmentId)); };
+export const updateMessage = (userId: string, messageId: string, messageData: Partial<Message>): Promise<void> => { const messageRef = doc(db, 'users', userId, 'messages', messageId); return updateDoc(messageRef, cleanupObject(messageData)); };
+export const deleteMessage = (userId: string, messageId: string): Promise<void> => { const messageRef = doc(db, `users/${userId}/messages`, messageId); return deleteDoc(messageRef); };
+export const sendAppMessage = async (senderId: string, senderName: string, recipients: string[], subject: string, body: string, type: Message['type'] = 'standard', jobPostId?: string): Promise<void> => {
+    const senderProfile = await getDoc(doc(db, `users/${senderId}`));
+    const senderEmail = senderProfile.exists() ? senderProfile.data().email : 'noreply@ten99.app';
+
+    const internalRecipients: string[] = [];
+    const externalRecipients: string[] = [];
+
+    for (const recipient of recipients) {
+        if (recipient.includes('@')) {
+            const usersRef = collection(db, 'users');
+            const q = query(usersRef, where("email", "==", recipient), limit(1));
+            const querySnapshot = await getDocs(q);
+            if (!querySnapshot.empty) {
+                internalRecipients.push(querySnapshot.docs[0].id);
+            } else {
+                externalRecipients.push(recipient);
+            }
         } else {
-            setEducationFormData({ date: '', time: '' });
-            setIsEducationModalOpen(true);
+            internalRecipients.push(recipient);
         }
-    };
-
-    const handleScheduleEducation = async () => {
-        if (!selectedMessage || !educationFormData.date || !educationFormData.time || !userId) {
-            showStatusMessage("error", "Please provide both a date and a time.");
-            return;
-        }
-        const appointmentData: Partial<Appointment> = {
-            subject: selectedMessage.subject,
-            date: educationFormData.date,
-            time: educationFormData.time,
-            eventType: 'education',
-            status: 'scheduled',
-            notes: `This event was manually scheduled from the following email:\n\n--- Original Email ---\nFrom: ${selectedMessage.senderName}\nSubject: ${selectedMessage.subject}\n\n${selectedMessage.body}`
-        };
-        await performAction(() => createEducationAppointmentFromMessage(userId, selectedMessage, appointmentData), 'Education event scheduled successfully!');
-        setIsEducationModalOpen(false);
-    };
-
-    interface ActionButtonProps { onClick: () => void; disabled: boolean; icon: ElementType; text: string; variant?: 'primary' | 'secondary' | 'success' | 'danger' | 'warning'; }
-    
-    const ActionButton = ({ onClick, disabled, icon: Icon, text, variant = 'primary' }: ActionButtonProps) => {
-        const variants: Record<string, string> = { primary: 'bg-primary text-primary-foreground hover:bg-primary/90', secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80', success: 'bg-emerald-600 text-white hover:bg-emerald-700', danger: 'bg-rose-600 text-white hover:bg-rose-700', warning: 'bg-amber-500 text-white hover:bg-amber-600' };
-        return (<button onClick={onClick} disabled={disabled} className={`flex items-center gap-2 font-semibold py-2 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${variants[variant]}`}> {disabled ? <Loader2 size={16} className="animate-spin" /> : <Icon size={16}/>} {text} </button>);
-    };
-
-    const relatedJobPost = selectedMessage?.jobPostId ? jobPostings.find(p => p.id === selectedMessage.jobPostId) : null;
-
-    const FolderButton = ({ folderName, label, icon: Icon, count }: { folderName: MailboxFolder, label: string, icon: ElementType, count?: number }) => (
-        <button onClick={() => setActiveFolder(folderName)} className={`flex items-center justify-between w-full px-3 py-2 text-sm font-semibold rounded-md transition-colors ${activeFolder === folderName ? 'bg-primary/10 text-primary' : 'hover:bg-muted'}`}>
-            <div className="flex items-center gap-3"> <Icon size={18} /> <span>{label}</span> </div>
-            {count !== undefined && count > 0 && ( <span className="px-2 py-0.5 text-xs rounded-full bg-primary text-primary-foreground">{count}</span> )}
-        </button>
-    );
-
-    if (!isFirebaseAuthenticated || isLoading) {
-        return (
-            <div className="flex justify-center items-center h-full p-8">
-               <div className="text-center">
-                   <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-                   <p className="text-lg font-semibold mt-4">Loading Mailbox...</p>
-                   <p className="text-muted-foreground text-sm mt-1">Authenticating and fetching messages...</p>
-               </div>
-           </div>
-        );
     }
 
-    const messageListComponent = (
-        <div className="flex flex-col h-full border-r">
-            <div className="p-4 border-b shrink-0">
-                <div className="flex items-center justify-between">
-                    <h2 className="text-2xl font-bold">Mailbox</h2>
-                    <button onClick={handleCompose} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-3 rounded-lg hover:bg-primary/90">
-                        <Pencil size={16} /> Compose
-                    </button>
-                </div>
-                <div className="relative mt-4">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <input onChange={(e) => setSearchTerm(e.target.value)} type="text" placeholder="Search..." className="w-full bg-background border rounded-md pl-9 pr-3 py-2 text-sm"/>
-                </div>
-            </div>
-            <nav className="p-2 border-b">
-                <FolderButton folderName="inbox" label="Inbox" icon={Inbox} count={messages.filter(m => !m.isRead && (m.status === 'new' || m.status === undefined)).length} />
-                <FolderButton folderName="sent" label="Sent" icon={SendHorizontal} />
-                <FolderButton folderName="approved" label="Approved Jobs" icon={CheckCircle} />
-                <FolderButton folderName="pending" label="Pending Jobs" icon={Hourglass} />
-                <FolderButton folderName="education" label="Education" icon={BookOpen} />
-            </nav>
-            <div className="overflow-y-auto flex-grow">
-                {filteredMessages.length > 0 ? filteredMessages.map(message => (
-                    <div key={message.id} onClick={() => handleSelectMessage(message)} className={`p-4 border-b cursor-pointer hover:bg-muted ${selectedMessage?.id === message.id ? 'bg-muted' : ''} ${!message.isRead && activeFolder === 'inbox' ? 'font-bold' : ''}`}>
-                        <div className="flex justify-between text-sm">
-                            <p className="truncate">{activeFolder === 'inbox' ? message.senderName : `To: ${message.recipientId}`}</p>
-                            <p className="text-xs shrink-0 pl-2">{message.createdAt instanceof Timestamp ? format(message.createdAt.toDate(), 'MMM d') : ''}</p>
-                        </div>
-                        <p className="text-sm truncate">{message.subject}</p>
-                    </div>
-                )) : <div className="text-center p-8 text-muted-foreground">No messages in this folder</div>}
-            </div>
-        </div>
-    );
+    for (const recipientId of internalRecipients) {
+        const messageData: Partial<Message> = { senderId, senderName, recipientId, subject, body, isRead: false, status: 'new', createdAt: serverTimestamp(), type, jobPostId };
+        await addDoc(collection(db, `users/${recipientId}/messages`), cleanupObject(messageData));
+    }
 
-    const detailComponent = (
-        <div className="flex flex-col h-full">
-            {isComposing ? (
-                <ComposeMessageForm onSend={handleSend} onClose={() => setIsComposing(false)} initialData={composeInitialData} isSending={isActionLoading} />
-            ) : selectedMessage ? (
-                <>
-                    <div className="p-4 border-b shrink-0">
-                        <button onClick={() => setSelectedMessage(null)} className="md:hidden flex items-center gap-2 text-sm font-semibold mb-4 text-primary"><ArrowLeft size={16}/> Back to Inbox</button>
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <h3 className="text-xl font-bold">{selectedMessage.subject}</h3>
-                                <p className="text-sm text-muted-foreground">From: {selectedMessage.senderName} ({selectedMessage.senderId})</p>
-                                <p className="text-xs text-muted-foreground">Date: {selectedMessage.createdAt instanceof Timestamp ? selectedMessage.createdAt.toDate().toLocaleString() : ''}</p>
-                            </div>
-                            <div className="flex gap-2">
-                                <button onClick={handleReply} className="p-2 text-muted-foreground hover:text-primary hover:bg-muted rounded-full"><CornerDownLeft size={18}/></button>
-                                <button onClick={handleDelete} className="p-2 text-muted-foreground hover:text-destructive hover:bg-muted rounded-full"><Trash2 size={18}/></button>
-                            </div>
-                        </div>
-                    </div>
+    const sentMessageData: Partial<Message> = { 
+        senderId, 
+        senderName, 
+        recipientId: recipients.join(', '), 
+        subject, 
+        body, 
+        isRead: true, 
+        status: 'new', 
+        createdAt: serverTimestamp(), 
+        type, 
+        jobPostId 
+    };
+    await addDoc(collection(db, `users/${senderId}/messages`), cleanupObject(sentMessageData));
 
-                    <div className="p-6 overflow-y-auto flex-grow">
-                        <p className="text-base whitespace-pre-wrap">{selectedMessage.body}</p>
-                        {activeFolder === 'inbox' && (
-                           <div className="mt-8 pt-6 border-t space-y-4">
-                                { (selectedMessage.type === 'application' || selectedMessage.type === 'offer') && (
-                                    <><h3 className="font-semibold">Job Board Actions</h3><div className="flex flex-wrap gap-2">{selectedMessage.type === 'application' && selectedMessage.status === 'new' && !relatedJobPost?.isFilled && (!relatedJobPost?.pendingApplicantId ? (<><ActionButton onClick={() => performAction(() => sendJobOffer(selectedMessage), 'Offer sent!')} disabled={isActionLoading} icon={Send} text="Send Offer" variant="primary" /><ActionButton onClick={() => performAction(() => declineJobApplication(selectedMessage), 'Application declined.')} disabled={isActionLoading} icon={XIcon} text="Decline" variant="danger"/></>) : relatedJobPost.pendingApplicantId === selectedMessage.senderId ? (<p className="text-sm text-amber-600">You have a pending offer with this applicant.</p>) : (<p className="text-sm text-muted-foreground">An offer is pending with another applicant for this job.</p>))} {selectedMessage.type === 'application' && selectedMessage.status === 'offer-pending' && (<ActionButton onClick={() => performAction(() => rescindJobOffer(selectedMessage), 'Offer rescinded.')} disabled={isActionLoading} icon={RotateCcw} text="Rescind Offer" variant="warning"/>)} {selectedMessage.type === 'offer' && selectedMessage.status === 'new' && (<><ActionButton onClick={() => performAction(() => acceptJobOffer(selectedMessage), 'Offer Accepted!')} disabled={isActionLoading} icon={Check} text="Accept Offer" variant="success" /><ActionButton onClick={() => performAction(() => declineJobOffer(selectedMessage), 'Offer Declined.')} disabled={isActionLoading} icon={XIcon} text="Decline Offer" variant="danger"/></>)}</div></>
-                                )}
-                                { selectedMessage.type === 'inbound-offer' && (
-                                    <>
-                                        <h3 className="font-semibold">Inbound Offer Actions</h3>
-                                        <div className="flex flex-wrap gap-2">
-                                            {selectedMessage.status === 'new' && (
-                                                <>
-                                                    <ActionButton onClick={() => performAction(() => confirmInboundOffer(userId, selectedMessage), 'Appointment Confirmed!')} disabled={isActionLoading} icon={CalendarCheck} text="Confirm & Book" variant="success"/>
-                                                    <ActionButton onClick={() => performAction(() => acceptInboundOfferPending(userId, selectedMessage), 'Replied to Sender.')} disabled={isActionLoading} icon={Clock} text="Accept Pending" variant="warning"/>
-                                                    <ActionButton onClick={handleMarkAsEducation} disabled={isActionLoading} icon={BookOpen} text="Mark as Education" variant="secondary"/>
-                                                    <ActionButton onClick={() => performAction(() => declineInboundOffer(userId, selectedMessage), 'Declined & Replied.')} disabled={isActionLoading} icon={XIcon} text="Decline" variant="danger"/>
-                                                </>
-                                            )}
-                                            {selectedMessage.status === 'pending' && (
-                                                <ActionButton onClick={() => performAction(() => confirmInboundOffer(userId, selectedMessage), 'Appointment Confirmed!')} disabled={isActionLoading} icon={CalendarCheck} text="Confirm & Book" variant="success"/>
-                                            )}
-                                        </div>
-                                    </>
-                                )}
-                                {['approved', 'declined', 'offer-rescinded', 'pending', 'archived-education'].includes(selectedMessage.status || '') && (
-                                    <p className="text-sm font-semibold text-muted-foreground mt-4">This conversation has been actioned. Status: &apos;{selectedMessage.status}&apos;.</p>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                </>
-            ) : (
-                <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-4">
-                    <PackageOpen size={64}/>
-                    <p className="text-lg">Select a message to read</p>
-                </div>
-            )}
-        </div>
-    );
+    if (externalRecipients.length > 0) {
+        await fetch('/api/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userId: senderId,
+                to: externalRecipients,
+                subject,
+                html: `<p>${body.replace(/\n/g, '<br>')}</p>`,
+                replyToEmail: senderEmail
+            }),
+        });
+    }
+};
+export const addTemplate = (userId: string, templateData: Partial<Template>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/templates`), { ...cleanupObject(templateData), createdAt: serverTimestamp() }); };
+export const updateTemplate = (userId: string, templateId: string, templateData: Partial<Template>): Promise<void> => { const docRef = doc(db, `users/${userId}/templates`, templateId); return setDoc(docRef, cleanupObject(templateData), { merge: true }); };
+export const deleteTemplate = (userId: string, templateId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/templates`, templateId)); };
+export const addCertification = (userId: string, certData: Partial<Certification>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/certifications`), { ...cleanupObject(certData), createdAt: serverTimestamp() }); };
+export const updateCertification = (userId: string, certId: string, certData: Partial<Certification>): Promise<void> => { const docRef = doc(db, `users/${userId}/certifications`, certId); return setDoc(docRef, cleanupObject(certData), { merge: true }); };
+export const deleteCertification = async (userId: string, certId: string): Promise<void> => { const batch = writeBatch(db); const certRef = doc(db, `users/${userId}/certifications`, certId); const ceusQuery = query(collectionGroup(db, 'ceus'), where('certificationId', '==', certId), where('userId', '==', userId)); const ceusSnapshot = await getDocs(ceusQuery); ceusSnapshot.forEach(doc => batch.delete(doc.ref)); batch.delete(certRef); await batch.commit(); };
+export const addCEU = (userId: string, certId: string, ceuData: Partial<CEU>): Promise<DocumentReference> => { const dataToSave = { ...cleanupObject(ceuData), userId, certificationId: certId, createdAt: serverTimestamp() }; return addDoc(collection(db, `users/${userId}/ceus`), dataToSave); };
+export const deleteCEU = (userId: string, ceuId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/ceus`, ceuId)); };
+export const updateCEU = (userId: string, ceuData: Partial<CEU>): Promise<void> => { if (!ceuData.id) { return Promise.reject("CEU ID is required for update."); } const docRef = doc(db, `users/${userId}/ceus`, ceuData.id); return setDoc(docRef, cleanupObject(ceuData), { merge: true }); };
+export const updateUserProfile = (userId: string, profileData: Partial<UserProfile>): Promise<void> => { const docRef = doc(db, `users/${userId}`); return setDoc(docRef, profileData, { merge: true }); };
+const generateNextInvoiceNumber = async (userId: string): Promise<string> => { const metaRef = doc(db, `users/${userId}/_metadata`, 'invoiceCounter'); const year = new Date().getFullYear(); try { const newInvoiceNumber = await runTransaction(db, async (transaction) => { const metaDoc = await transaction.get(metaRef); if (!metaDoc.exists()) { transaction.set(metaRef, { lastNumber: 1, year: year }); return `${year}-001`; } const data = metaDoc.data(); if(!data) { transaction.set(metaRef, { lastNumber: 1, year: year }); return `${year}-001`; } const lastNumber = data.year === year ? data.lastNumber : 0; const nextNumber = lastNumber + 1; transaction.update(metaRef, { lastNumber: nextNumber, year: year }); return `${year}-${String(nextNumber).padStart(3, '0')}`; }); return newInvoiceNumber; } catch (error) { console.error("Transaction failed: ", error); return `${year}-${Date.now().toString().slice(-5)}`; } };
+export const getNextInvoiceNumber = async (userId: string): Promise<string> => { return generateNextInvoiceNumber(userId); };
+export const addInvoice = async (userId: string, invoiceData: Partial<Invoice>): Promise<void> => { if (!invoiceData.invoiceNumber) { invoiceData.invoiceNumber = await getNextInvoiceNumber(userId); } const dataToSave = { ...cleanupObject(invoiceData), createdAt: serverTimestamp(), }; await addDoc(collection(db, `users/${userId}/invoices`), dataToSave); };
+export const updateInvoice = (userId: string, invoiceId: string, invoiceData: Partial<Invoice>): Promise<void> => { const docRef = doc(db, `users/${userId}/invoices`, invoiceId); return setDoc(docRef, cleanupObject(invoiceData), { merge: true }); };
+export const deleteInvoice = (userId: string, invoiceId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/invoices`, invoiceId)); };
+const calculateDurationInHours = (startTime?: string, endTime?: string): number => { if (!startTime || !endTime) return 1; const start = new Date(`1970-01-01T${startTime}`); const end = new Date(`1970-01-01T${endTime}`); const diffMs = end.getTime() - start.getTime(); if (diffMs <= 0) return 1; return parseFloat((diffMs / (1000 * 60 * 60)).toFixed(2)); };
+export const createInvoiceFromAppointment = async (userId: string, appointment: Appointment): Promise<void> => {
+    if (!appointment.clientId || !appointment.id) { throw new Error("Appointment must have an ID and be linked to a client."); }
+    const clientRef = doc(db, `users/${userId}/clients`, appointment.clientId);
+    const clientSnap = await getDoc(clientRef);
+    if (!clientSnap.exists()) { throw new Error("Client not found for this appointment."); }
+    const client = clientSnap.data() as Client;
+    const rate = client.rate || 0;
+    const duration = calculateDurationInHours(appointment.time, appointment.endTime);
+    const description = `${appointment.subject || 'Services Rendered'}\nDate: ${appointment.date}`;
+    const lineItems: LineItem[] = [{ description, quantity: duration, unitPrice: rate, total: duration * rate, isTaxable: true }];
+    if (client.differentials && client.differentials.length > 0) {
+        client.differentials.forEach(diff => {
+            lineItems.push({ description: diff.description, quantity: 1, unitPrice: diff.amount, total: diff.amount, isTaxable: true });
+        });
+    }
+    const subtotal = lineItems.reduce((sum, lineItem) => sum + lineItem.total, 0);
+    const total = subtotal; 
+    const invoiceData: Partial<Invoice> = {
+        clientId: appointment.clientId, appointmentId: appointment.id, invoiceDate: new Date().toISOString().split('T')[0],
+        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], status: 'draft',
+        lineItems: lineItems, subtotal: subtotal, total: total,
+    };
+    await addInvoice(userId, invoiceData);
+};
+export const addExpense = (userId: string, expenseData: Partial<Expense>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/expenses`), { ...cleanupObject(expenseData), createdAt: serverTimestamp() }); };
+export const updateExpense = (userId: string, expenseId: string, expenseData: Partial<Expense>): Promise<void> => { return setDoc(doc(db, `users/${userId}/expenses`, expenseId), cleanupObject(expenseData), { merge: true }); };
+export const deleteExpense = (userId: string, expenseId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/expenses`, expenseId)); };
 
-    return (
-        <>
-            {confirmation && <ConfirmationModal {...confirmation} onCancel={() => setConfirmation(null)} />}
-            {statusMessage && (
-                <div className={`fixed bottom-5 right-5 z-50 p-4 rounded-lg shadow-lg flex items-center gap-3 ${statusMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                    {statusMessage.type === 'success' ? <ThumbsUp size={20} /> : <Info size={20} />}
-                    <span>{statusMessage.text}</span>
-                    <button onClick={() => setStatusMessage(null)} className="p-1 rounded-full hover:bg-black/10"><XIcon size={16}/></button>
-                </div>
-            )}
-            <div className="h-[calc(100vh-8rem)] bg-card border rounded-lg overflow-hidden">
-                <div className="md:hidden h-full">
-                    {selectedMessage || isComposing ? detailComponent : messageListComponent}
-                </div>
-                <div className="hidden md:flex h-full">
-                    <PanelGroup direction="horizontal">
-                        <Panel defaultSize={35} minSize={25}>
-                            {messageListComponent}
-                        </Panel>
-                        <PanelResizeHandle className="w-2 bg-muted hover:bg-primary/20 transition-colors" />
-                        <Panel minSize={30}>
-                            {detailComponent}
-                        </Panel>
-                    </PanelGroup>
-                </div>
-            </div>
+// --- JOB BOARD FUNCTIONS ---
+export const addJobPosting = async (userId: string, jobData: Partial<JobPosting>): Promise<DocumentReference> => {
+    const profileRef = doc(db, `users/${userId}`);
+    const newPostRef = await runTransaction(db, async (transaction) => {
+        const userProfileSnap = await transaction.get(profileRef);
+        if (!userProfileSnap.exists()) { throw new Error("User profile not found."); }
+        const userProfile = userProfileSnap.data() as UserProfile;
+        const postLimit = 2;
+        const currentMonthYear = `${new Date().getFullYear()}-${new Date().getMonth()}`;
+        if (userProfile.postCountResetDate === currentMonthYear && (userProfile.monthlyPostCount || 0) >= postLimit) {
+            throw new Error(`You have reached your monthly limit of ${postLimit} job posts.`);
+        }
+        const newCount = userProfile.postCountResetDate === currentMonthYear ? (userProfile.monthlyPostCount || 0) + 1 : 1;
+        transaction.update(profileRef, { monthlyPostCount: newCount, postCountResetDate: currentMonthYear });
+        const createdAt = serverTimestamp();
+        const thirtyDaysFromNow = new Date();
+        thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+        const dataToSave = { ...cleanupObject(jobData), userId, isFilled: false, createdAt, expiresAt: Timestamp.fromDate(thirtyDaysFromNow), contactEmail: userProfile.email || '', };
+        const newDocRef = doc(collection(db, 'jobPostings'));
+        transaction.set(newDocRef, dataToSave);
+        return newDocRef;
+    });
+    return newPostRef;
+};
+export const getJobPostingById = async (postId: string): Promise<JobPosting | null> => {
+    const docRef = doc(db, "jobPostings", postId);
+    const docSnap = await getDoc(docRef);
+    return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as JobPosting : null;
+};
+export const sendJobApplicationMessage = async (applicantId: string, applicantProfile: UserProfile, jobPost: JobPosting): Promise<void> => {
+    if (applicantId === jobPost.userId) { throw new Error("You cannot apply to your own job posting."); }
+    const applicantName = applicantProfile.name || 'A freelancer';
+    const profileUrl = `${window.location.origin}/profile/${applicantId}`;
+    await sendAppMessage(applicantId, applicantName, [jobPost.userId], `Application for: ${jobPost.title}`, `${applicantName} has applied for your job posting, "${jobPost.title}".\n\nYou can view their public profile here:\n${profileUrl}`, 'application', jobPost.id);
+};
+export const sendJobOffer = async (applicationMessage: Message): Promise<void> => {
+    if (!applicationMessage.id || !applicationMessage.jobPostId) throw new Error("Message is not a valid application.");
+    const jobPostRef = doc(db, 'jobPostings', applicationMessage.jobPostId);
+    const jobPostSnap = await getDoc(jobPostRef);
+    if (!jobPostSnap.exists()) throw new Error("Job post not found.");
+    const jobPost = jobPostSnap.data() as JobPosting;
+    if (jobPost.pendingApplicantId) throw new Error("An offer is already pending for this job.");
+    const batch = writeBatch(db);
+    batch.update(jobPostRef, { pendingApplicantId: applicationMessage.senderId });
+    const originalMessageRef = doc(db, 'users', applicationMessage.recipientId, 'messages', applicationMessage.id);
+    batch.update(originalMessageRef, { status: 'offer-pending' });
+    await batch.commit();
+    await sendAppMessage(applicationMessage.recipientId, "Job Poster", [applicationMessage.senderId], `Job Offer for: ${jobPost.title}`, `Congratulations! You have been offered the job for "${jobPost.title}". Please review the offer and accept or decline it from your mailbox.`, 'offer', jobPost.id);
+};
+export const declineJobApplication = async (applicationMessage: Message): Promise<void> => {
+    if (!applicationMessage.id) return;
+    await sendAppMessage(applicationMessage.recipientId, "Job Poster", [applicationMessage.senderId], `Regarding your application for: ${applicationMessage.subject.replace('Application for: ', '')}`, `Thank you for your interest. Unfortunately, another candidate has been selected. We wish you the best in your job search.`);
+    const originalMessageRef = doc(db, 'users', applicationMessage.recipientId, 'messages', applicationMessage.id);
+    await updateDoc(originalMessageRef, { status: 'declined' });
+};
+export const acceptJobOffer = async (offerMessage: Message): Promise<void> => {
+    if (!offerMessage.id || !offerMessage.jobPostId || offerMessage.type !== 'offer') throw new Error("Invalid offer message.");
+    const jobPost = await getJobPostingById(offerMessage.jobPostId);
+    if (!jobPost) throw new Error("Job posting not found.");
+    if (jobPost.isFilled) throw new Error("This job has already been filled.");
+    const batch = writeBatch(db);
+    const jobPostRef = doc(db, 'jobPostings', jobPost.id!);
+    batch.update(jobPostRef, { isFilled: true, pendingApplicantId: '' });
+    const offerMessageRef = doc(db, 'users', offerMessage.recipientId, 'messages', offerMessage.id);
+    batch.update(offerMessageRef, { status: 'approved' });
+    await batch.commit();
+    const newAppointmentData: Partial<Appointment> = { subject: jobPost.title, date: new Date().toISOString().split('T')[0], time: '09:00', status: 'pending-confirmation', locationType: jobPost.jobType === 'Virtual' ? 'virtual' : 'physical', address: jobPost.location, notes: `This appointment was created from your successful application... Please confirm or update the date and time.`, };
+    await addAppointment(offerMessage.recipientId, newAppointmentData);
+    await sendAppMessage(offerMessage.recipientId, "Ten99 System", [jobPost.userId], `Offer Accepted: ${jobPost.title}`, `${offerMessage.senderName} has accepted your offer for "${jobPost.title}". An event has been added to their calendar for confirmation.`);
+};
+export const declineJobOffer = async (offerMessage: Message): Promise<void> => {
+    if (!offerMessage.id || !offerMessage.jobPostId || offerMessage.type !== 'offer') throw new Error("Invalid offer message.");
+    const jobPostRef = doc(db, 'jobPostings', offerMessage.jobPostId);
+    await updateDoc(jobPostRef, { pendingApplicantId: '' });
+    const offerMessageRef = doc(db, 'users', offerMessage.recipientId, 'messages', offerMessage.id);
+    await updateDoc(offerMessageRef, { status: 'declined' });
+    await sendAppMessage(offerMessage.recipientId, "Ten99 System", [offerMessage.senderId], `Offer Declined: ${offerMessage.subject.replace('Job Offer for: ', '')}`, `The applicant has declined your offer. The job post "${offerMessage.subject.replace('Job Offer for: ', '')}" has been made available for other applicants.`);
+};
+export const rescindJobOffer = async (applicationMessage: Message): Promise<void> => {
+    if (!applicationMessage.id || !applicationMessage.jobPostId) return;
+    const jobPostRef = doc(db, 'jobPostings', applicationMessage.jobPostId);
+    await updateDoc(jobPostRef, { pendingApplicantId: '' });
+    const originalMessageRef = doc(db, 'users', applicationMessage.recipientId, 'messages', applicationMessage.id);
+    await updateDoc(originalMessageRef, { status: 'offer-rescinded' });
+    await sendAppMessage(applicationMessage.recipientId, "Job Poster", [applicationMessage.senderId], `Offer Rescinded for: ${applicationMessage.subject.replace('Application for: ', '')}`, `The job offer for "${applicationMessage.subject.replace('Application for: ', '')}" has been rescinded.`);
+};
+export const reportJobPost = async (postId: string): Promise<void> => {
+    if (!postId) return;
+    const jobRef = doc(db, 'jobPostings', postId);
+    await updateDoc(jobRef, { reportCount: increment(1) });
+};
 
-            <Modal isOpen={isEducationModalOpen} onClose={() => setIsEducationModalOpen(false)}>
-                <div className="p-6">
-                    <h2 className="text-xl font-bold mb-4">Schedule Education Event</h2>
-                    <p className="text-sm text-muted-foreground mb-4">The AI couldn&apos;t find a date in this email. Please set the date and time for this training/workshop.</p>
-                    <div className="space-y-4">
-                        <div>
-                            <label htmlFor="educationDate" className="block text-sm font-medium">Date</label>
-                            <input 
-                                type="date" 
-                                id="educationDate" 
-                                value={educationFormData.date}
-                                onChange={(e) => setEducationFormData(prev => ({...prev, date: e.target.value}))}
-                                className="w-full mt-1 p-2 bg-background border rounded-md"
-                            />
-                        </div>
-                        <div>
-                            <label htmlFor="educationTime" className="block text-sm font-medium">Time</label>
-                            <input 
-                                type="time" 
-                                id="educationTime" 
-                                value={educationFormData.time}
-                                onChange={(e) => setEducationFormData(prev => ({...prev, time: e.target.value}))}
-                                className="w-full mt-1 p-2 bg-background border rounded-md"
-                            />
-                        </div>
-                    </div>
-                    <div className="flex justify-end gap-4 mt-6">
-                        <button type="button" onClick={() => setIsEducationModalOpen(false)} className="bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-secondary/80">Cancel</button>
-                        <button onClick={handleScheduleEducation} disabled={isActionLoading} className="bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg flex items-center gap-2 disabled:opacity-50">
-                            {isActionLoading ? <Loader2 size={16} className="animate-spin"/> : <CalendarCheck size={16}/>}
-                            Schedule Event
-                        </button>
-                    </div>
-                </div>
-            </Modal>
-        </>
-    );
-}
+// --- MAGIC MAILBOX ACTION FUNCTIONS ---
+export const confirmInboundOffer = async (userId: string, message: Message): Promise<void> => {
+    if (!message.id || !message.appointmentId) { throw new Error("Cannot confirm offer: The message is missing a linked appointment ID."); }
+    const batch = writeBatch(db);
+    const messageRef = doc(db, `users/${userId}/messages`, message.id);
+    batch.update(messageRef, { status: 'approved' });
+    const appointmentRef = doc(db, `users/${userId}/appointments`, message.appointmentId);
+    const appointmentSnap = await getDoc(appointmentRef);
+    if (!appointmentSnap.exists()) { throw new Error("Could not find the linked appointment to confirm."); }
+    batch.update(appointmentRef, { status: 'scheduled', subject: appointmentSnap.data().subject.replace('Pending: ', '') });
+    await batch.commit();
+};
+export const acceptInboundOfferPending = async (userId: string, message: Message): Promise<void> => {
+    if (!message.id) throw new Error("Message ID is missing.");
+    const userProfileSnap = await getDoc(doc(db, `users/${userId}`));
+    const userName = userProfileSnap.exists() ? userProfileSnap.data()?.name || "The Freelancer" : "The Freelancer";
+    const templatesRef = collection(db, `users/${userId}/templates`);
+    const q = query(templatesRef, where("type", "==", "pending"), limit(1));
+    const templateSnapshot = await getDocs(q);
+    if (templateSnapshot.empty) { console.warn("No 'pending' template found. Skipping email reply."); }
+    else { const template = templateSnapshot.docs[0].data() as Template; await sendAppMessage(userId, userName, [message.senderId], template.subject, template.body); }
+    await updateDoc(doc(db, `users/${userId}/messages`, message.id), { status: 'pending' });
+};
+export const declineInboundOffer = async (userId: string, message: Message): Promise<void> => {
+    if (!message.id) throw new Error("Message ID is missing.");
+    const batch = writeBatch(db);
+    const messageRef = doc(db, `users/${userId}/messages`, message.id);
+    batch.update(messageRef, { status: 'declined' });
+    if (message.appointmentId) {
+        const appointmentRef = doc(db, `users/${userId}/appointments`, message.appointmentId);
+        batch.update(appointmentRef, { status: 'canceled' });
+    }
+    const userProfileSnap = await getDoc(doc(db, `users/${userId}`));
+    const userName = userProfileSnap.exists() ? userProfileSnap.data()?.name || "The Freelancer" : "The Freelancer";
+    const templatesRef = collection(db, `users/${userId}/templates`);
+    const q = query(templatesRef, where("type", "==", "decline"), limit(1));
+    const templateSnapshot = await getDocs(q);
+    if (!templateSnapshot.empty) { const template = templateSnapshot.docs[0].data() as Template; await sendAppMessage(userId, userName, [message.senderId], template.subject, template.body); }
+    else { console.warn("No 'decline' template found. Skipping email reply."); }
+    await batch.commit();
+};
+export const markAsEducation = async (userId: string, message: Message): Promise<void> => {
+    if (!message.id || !message.appointmentId) { throw new Error("Cannot process education event: The message is missing a linked appointment ID."); }
+    const batch = writeBatch(db);
+    const messageRef = doc(db, `users/${userId}/messages`, message.id);
+    batch.update(messageRef, { status: 'archived-education' });
+    const appointmentRef = doc(db, `users/${userId}/appointments`, message.appointmentId);
+    batch.update(appointmentRef, { status: 'scheduled', eventType: 'education' });
+    await batch.commit();
+};
+export const createEducationAppointmentFromMessage = async (userId: string, message: Message, appointmentData: Partial<Appointment>): Promise<void> => {
+    if (!message.id) { throw new Error("Cannot create event: Message ID is missing."); }
+    const batch = writeBatch(db);
+    const newAppointmentRef = doc(collection(db, `users/${userId}/appointments`));
+    batch.set(newAppointmentRef, { ...cleanupObject(appointmentData), createdAt: serverTimestamp() });
+    const messageRef = doc(db, `users/${userId}/messages`, message.id);
+    batch.update(messageRef, { status: 'archived-education', appointmentId: newAppointmentRef.id });
+    await batch.commit();
+};
 
-export default function MailboxPageContent({ userId }: { userId: string }) {
-    return (
-        <div className="p-4 sm:p-6 lg:p-8">
-             <Suspense fallback={<div className="text-center p-8">Loading Mailbox...</div>}>
-                  <MailboxPageInternal userId={userId} />
-             </Suspense>
-        </div>
-    );
-}
+// --- REMINDER & MILEAGE FUNCTIONS ---
+export const addReminder = (userId: string, reminderData: Partial<Reminder>): Promise<DocumentReference> => {
+    return addDoc(collection(db, `users/${userId}/reminders`), { ...cleanupObject(reminderData), createdAt: serverTimestamp() });
+};
+export const deleteReminder = (userId: string, reminderId: string): Promise<void> => {
+    return deleteDoc(doc(db, `users/${userId}/reminders`, reminderId));
+};
+export const addMileage = (userId: string, mileageData: Partial<Mileage>): Promise<DocumentReference> => {
+    return addDoc(collection(db, `users/${userId}/mileage`), { ...cleanupObject(mileageData), createdAt: serverTimestamp() });
+};
+export const deleteMileage = (userId: string, mileageId: string): Promise<void> => {
+    return deleteDoc(doc(db, `users/${userId}/mileage`, mileageId));
+};
