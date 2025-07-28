@@ -1,44 +1,20 @@
-import { auth } from '@clerk/nextjs/server';
-import { getCertificationsData, getAllCEUsData } from '@/utils/firestoreService';
-import CertificationsPageContent from '@/components/CertificationsPageContent';
-import type { Certification, CEU } from '@/types/app-interfaces';
-import { Timestamp } from 'firebase/firestore';
-import { redirect } from 'next/navigation';
-import { Suspense } from 'react';
+// src/app/dashboard/certifications/page.tsx
 
-const serializeData = <T extends object>(doc: T | null): T | null => {
-    if (!doc) return null;
-    const data: { [key: string]: any } = { ...doc };
-    for (const key in data) {
-        if (data[key] instanceof Timestamp) {
-            data[key] = data[key].toDate().toISOString();
-        }
-    }
-    return data as T;
-};
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
+import CertificationsPageContent from "@/components/CertificationsPageContent";
 
+// This is the simple, safe server component shell
 export default async function CertificationsPage() {
-    const { userId } = await auth();
+  
+  // It safely gets the userId on the server
+  const { userId } = await auth();
 
-    if (!userId) {
-      redirect('/sign-in');
-    }
+  // It redirects if the user isn't logged in
+  if (!userId) {
+    redirect("/");
+  }
 
-    const [certsData, ceusData] = await Promise.all([
-        getCertificationsData(userId),
-        getAllCEUsData(userId)
-    ]);
-
-    const initialCertifications = certsData.map(c => serializeData(c));
-    const initialCeus = ceusData.map(c => serializeData(c));
-
-    return (
-        <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading Credentials...</div>}>
-            <CertificationsPageContent
-                initialCertifications={initialCertifications as Certification[]}
-                initialCeus={initialCeus as CEU[]}
-                userId={userId}
-            />
-        </Suspense>
-    );
+  // It renders the client component that will now do all the real work
+  return <CertificationsPageContent userId={userId} />;
 }

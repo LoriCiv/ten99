@@ -1,3 +1,4 @@
+// src/components/PublicProfileContent.tsx
 "use client";
 
 import type { UserProfile, Certification } from '@/types/app-interfaces';
@@ -34,12 +35,11 @@ export default function PublicProfileContent({ profile, certifications }: Public
                 <div className="flex flex-col sm:flex-row items-center gap-6 mb-8 p-6 bg-card border rounded-lg">
                     <div className="relative w-32 h-32 rounded-full bg-muted flex items-center justify-center border shrink-0 overflow-hidden">
                         {profile.photoUrl ? (
-                            // ✅ FIX: Replaced 'fill' and 'style' with 'width', 'height', and 'className'
+                            // ✅ Updated to use the modern 'fill' prop for the Image component
                             <Image 
                                 src={profile.photoUrl} 
                                 alt="Profile" 
-                                width={128} 
-                                height={128} 
+                                fill
                                 className="object-cover" 
                             />
                         ) : (

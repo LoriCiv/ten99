@@ -1,3 +1,5 @@
+// src/components/ClientsPageContent.tsx
+
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -5,15 +7,16 @@ import { useRouter } from 'next/navigation';
 import type { Client, PersonalNetworkContact, JobFile } from '@/types/app-interfaces';
 import { getClients, getPersonalNetwork, getJobFiles } from '@/utils/firestoreService';
 import Link from 'next/link';
-import { Search, Building2, User } from 'lucide-react';
+import { Search, Building2, User, Loader2 } from 'lucide-react';
 import ClientDetailModal from './ClientDetailModal';
+import { useFirebase } from './FirebaseProvider'; // ✅ 1. Import our hook
 
-// ✅ 1. Add the props interface
 interface ClientsPageContentProps {
     userId: string;
 }
 
-export default function ClientsPageContent({ userId }: ClientsPageContentProps) { // ✅ 2. Receive userId
+export default function ClientsPageContent({ userId }: ClientsPageContentProps) {
+    const { isFirebaseAuthenticated } = useFirebase(); // ✅ 2. Get the "Green Light"
     const router = useRouter();
     const [clients, setClients] = useState<Client[]>([]);
     const [contacts, setContacts] = useState<PersonalNetworkContact[]>([]);
@@ -25,22 +28,25 @@ export default function ClientsPageContent({ userId }: ClientsPageContentProps) 
     const [selectedItem, setSelectedItem] = useState<Client | PersonalNetworkContact | null>(null);
     const [itemType, setItemType] = useState<'Company' | 'Contact'>('Company');
 
-    // ✅ 3. Move all data fetching logic here and use the real userId
+    // ✅ 3. This useEffect now waits for the Green Light before fetching any data
     useEffect(() => {
-        setIsLoading(true);
-        const unsubClients = getClients(userId, setClients);
-        const unsubContacts = getPersonalNetwork(userId, setContacts);
-        const unsubJobFiles = getJobFiles(userId, (data) => {
-            setJobFiles(data);
-            setIsLoading(false); 
-        });
+        if (isFirebaseAuthenticated) {
+            console.log("✅ Clients page is authenticated, fetching data...");
+            setIsLoading(true);
+            const unsubClients = getClients(userId, setClients);
+            const unsubContacts = getPersonalNetwork(userId, setContacts);
+            const unsubJobFiles = getJobFiles(userId, (data) => {
+                setJobFiles(data);
+                setIsLoading(false); 
+            });
 
-        return () => {
-            unsubClients();
-            unsubContacts();
-            unsubJobFiles();
-        };
-    }, [userId]);
+            return () => {
+                unsubClients();
+                unsubContacts();
+                unsubJobFiles();
+            };
+        }
+    }, [isFirebaseAuthenticated, userId]);
 
     const filteredItems = useMemo(() => {
         const allItems = [
@@ -70,12 +76,24 @@ export default function ClientsPageContent({ userId }: ClientsPageContentProps) 
         setSelectedItem(null);
     };
 
+    // This function can be used by the modal to signal a data change.
     const handleDataChanged = () => {
-        router.refresh();
+        // The real-time listeners will handle the update automatically.
+        // We could force a refresh if needed, but it's often not necessary.
+        console.log("Data changed, UI will update via listeners.");
     };
 
-    if (isLoading) {
-        return <div className="p-8 text-center text-muted-foreground">Loading...</div>;
+    // ✅ 4. Show a loading indicator until Firebase is ready AND data is loaded
+    if (!isFirebaseAuthenticated || isLoading) {
+        return (
+            <div className="flex justify-center items-center h-full p-8">
+               <div className="text-center">
+                   <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+                   <p className="text-lg font-semibold mt-4">Loading Clients & Connections...</p>
+                   <p className="text-muted-foreground text-sm mt-1">Authenticating and fetching your data...</p>
+               </div>
+           </div>
+        );
     }
 
     return (
@@ -128,6 +146,15 @@ export default function ClientsPageContent({ userId }: ClientsPageContentProps) 
                         </div>
                     ))}
                 </div>
+
+                {filteredItems.length === 0 && !isLoading && (
+                    <div className="text-center py-16">
+                        <p className="text-lg font-semibold">No items found.</p>
+                        <p className="text-muted-foreground mt-1">
+                        {searchTerm ? "Try adjusting your search." : "Click 'New Company' or 'New Contact' to get started."}
+                        </p>
+                    </div>
+                )}
             </div>
 
             {isModalOpen && (

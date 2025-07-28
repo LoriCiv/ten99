@@ -1,10 +1,10 @@
+// src/components/ShareModal.tsx
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
 import type { JobFile, Client, PersonalNetworkContact } from '@/types/app-interfaces';
-// DELETED: createPublicJobFile was removed as it doesn't exist
-import { sendAppMessage } from '@/utils/firestoreService';
-import { X, Copy, Check, Send, Loader2, CheckCircle, ChevronsUpDown } from 'lucide-react';
+import { createPublicJobFile, sendAppMessage } from '@/utils/firestoreService';
+import { X, Copy, Check, Send, Loader2, CheckCircle, ChevronsUpDown, ThumbsUp, Info } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import {
     Command,
@@ -19,12 +19,6 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover";
-
-// Placeholder function to allow the build to pass
-const createPublicJobFile = async (userId: string, jobFile: JobFile): Promise<string | null> => {
-    console.error("createPublicJobFile function is not implemented.");
-    return null;
-}
 
 interface ShareModalProps {
     onClose: () => void;
@@ -51,6 +45,7 @@ export default function ShareModal({
     const [recipientEmail, setRecipientEmail] = useState('');
     const [isSending, setIsSending] = useState(false);
     const [popoverOpen, setPopoverOpen] = useState(false);
+    const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
     const contactList = useMemo(() => {
         const allContacts = new Map<string, { value: string; label: string }>();
@@ -68,10 +63,10 @@ export default function ShareModal({
         const generateLink = async () => {
             setIsLoadingLink(true);
             try {
-                // This now calls the local placeholder function
+                // This now calls the REAL firestore function
                 const publicId = await createPublicJobFile(currentUserId, jobFile);
                 if (publicId) {
-                    const link = `${window.location.origin}/share/job/${publicId}`;
+                    const link = `${window.location.origin}/share/${publicId}`;
                     setPublicLink(link);
                 }
             } catch (error) {
@@ -83,22 +78,21 @@ export default function ShareModal({
         generateLink();
     }, [currentUserId, jobFile]);
 
+    const showStatusMessage = (type: 'success' | 'error', text: string) => {
+        setStatusMessage({ type, text });
+        setTimeout(() => setStatusMessage(null), 4000);
+    };
+
     const handleCopy = () => {
         if (!publicLink) return;
         
-        const textArea = document.createElement("textarea");
-        textArea.value = publicLink;
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        try {
-            document.execCommand('copy');
+        navigator.clipboard.writeText(publicLink).then(() => {
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
-        } catch (err) {
-            alert("Failed to copy link.");
-        }
-        document.body.removeChild(textArea);
+        }).catch(err => {
+            console.error('Failed to copy text: ', err);
+            showStatusMessage("error", "Failed to copy link.");
+        });
     };
 
     const handleSendToUser = async () => {
@@ -108,11 +102,11 @@ export default function ShareModal({
             const subject = `Job File Shared: ${jobFile.jobTitle}`;
             const body = `${currentUserName} has shared a job file with you.\n\nTitle: ${jobFile.jobTitle}\nClient: ${clientName}\n\nYou can view the details here: ${publicLink}`;
             await sendAppMessage(currentUserId, currentUserName, recipientEmail, subject, body);
-            alert(`Job file sent to ${recipientEmail}!`);
+            showStatusMessage("success", `Job file sent to ${recipientEmail}!`);
             setRecipientEmail('');
         } catch (error) {
             console.error("Failed to send job file:", error);
-            alert("Failed to send job file.");
+            showStatusMessage("error", "Failed to send job file.");
         } finally {
             setIsSending(false);
         }
@@ -120,7 +114,13 @@ export default function ShareModal({
 
     return (
         <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4">
-            <div className="bg-card rounded-lg shadow-xl w-full max-w-lg border">
+            <div className="bg-card rounded-lg shadow-xl w-full max-w-lg border relative">
+                {statusMessage && (
+                    <div className={`absolute -top-14 left-1/2 -translate-x-1/2 z-50 p-3 rounded-lg shadow-lg flex items-center gap-3 ${statusMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        {statusMessage.type === 'success' ? <ThumbsUp size={16} /> : <Info size={16} />}
+                        <span className="text-sm font-semibold">{statusMessage.text}</span>
+                    </div>
+                )}
                 <div className="p-6 flex justify-between items-center border-b">
                     <h2 className="text-xl font-bold text-foreground">Share Job File</h2>
                     <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X size={24} /></button>

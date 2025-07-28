@@ -1,3 +1,5 @@
+// src/components/InvoiceForm.tsx
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -12,9 +14,19 @@ interface InvoiceFormProps {
     initialData?: Partial<Invoice>;
     userProfile: UserProfile | null;
     nextInvoiceNumber: string;
+    statusMessage: string | null; // ✅ 1. Add the statusMessage prop
 }
 
-export default function InvoiceForm({ onSave, onCancel, clients = [], initialData, isSubmitting, userProfile, nextInvoiceNumber }: InvoiceFormProps) {
+export default function InvoiceForm({ 
+    onSave, 
+    onCancel, 
+    clients = [], 
+    initialData, 
+    isSubmitting, 
+    userProfile, 
+    nextInvoiceNumber,
+    statusMessage // ✅ 2. Receive the statusMessage prop
+}: InvoiceFormProps) {
     const isEditMode = !!initialData?.id;
     const [formData, setFormData] = useState<Partial<Invoice>>({});
     const [lineItems, setLineItems] = useState<LineItem[]>([]);
@@ -117,7 +129,10 @@ export default function InvoiceForm({ onSave, onCancel, clients = [], initialDat
     
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!formData.clientId || !formData.dueDate) { alert("Client and Due Date are required."); return; }
+        if (!formData.clientId || !formData.dueDate) { 
+            alert("Client and Due Date are required."); 
+            return; 
+        }
         await onSave({ ...formData, lineItems });
     };
     
@@ -188,7 +203,6 @@ export default function InvoiceForm({ onSave, onCancel, clients = [], initialDat
                     </div>
                 </div>
 
-                {/* ✅ UPDATED LINE ITEMS SECTION */}
                 <div className="space-y-4 pt-6 border-t">
                     <div className="hidden md:grid md:grid-cols-12 gap-2 text-sm font-semibold text-muted-foreground px-2">
                         <div className="col-span-5">DESCRIPTION</div>
@@ -249,6 +263,9 @@ export default function InvoiceForm({ onSave, onCancel, clients = [], initialDat
                         <div className="flex justify-between items-center font-bold text-lg pt-2 border-t"><span className="text-foreground">Amount Due</span> <span className="text-foreground">${(formData.total || 0).toFixed(2)}</span></div>
                     </div>
                 </div>
+
+                {/* ✅ 3. Add a place to display status messages */}
+                {statusMessage && <p className="text-red-500 text-sm text-center">{statusMessage}</p>}
 
                 <div className="flex justify-end items-center mt-8 pt-6 border-t border-border">
                     <div className="flex space-x-3">

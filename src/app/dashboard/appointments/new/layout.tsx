@@ -1,16 +1,11 @@
 // src/app/dashboard/appointments/new/layout.tsx
-import React from 'react';
 
-// This simple layout component just renders its children directly,
-// overriding the parent dashboard layout.
+// This layout simply renders the page content that is passed to it.
+// It inherits the main dashboard sidebar, header, and FirebaseProvider.
 export default function NewAppointmentLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
-  return (
-    <>
-      {children}
-    </>
-  );
+  return <>{children}</>;
 }

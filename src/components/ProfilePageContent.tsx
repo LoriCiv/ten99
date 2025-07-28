@@ -1,8 +1,8 @@
+// src/components/ProfilePageContent.tsx
 "use client";
 
 import type { UserProfile, Certification, JobHistoryEntry, EducationEntry } from '@/types/app-interfaces';
 import Image from 'next/image';
-// ✅ 1. Import the GraduationCap icon
 import { User, MapPin, Briefcase, Award, Languages, Sparkles, History, ExternalLink, GraduationCap } from 'lucide-react';
 
 interface ProfilePageContentProps {
@@ -25,7 +25,8 @@ export default function ProfilePageContent({ profile, certifications }: ProfileP
                     <header className="flex flex-col sm:flex-row items-center gap-6 mb-8">
                         <div className="relative w-32 h-32 rounded-full bg-muted flex items-center justify-center border-2 border-primary/20 shrink-0 overflow-hidden">
                             {profile.photoUrl ? (
-                                <Image src={profile.photoUrl} alt="Profile Photo" layout="fill" className="object-cover" />
+                                // ✅ Updated to use fill and className for modern Next.js Image
+                                <Image src={profile.photoUrl} alt="Profile Photo" fill className="object-cover" />
                             ) : (
                                 <User className="w-16 h-16 text-muted-foreground" />
                             )}
@@ -112,7 +113,6 @@ export default function ProfilePageContent({ profile, certifications }: ProfileP
                             </Section>
                         )}
                         
-                        {/* ✅ 2. ADDED EDUCATION SECTION */}
                         {profile.education && profile.education.length > 0 && (
                             <Section title="Education" icon={GraduationCap}>
                                 <div className="space-y-4">

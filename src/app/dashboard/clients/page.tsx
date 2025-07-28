@@ -1,20 +1,20 @@
-import { auth } from '@clerk/nextjs/server';
-import ClientsPageContent from '@/components/ClientsPageContent';
-import { Suspense } from 'react';
-import { redirect } from 'next/navigation';
+// src/app/dashboard/clients/page.tsx
 
-// ✅ Add "async" to the function signature
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
+import ClientsPageContent from "@/components/ClientsPageContent";
+
+// This is the server component shell.
 export default async function ClientsPage() {
-    // ✅ Add "await" before the auth() call
-    const { userId } = await auth();
+  
+  // Safely get the userId on the server.
+  const { userId } = await auth();
 
-    if (!userId) {
-      redirect('/sign-in');
-    }
+  // If no user, redirect away.
+  if (!userId) {
+    redirect("/");
+  }
 
-    return (
-        <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading...</div>}>
-            <ClientsPageContent userId={userId} />
-        </Suspense>
-    );
+  // Render the client component that will handle all logic and display.
+  return <ClientsPageContent userId={userId} />;
 }

@@ -1,11 +1,11 @@
+// src/components/JobBoardDetailPageContent.tsx
 "use client";
 
 import { useState } from 'react';
 import type { JobPosting, UserProfile } from '@/types/app-interfaces';
 import { sendJobApplicationMessage } from '@/utils/firestoreService';
 import { Button } from '@/components/ui/button';
-// ✅ 1. Added DollarSign to the import list
-import { Loader2, User, Calendar, MapPin, Globe, DollarSign } from 'lucide-react';
+import { Loader2, User, Calendar, MapPin, Globe, DollarSign, ThumbsUp, Info, X as XIcon } from 'lucide-react'; // ✅ 1. Import new icons
 import Link from 'next/link';
 
 interface JobBoardDetailPageContentProps {
@@ -28,19 +28,22 @@ const DetailItem = ({ icon: Icon, text }: { icon: React.ElementType, text?: stri
 export default function JobBoardDetailPageContent({ jobPost, posterProfile, userProfile, currentUserId }: JobBoardDetailPageContentProps) {
     const [isApplying, setIsApplying] = useState(false);
     const [applicationStatus, setApplicationStatus] = useState<'idle' | 'success' | 'error'>('idle');
+    const [statusMessage, setStatusMessage] = useState<string | null>(null); // ✅ 2. Add state for status messages
 
     const handleApply = async () => {
         if (!currentUserId || !userProfile) {
-            alert("You must be logged in and have a profile to apply.");
+            setStatusMessage("You must be logged in and have a profile to apply.");
             return;
         }
         setIsApplying(true);
+        setStatusMessage(null);
         try {
             await sendJobApplicationMessage(currentUserId, userProfile, jobPost);
             setApplicationStatus('success');
         } catch (error) {
             console.error("Error applying for job:", error);
             setApplicationStatus('error');
+            setStatusMessage(`Error applying: ${error instanceof Error ? error.message : "Unknown error"}`);
         } finally {
             setIsApplying(false);
         }
@@ -61,7 +64,7 @@ export default function JobBoardDetailPageContent({ jobPost, posterProfile, user
                         )}
                     </div>
                     {applicationStatus === 'success' ? (
-                        <div className="text-center p-4 bg-green-500/10 text-green-700 rounded-lg">
+                        <div className="text-center p-4 bg-green-500/10 text-green-700 rounded-lg w-full md:w-auto">
                             <h3 className="font-semibold">Application Sent!</h3>
                             <p className="text-sm">The poster has been notified.</p>
                         </div>
@@ -73,8 +76,18 @@ export default function JobBoardDetailPageContent({ jobPost, posterProfile, user
                             </Button>
                         )
                     )}
-                    {applicationStatus === 'error' && <p className="text-sm text-red-500 mt-2">Could not send application. Please try again later.</p>}
                 </div>
+
+                {/* ✅ 3. Display error messages here */}
+                {statusMessage && (
+                    <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                            <Info size={16} />
+                            <span className="text-sm">{statusMessage}</span>
+                        </div>
+                        <button onClick={() => setStatusMessage(null)} className="p-1 rounded-full hover:bg-black/10"><XIcon size={16}/></button>
+                    </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                     <div className="md:col-span-2 space-y-6">

@@ -1,6 +1,8 @@
 // src/app/api/invoicing/send/route.ts
+
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/firebase-admin';
+import { initializeFirebaseAdmin } from '@/lib/firebase-admin'; // ✅ 1. Import our new helper
+import { getFirestore } from 'firebase-admin/firestore'; // ✅ 2. Import firestore components
 import type { Invoice, Client, UserProfile } from '@/types/app-interfaces';
 import sgMail from '@sendgrid/mail';
 
@@ -9,8 +11,8 @@ if (process.env.SENDGRID_API_KEY) {
 }
 
 const createInvoiceHtml = (invoice: Invoice, client: Client, user: UserProfile): string => {
-    // This is a simplified HTML generator. You can make this as complex as you like.
     const total = invoice.total || 0;
+    // This is a simplified HTML generator. You can make this as complex as you like.
     return `<h1>Invoice #${invoice.invoiceNumber}</h1><p>Hi ${client.name},</p><p>This is an invoice for the amount of <strong>$${total.toFixed(2)}</strong>.</p><p>Thank you,<br/>${user.name || 'Your Business'}</p>`;
 };
 
@@ -20,6 +22,9 @@ export async function POST(request: NextRequest) {
     }
 
     try {
+        initializeFirebaseAdmin(); // ✅ 3. Initialize Firebase Admin at the start
+        const db = getFirestore(); // ✅ 4. Get the db instance to use
+
         const { invoiceId, userId } = await request.json();
         if (!invoiceId || !userId) {
             return NextResponse.json({ error: 'Missing invoiceId or userId' }, { status: 400 });
@@ -33,7 +38,7 @@ export async function POST(request: NextRequest) {
         const invoice = { id: invoiceSnap.id, ...invoiceSnap.data() } as Invoice;
 
         const clientRef = db.doc(`users/${userId}/clients/${invoice.clientId}`);
-        const userProfileRef = db.doc(`users/${userId}/profile/mainProfile`);
+        const userProfileRef = db.doc(`users/${userId}`); // ✅ 5. Corrected user profile path
 
         const [clientSnap, userProfileSnap] = await Promise.all([clientRef.get(), userProfileRef.get()]);
 
@@ -59,12 +64,10 @@ export async function POST(request: NextRequest) {
 
         await sgMail.send(msg);
 
-        // Update the invoice status to 'sent' if it was a draft
         if (invoice.status === 'draft') {
             await invoiceRef.update({ status: 'sent', invoiceDate: new Date().toISOString().split('T')[0] });
         } else if (invoice.status === 'overdue') {
-            // If it was overdue, we can just mark it as sent again
-             await invoiceRef.update({ status: 'sent' });
+            await invoiceRef.update({ status: 'sent' });
         }
         
         return NextResponse.json({ success: true });

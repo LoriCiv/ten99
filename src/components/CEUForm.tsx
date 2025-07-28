@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import type { CEU } from '@/types/app-interfaces';
-import { Save, Loader2 } from 'lucide-react';
+import { Save, Loader2, Info } from 'lucide-react'; // ✅ 1. Import an icon for the error message
 
 interface CEUFormProps {
     onSave: (data: Partial<CEU>) => Promise<void>;
@@ -16,9 +16,9 @@ interface CEUFormProps {
 export default function CEUForm({ onSave, onCancel, initialData, isSubmitting, availableCategories }: CEUFormProps) {
     const isEditMode = !!initialData.id;
     const [formData, setFormData] = useState<Partial<CEU>>(initialData);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null); // ✅ 2. Add state for the error message
 
     useEffect(() => {
-        // Ensure category defaults correctly, especially for new CEUs
         const defaultData = { category: 'General Studies', ...initialData };
         setFormData(defaultData);
     }, [initialData]);
@@ -31,8 +31,11 @@ export default function CEUForm({ onSave, onCancel, initialData, isSubmitting, a
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        setErrorMessage(null); // Clear previous errors
+
+        // ✅ 3. Replace alert() with a state-based error message
         if (!formData.activityName || !formData.ceuHours) {
-            alert("Activity Name and CEU Hours are required.");
+            setErrorMessage("Activity Name and CEU Hours are required.");
             return;
         }
         onSave(formData);
@@ -72,7 +75,6 @@ export default function CEUForm({ onSave, onCancel, initialData, isSubmitting, a
                 <input name="provider" value={formData.provider || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" />
             </div>
 
-            {/* ✅ NEW WEBSITE FIELD */}
             <div>
                 <label className="block text-sm font-medium text-muted-foreground">Website (Optional)</label>
                 <input name="website" type="url" value={formData.website || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" placeholder="https://example.com" />
@@ -82,6 +84,14 @@ export default function CEUForm({ onSave, onCancel, initialData, isSubmitting, a
                 <label className="block text-sm font-medium text-muted-foreground">Cost ($) (Optional)</label>
                 <input name="cost" type="number" step="0.01" value={formData.cost ?? ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" />
             </div>
+
+            {/* ✅ 4. Display the error message here if it exists */}
+            {errorMessage && (
+                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md flex items-center gap-2">
+                    <Info size={16} />
+                    <span className="text-sm">{errorMessage}</span>
+                </div>
+            )}
 
             <div className="flex justify-end gap-4 pt-4 border-t">
                 <button type="button" onClick={onCancel} className="bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-secondary/80">

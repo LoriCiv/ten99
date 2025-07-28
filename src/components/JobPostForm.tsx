@@ -1,8 +1,9 @@
+// src/components/JobPostForm.tsx
 "use client";
 
 import { useState, useEffect } from 'react';
 import type { JobPosting, UserProfile } from '@/types/app-interfaces';
-import { Save, Loader2, X } from 'lucide-react';
+import { Save, Loader2, X, Info } from 'lucide-react'; // ✅ 1. Import Info icon
 
 const usStates = [
     "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", "Delaware",
@@ -29,6 +30,7 @@ export default function JobPostForm({ onSave, onCancel, isSubmitting, userProfil
         isFilled: false,
     });
     const [skillInput, setSkillInput] = useState('');
+    const [errorMessage, setErrorMessage] = useState<string | null>(null); // ✅ 2. Add state for error messages
 
     useEffect(() => {
         if (userProfile) {
@@ -62,8 +64,11 @@ export default function JobPostForm({ onSave, onCancel, isSubmitting, userProfil
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        setErrorMessage(null); // Clear previous errors
+
+        // ✅ 3. Replace alert() with a state-based error message
         if (!formData.title || !formData.description) {
-            alert("Title and Description are required.");
+            setErrorMessage("Title and Description are required.");
             return;
         }
         const dataToSave = {
@@ -137,7 +142,6 @@ export default function JobPostForm({ onSave, onCancel, isSubmitting, userProfil
                     
                      <div className="md:col-span-2">
                         <label className="block text-sm font-medium text-muted-foreground">Required Skills (Tags)</label>
-                        {/* ✅ This is the new reminder text */}
                         <p className="text-xs text-muted-foreground mt-1">
                             These tags are how freelancers find your job. Be specific! 
                             Examples: ASL, Medical, Legal, Spanish, Conference, etc.
@@ -157,6 +161,14 @@ export default function JobPostForm({ onSave, onCancel, isSubmitting, userProfil
                         <textarea name="description" value={formData.description || ''} onChange={handleInputChange} rows={6} className="w-full mt-1 p-2 bg-background border rounded-md" required></textarea>
                     </div>
                 </div>
+
+                {/* ✅ 4. Display the error message here if it exists */}
+                {errorMessage && (
+                    <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md flex items-center gap-2">
+                        <Info size={16} />
+                        <span className="text-sm">{errorMessage}</span>
+                    </div>
+                )}
 
                 <div className="flex justify-end gap-4 pt-4 border-t">
                     <button type="button" onClick={onCancel} className="bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-secondary/80">Cancel</button>

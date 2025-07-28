@@ -1,11 +1,16 @@
+// src/app/api/upload/route.ts
+
 import { NextResponse } from 'next/server';
-import { storage } from '@/lib/firebase-admin';
+import { initializeFirebaseAdmin } from '@/lib/firebase-admin'; // ✅ 1. Import our new helper
+import { getStorage } from 'firebase-admin/storage'; // ✅ 2. Import getStorage
 import { v4 as uuidv4 } from 'uuid';
 import { auth } from '@clerk/nextjs/server';
 
 export async function POST(request: Request) {
     try {
-        // ✅ FIX: Add the "await" keyword here
+        initializeFirebaseAdmin(); // ✅ 3. Initialize Firebase Admin at the start
+        const storage = getStorage(); // ✅ 4. Get the storage instance
+
         const { userId } = await auth();
 
         if (!userId) {
@@ -19,10 +24,13 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'No file provided.' }, { status: 400 });
         }
 
-        const bucket = storage.bucket(process.env.FIREBASE_STORAGE_BUCKET);
+        const bucket = storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET);
         const fileExtension = file.name.split('.').pop();
         const fileName = `${uuidv4()}.${fileExtension}`;
-        const filePath = `jobFiles/${userId}/${fileName}`;
+        
+        // The path now correctly reflects where files for different features might go
+        // For now, we can keep a general 'userUploads' folder
+        const filePath = `userUploads/${userId}/${fileName}`;
         
         const fileBuffer = Buffer.from(await file.arrayBuffer());
 
@@ -34,9 +42,12 @@ export async function POST(request: Request) {
             },
         });
 
+        // Note: getSignedUrl is often preferred for temporary access.
+        // For permanent access, you'd typically make the file public and construct the URL.
+        // This long-expiry signed URL works well for private files.
         const [url] = await fileUpload.getSignedUrl({
             action: 'read',
-            expires: '03-09-2491',
+            expires: '03-09-2491', // A very long expiration date
         });
 
         return NextResponse.json({ fileUrl: url });

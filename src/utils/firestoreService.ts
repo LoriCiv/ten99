@@ -1,3 +1,5 @@
+// src/utils/firestoreService.ts
+
 import { db, storage } from '@/lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import {
@@ -23,7 +25,7 @@ import {
     collectionGroup,
     increment
 } from 'firebase/firestore';
-import type { Client, PersonalNetworkContact, JobFile, Appointment, Message, Template, Certification, CEU, UserProfile, Invoice, Expense, JobPosting, Reminder, Mileage, Differential, LineItem } from '@/types/app-interfaces';
+import type { Client, PersonalNetworkContact, JobFile, Appointment, Message, Template, Certification, CEU, UserProfile, Invoice, Expense, JobPosting, Reminder, Mileage, LineItem } from '@/types/app-interfaces';
 import { v4 as uuidv4 } from 'uuid';
 
 const cleanupObject = <T extends Record<string, unknown>>(data: T): Partial<T> => {
@@ -86,7 +88,17 @@ export const getAllCEUs = (userId: string, callback: (data: CEU[]) => void) => {
         callback(ceus);
     });
 };
-export const getUserProfile = (userId: string, callback: (data: UserProfile | null) => void) => { const docRef = doc(db, `users/${userId}/profile`, 'mainProfile'); return onSnapshot(docRef, (docSnap) => { if (docSnap.exists()) { callback({ id: docSnap.id, ...docSnap.data() } as UserProfile); } else { callback(null); } }); };
+// ✅ Corrected getUserProfile to point to the root user document
+export const getUserProfile = (userId: string, callback: (data: UserProfile | null) => void) => { 
+    const docRef = doc(db, `users/${userId}`); 
+    return onSnapshot(docRef, (docSnap) => { 
+        if (docSnap.exists()) { 
+            callback({ id: docSnap.id, ...docSnap.data() } as UserProfile); 
+        } else { 
+            callback(null); 
+        } 
+    }); 
+};
 export const getInvoices = (userId: string, callback: (data: Invoice[]) => void) => { const q = query(collection(db, `users/${userId}/invoices`), orderBy('invoiceDate', 'desc')); return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Invoice))); }); };
 export const getExpenses = (userId: string, callback: (data: Expense[]) => void) => { const q = query(collection(db, `users/${userId}/expenses`), orderBy('date', 'desc')); return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Expense))); }); };
 export const getJobPostings = (callback: (data: JobPosting[]) => void) => {
@@ -102,10 +114,15 @@ export const getMileage = (userId: string, callback: (data: Mileage[]) => void) 
     const q = query(collection(db, `users/${userId}/mileage`), orderBy('date', 'desc'));
     return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Mileage))); });
 };
-// ✅ FIX: Added the missing function back
 export const getPriorityJobFiles = (userId: string, callback: (data: JobFile[]) => void) => {
     const q = query(collection(db, `users/${userId}/jobFiles`), where('priority', '==', 2), orderBy('createdAt', 'desc'));
     return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as JobFile))); });
+};
+export const getCeusForCertification = (userId: string, certId: string, callback: (data: CEU[]) => void) => {
+    const q = query(collection(db, `users/${userId}/ceus`), where('certificationId', '==', certId));
+    return onSnapshot(q, (snapshot) => {
+        callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CEU)));
+    });
 };
 
 // --- SERVER-SIDE DATA FETCHERS ---
@@ -116,7 +133,7 @@ export const getJobFile = async (userId: string, jobFileId: string): Promise<Job
     return null;
 };
 export const getProfileData = async (userId: string): Promise<UserProfile | null> => {
-    const docRef = doc(db, `users/${userId}/profile`, 'mainProfile');
+    const docRef = doc(db, `users/${userId}`);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) { return serializeData({ id: docSnap.id, ...docSnap.data() } as UserProfile); }
     return null;
@@ -131,7 +148,7 @@ export const getRemindersData = async (userId: string): Promise<Reminder[]> => {
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => serializeData({ id: doc.id, ...doc.data() } as Reminder)).filter((item): item is Reminder => item !== null);
 };
-export const getPublicUserProfile = async (userId: string): Promise<UserProfile | null> => { const docRef = doc(db, `users/${userId}/profile`, 'mainProfile'); const docSnap = await getDoc(docRef); if (docSnap.exists()) { return { id: docSnap.id, ...docSnap.data() } as UserProfile; } return null; };
+export const getPublicUserProfile = async (userId: string): Promise<UserProfile | null> => { const docRef = doc(db, `users/${userId}`); const docSnap = await getDoc(docRef); if (docSnap.exists()) { return { id: docSnap.id, ...docSnap.data() } as UserProfile; } return null; };
 export const getCertificationsData = async (userId: string): Promise<Certification[]> => {
     const q = query(collection(db, `users/${userId}/certifications`), orderBy('createdAt', 'desc'));
     const snapshot = await getDocs(q);
@@ -164,6 +181,21 @@ export const deletePersonalNetworkContact = (userId: string, contactId: string):
 export const addJobFile = (userId: string, jobFileData: Partial<JobFile>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/jobFiles`), { ...cleanupObject(jobFileData), createdAt: serverTimestamp(), updatedAt: serverTimestamp() }); };
 export const updateJobFile = (userId: string, jobFileId: string, jobFileData: Partial<JobFile>): Promise<void> => { const dataToSave = { ...cleanupObject(jobFileData), updatedAt: serverTimestamp() }; return updateDoc(doc(db, `users/${userId}/jobFiles`, jobFileId), dataToSave); };
 export const deleteJobFile = (userId: string, jobFileId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/jobFiles`, jobFileId)); };
+export const createPublicJobFile = async (userId: string, jobFile: JobFile): Promise<string | null> => {
+    if (!jobFile.id) return null;
+    const jobFileRef = doc(db, 'users', userId, 'jobFiles', jobFile.id);
+    if (jobFile.publicId) {
+        await updateDoc(jobFileRef, { isShared: true });
+        return jobFile.publicId;
+    }
+    const newPublicId = uuidv4();
+    await updateDoc(jobFileRef, {
+        isShared: true,
+        publicId: newPublicId,
+        originalUserId: userId
+    });
+    return newPublicId;
+};
 export const uploadFile = async (userId: string, file: File): Promise<string> => {
     if (!file) { throw new Error("No file provided for upload."); }
     const filePath = `users/${userId}/uploads/${uuidv4()}-${file.name}`;
@@ -230,7 +262,7 @@ export const deleteCertification = async (userId: string, certId: string): Promi
 export const addCEU = (userId: string, certId: string, ceuData: Partial<CEU>): Promise<DocumentReference> => { const dataToSave = { ...cleanupObject(ceuData), userId, certificationId: certId, createdAt: serverTimestamp() }; return addDoc(collection(db, `users/${userId}/ceus`), dataToSave); };
 export const deleteCEU = (userId: string, ceuId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/ceus`, ceuId)); };
 export const updateCEU = (userId: string, ceuData: Partial<CEU>): Promise<void> => { if (!ceuData.id) { return Promise.reject("CEU ID is required for update."); } const docRef = doc(db, `users/${userId}/ceus`, ceuData.id); return setDoc(docRef, cleanupObject(ceuData), { merge: true }); };
-export const updateUserProfile = (userId: string, profileData: Partial<UserProfile>): Promise<void> => { const docRef = doc(db, `users/${userId}/profile`, 'mainProfile'); return setDoc(docRef, profileData, { merge: true }); };
+export const updateUserProfile = (userId: string, profileData: Partial<UserProfile>): Promise<void> => { const docRef = doc(db, `users/${userId}`); return setDoc(docRef, profileData, { merge: true }); };
 const generateNextInvoiceNumber = async (userId: string): Promise<string> => { const metaRef = doc(db, `users/${userId}/_metadata`, 'invoiceCounter'); const year = new Date().getFullYear(); try { const newInvoiceNumber = await runTransaction(db, async (transaction) => { const metaDoc = await transaction.get(metaRef); if (!metaDoc.exists()) { transaction.set(metaRef, { lastNumber: 1, year: year }); return `${year}-001`; } const data = metaDoc.data(); if(!data) { transaction.set(metaRef, { lastNumber: 1, year: year }); return `${year}-001`; } const lastNumber = data.year === year ? data.lastNumber : 0; const nextNumber = lastNumber + 1; transaction.update(metaRef, { lastNumber: nextNumber, year: year }); return `${year}-${String(nextNumber).padStart(3, '0')}`; }); return newInvoiceNumber; } catch (error) { console.error("Transaction failed: ", error); return `${year}-${Date.now().toString().slice(-5)}`; } };
 export const getNextInvoiceNumber = async (userId: string): Promise<string> => { return generateNextInvoiceNumber(userId); };
 export const addInvoice = async (userId: string, invoiceData: Partial<Invoice>): Promise<void> => { if (!invoiceData.invoiceNumber) { invoiceData.invoiceNumber = await getNextInvoiceNumber(userId); } const dataToSave = { ...cleanupObject(invoiceData), createdAt: serverTimestamp(), }; await addDoc(collection(db, `users/${userId}/invoices`), dataToSave); };
@@ -252,7 +284,8 @@ export const createInvoiceFromAppointment = async (userId: string, appointment: 
             lineItems.push({ description: diff.description, quantity: 1, unitPrice: diff.amount, total: diff.amount, isTaxable: true });
         });
     }
-    const subtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
+    // ✅ This is the corrected line
+    const subtotal = lineItems.reduce((sum, lineItem) => sum + lineItem.total, 0);
     const total = subtotal; 
     const invoiceData: Partial<Invoice> = {
         clientId: appointment.clientId, appointmentId: appointment.id, invoiceDate: new Date().toISOString().split('T')[0],
@@ -267,7 +300,7 @@ export const deleteExpense = (userId: string, expenseId: string): Promise<void> 
 
 // --- JOB BOARD FUNCTIONS ---
 export const addJobPosting = async (userId: string, jobData: Partial<JobPosting>): Promise<DocumentReference> => {
-    const profileRef = doc(db, `users/${userId}/profile`, 'mainProfile');
+    const profileRef = doc(db, `users/${userId}`);
     const newPostRef = await runTransaction(db, async (transaction) => {
         const userProfileSnap = await transaction.get(profileRef);
         if (!userProfileSnap.exists()) { throw new Error("User profile not found."); }
@@ -371,7 +404,7 @@ export const confirmInboundOffer = async (userId: string, message: Message): Pro
 };
 export const acceptInboundOfferPending = async (userId: string, message: Message): Promise<void> => {
     if (!message.id) throw new Error("Message ID is missing.");
-    const userProfileSnap = await getDoc(doc(db, `users/${userId}/profile`, 'mainProfile'));
+    const userProfileSnap = await getDoc(doc(db, `users/${userId}`));
     const userName = userProfileSnap.exists() ? userProfileSnap.data()?.name || "The Freelancer" : "The Freelancer";
     const templatesRef = collection(db, `users/${userId}/templates`);
     const q = query(templatesRef, where("type", "==", "pending"), limit(1));
@@ -389,7 +422,7 @@ export const declineInboundOffer = async (userId: string, message: Message): Pro
         const appointmentRef = doc(db, `users/${userId}/appointments`, message.appointmentId);
         batch.update(appointmentRef, { status: 'canceled' });
     }
-    const userProfileSnap = await getDoc(doc(db, `users/${userId}/profile`, 'mainProfile'));
+    const userProfileSnap = await getDoc(doc(db, `users/${userId}`));
     const userName = userProfileSnap.exists() ? userProfileSnap.data()?.name || "The Freelancer" : "The Freelancer";
     const templatesRef = collection(db, `users/${userId}/templates`);
     const q = query(templatesRef, where("type", "==", "decline"), limit(1));

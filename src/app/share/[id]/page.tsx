@@ -1,73 +1,60 @@
-// src/app/share/job/[id]/page.tsx
-"use client";
+// src/app/share/[id]/page.tsx
 
-import { useState, useEffect } from 'react';
-import { useParams, notFound } from 'next/navigation';
-import { getClientForJobFile } from '@/utils/firestoreService';
+import { getFirestore } from 'firebase-admin/firestore';
+import { initializeFirebaseAdmin } from '@/lib/firebase-admin';
 import type { JobFile, Client } from '@/types/app-interfaces';
+import { notFound } from 'next/navigation';
 import { Paperclip, CalendarDays, Building, FileText } from 'lucide-react';
 
-// Placeholder function to allow the build to pass
-const getPublicJobFile = async (id: string): Promise<JobFile | null> => {
-    console.error("getPublicJobFile function is not implemented.");
-    return null;
-}
+// This is the real function to fetch a shared job file.
+// It looks for a job file in a public collection where the 'publicId' matches.
+const getPublicJobFile = async (publicId: string): Promise<JobFile | null> => {
+    initializeFirebaseAdmin();
+    const db = getFirestore();
+    const jobFilesRef = db.collectionGroup('jobFiles');
+    const q = jobFilesRef.where('publicId', '==', publicId).where('isShared', '==', true).limit(1);
+    const snapshot = await q.get();
 
-export default function SharePage() {
-    const params = useParams();
-    const id = Array.isArray(params.id) ? params.id[0] : params.id;
+    if (snapshot.empty) {
+        return null;
+    }
+    const doc = snapshot.docs[0];
+    return { id: doc.id, ...doc.data() } as JobFile;
+};
 
-    const [jobFile, setJobFile] = useState<JobFile | null>(null);
-    const [client, setClient] = useState<Client | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    
-    useEffect(() => {
-        if (!id) {
-            setIsLoading(false);
-            setError("Invalid share link.");
-            return;
-        }
+// This function can remain the same, fetching the client associated with the original user.
+const getClientForJobFile = async (userId: string, clientId: string): Promise<Client | null> => {
+    if (!userId || !clientId) return null;
+    initializeFirebaseAdmin();
+    const db = getFirestore();
+    const clientRef = db.doc(`users/${userId}/clients/${clientId}`);
+    const doc = await clientRef.get();
+    return doc.exists ? { id: doc.id, ...doc.data() } as Client : null;
+};
 
-        const fetchSharedData = async () => {
-            try {
-                const fetchedJobFile = await getPublicJobFile(id);
-                
-                if (!fetchedJobFile || !fetchedJobFile.originalUserId) {
-                    return notFound();
-                }
-                
-                const fetchedClient = await getClientForJobFile(fetchedJobFile.originalUserId, fetchedJobFile.clientId || '');
+const formatDate = (dateString?: string) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString + 'T00:00:00').toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+    });
+};
 
-                setJobFile(fetchedJobFile);
-                setClient(fetchedClient);
-            } catch (err) {
-                console.error("Failed to fetch shared data:", err);
-                setError("Could not load the shared file.");
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        fetchSharedData();
-    }, [id]);
-
-    const formatDate = (dateString?: string) => {
-        if (!dateString) return 'N/A';
-        return new Date(dateString + 'T00:00:00').toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-        });
-    };
-    
-    if (isLoading) {
-        return <div className="p-8 text-center text-slate-500">Loading...</div>;
+// This is now an async Server Component
+export default async function SharePage({ params }: { params: { id: string } }) {
+    const publicId = params.id;
+    if (!publicId) {
+        notFound();
     }
 
-    if (error || !jobFile) {
-        return <div className="p-8 text-center text-red-500">{error || "Shared file not found."}</div>;
+    const jobFile = await getPublicJobFile(publicId);
+
+    if (!jobFile || !jobFile.originalUserId) {
+        notFound();
     }
+
+    const client = await getClientForJobFile(jobFile.originalUserId, jobFile.clientId || '');
 
     return (
         <div className="bg-slate-50 min-h-screen p-4 sm:p-8">

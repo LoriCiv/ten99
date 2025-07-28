@@ -1,9 +1,10 @@
+// src/app/layout.tsx
+
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ClerkProvider } from '@clerk/nextjs';
-import { FirebaseProvider } from "@/components/FirebaseProvider"; // 1. Import the new provider
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -27,11 +28,8 @@ export default function RootLayout({
             enableSystem
             disableTransitionOnChange
           >
-            {/* 2. Wrap your children with the FirebaseProvider here */}
-            <FirebaseProvider>
-              {children}
-            </FirebaseProvider>
-            
+            {/* The FirebaseProvider does not belong here */}
+            {children}
           </ThemeProvider>
         </body>
       </html>

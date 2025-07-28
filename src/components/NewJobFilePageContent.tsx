@@ -1,3 +1,5 @@
+// src/components/NewJobFilePageContent.tsx
+
 "use client";
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
@@ -6,13 +8,16 @@ import type { JobFile, Client, Appointment } from '@/types/app-interfaces';
 import { getClients, getAppointments, addJobFile } from '@/utils/firestoreService';
 import JobFileForm from '@/components/JobFileForm';
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Loader2 } from 'lucide-react';
+import { useFirebase } from './FirebaseProvider'; // ✅ 1. Import our hook
 
 interface NewJobFilePageContentProps {
     userId: string;
 }
 
-function NewJobFilePageContent({ userId }: NewJobFilePageContentProps) {
+// The main component logic
+function NewJobFilePageContentInternal({ userId }: NewJobFilePageContentProps) {
+    const { isFirebaseAuthenticated } = useFirebase(); // ✅ 2. Get the "Green Light"
     const router = useRouter();
     const searchParams = useSearchParams();
     
@@ -20,6 +25,7 @@ function NewJobFilePageContent({ userId }: NewJobFilePageContentProps) {
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
     const initialClientId = searchParams.get('clientId') || '';
     const initialAppointmentId = searchParams.get('appointmentId') || '';
@@ -31,21 +37,26 @@ function NewJobFilePageContent({ userId }: NewJobFilePageContentProps) {
         jobTitle: initialSubject,
     };
 
-    const fetchData = useCallback(() => {
-        const unsubClients = getClients(userId, setClients);
-        const unsubAppointments = getAppointments(userId, (data) => {
-            setAppointments(data);
-            setIsLoading(false);
-        });
-        return () => { unsubClients(); unsubAppointments(); };
-    }, [userId]);
-
+    // ✅ 3. This useEffect now waits for the Green Light before fetching data
     useEffect(() => {
-        fetchData();
-    }, [fetchData]);
+        if (isFirebaseAuthenticated) {
+            console.log("✅ New Job File form is authenticated, fetching data...");
+            const unsubClients = getClients(userId, setClients);
+            const unsubAppointments = getAppointments(userId, (data) => {
+                setAppointments(data);
+                setIsLoading(false); // Stop loading once all data is here
+            });
+            return () => { unsubClients(); unsubAppointments(); };
+        }
+    }, [isFirebaseAuthenticated, userId]);
 
     const handleSaveJobFile = async (jobFileData: Partial<JobFile>) => {
+        if (!isFirebaseAuthenticated) {
+            setStatusMessage("Authentication error. Please wait and try again.");
+            return;
+        }
         setIsSubmitting(true);
+        setStatusMessage(null);
         
         const finalJobData = { ...jobFileData };
         const linkedAppointment = appointments.find(a => a.id === jobFileData.appointmentId);
@@ -64,18 +75,26 @@ function NewJobFilePageContent({ userId }: NewJobFilePageContentProps) {
 
         try {
             await addJobFile(userId, finalJobData);
-            alert("Job File saved successfully!");
             router.push('/dashboard/job-files');
         } catch (error) {
             console.error("Error saving job file:", error);
-            alert("Failed to save job file.");
+            setStatusMessage("Failed to save job file.");
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    if (isLoading) {
-        return <div className="p-8 text-center">Loading...</div>;
+    // ✅ 4. Show a loading indicator until Firebase is ready AND data is loaded
+    if (!isFirebaseAuthenticated || isLoading) {
+        return (
+            <div className="flex justify-center items-center h-full p-8">
+               <div className="text-center">
+                   <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+                   <p className="text-lg font-semibold mt-4">Loading Form...</p>
+                   <p className="text-muted-foreground text-sm mt-1">Authenticating and fetching initial data...</p>
+               </div>
+           </div>
+        );
     }
 
     return (
@@ -91,17 +110,18 @@ function NewJobFilePageContent({ userId }: NewJobFilePageContentProps) {
                 appointments={appointments}
                 initialData={prefilledData}
                 isSubmitting={isSubmitting}
-                userId={userId} // ✅ THIS LINE WAS ADDED
+                userId={userId}
+                statusMessage={statusMessage}
             />
         </div>
     );
 }
 
-// We wrap the component in Suspense to allow it to read search parameters
-export default function NewJobFilePageContentWrapper({ userId }: { userId: string }) {
+// We keep the wrapper to handle Suspense for reading search parameters
+export default function NewJobFilePageContent({ userId }: { userId: string }) {
     return (
         <Suspense fallback={<div className="p-8 text-center">Loading...</div>}>
-            <NewJobFilePageContent userId={userId} />
+            <NewJobFilePageContentInternal userId={userId} />
         </Suspense>
     );
 }

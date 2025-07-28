@@ -1,3 +1,5 @@
+// src/components/JobFilesPageContent.tsx
+
 "use client";
 
 import { useState, useEffect, useMemo, Suspense } from 'react';
@@ -5,8 +7,9 @@ import { useSearchParams } from 'next/navigation';
 import type { JobFile, Client } from '@/types/app-interfaces';
 import { getJobFiles, getClients, updateJobFile } from '@/utils/firestoreService';
 import Link from 'next/link';
-import { FilePlus, Search, X, CalendarDays, Tag, Clock, CheckCircle, Star } from 'lucide-react';
+import { FilePlus, Search, X, CalendarDays, Tag, Clock, CheckCircle, Star, Loader2 } from 'lucide-react';
 import { Timestamp } from 'firebase/firestore';
+import { useFirebase } from './FirebaseProvider'; // ✅ 1. Import our hook
 
 interface JobFilesPageContentProps {
     userId: string;
@@ -34,6 +37,7 @@ const PriorityStars = ({ priority, onClick }: { priority: number, onClick: (newP
 };
 
 function JobFilesPageContentInternal({ userId }: JobFilesPageContentProps) {
+    const { isFirebaseAuthenticated } = useFirebase(); // ✅ 2. Get the "Green Light"
     const searchParams = useSearchParams();
     const [jobFiles, setJobFiles] = useState<JobFile[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
@@ -50,18 +54,22 @@ function JobFilesPageContentInternal({ userId }: JobFilesPageContentProps) {
         }
     }, [searchParams]);
 
+    // ✅ 3. This useEffect now waits for the Green Light before fetching data
     useEffect(() => {
-        const unsubJobFiles = getJobFiles(userId, (data) => {
-            setJobFiles(data);
-            setIsLoading(false);
-        });
-        const unsubClients = getClients(userId, setClients);
+        if (isFirebaseAuthenticated) {
+            console.log("✅ Job Files page is authenticated, fetching data...");
+            const unsubJobFiles = getJobFiles(userId, (data) => {
+                setJobFiles(data);
+                setIsLoading(false);
+            });
+            const unsubClients = getClients(userId, setClients);
 
-        return () => {
-            unsubJobFiles();
-            unsubClients();
-        };
-    }, [userId]);
+            return () => {
+                unsubJobFiles();
+                unsubClients();
+            };
+        }
+    }, [isFirebaseAuthenticated, userId]);
 
     const allTags = useMemo(() => {
         const tagsSet = new Set<string>();
@@ -103,10 +111,11 @@ function JobFilesPageContentInternal({ userId }: JobFilesPageContentProps) {
     const handleSetPriority = async (file: JobFile, newPriority: number) => {
         if (!file.id) return;
         try {
-            await updateJobFile(userId, file.id, { priority: newPriority });
+            // ✅ 4. Explicitly cast the number to the correct type to satisfy TypeScript
+            await updateJobFile(userId, file.id, { priority: newPriority as 0 | 1 | 2 });
         } catch (error) {
             console.error("Error setting priority:", error);
-            alert("Failed to update priority status.");
+            // We can add a non-blocking error message here later if needed
         }
     };
     
@@ -138,8 +147,16 @@ function JobFilesPageContentInternal({ userId }: JobFilesPageContentProps) {
         return { text: 'In Progress', icon: Clock, color: 'text-yellow-500' };
     };
 
-    if (isLoading) {
-        return <div className="p-8 text-center text-muted-foreground">Loading Job Files...</div>;
+    if (!isFirebaseAuthenticated || isLoading) {
+        return (
+            <div className="flex justify-center items-center h-full p-8">
+               <div className="text-center">
+                   <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+                   <p className="text-lg font-semibold mt-4">Loading Job Files...</p>
+                   <p className="text-muted-foreground text-sm mt-1">Authenticating and fetching data...</p>
+               </div>
+           </div>
+        );
     }
 
     return (

@@ -1,20 +1,20 @@
 // src/app/dashboard/settings/page.tsx
 
-import { auth } from '@clerk/nextjs/server';
-import SettingsPageContent from '@/components/SettingsPageContent';
-import { Suspense } from 'react';
-import { redirect } from 'next/navigation';
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
+import SettingsPageContent from "@/components/SettingsPageContent"; // This is the component we'll fix next
 
+// This is a Server Component
 export default async function SettingsPage() {
-    const { userId } = await auth();
+  
+  // Safely get the userId using async/await
+  const { userId } = await auth();
 
-    if (!userId) {
-      redirect('/sign-in');
-    }
+  // Redirect if the user is not logged in
+  if (!userId) {
+    redirect("/");
+  }
 
-    return (
-        <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading Settings...</div>}>
-            <SettingsPageContent userId={userId} />
-        </Suspense>
-    );
+  // Render the client component and pass the userId to it
+  return <SettingsPageContent userId={userId} />;
 }

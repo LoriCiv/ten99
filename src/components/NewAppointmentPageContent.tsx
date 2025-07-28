@@ -1,3 +1,5 @@
+// src/components/NewAppointmentPageContent.tsx
+
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
@@ -7,12 +9,14 @@ import { getClients, getPersonalNetwork, getJobFiles, addAppointment, getAppoint
 import AppointmentForm from '@/components/AppointmentForm';
 import Link from 'next/link';
 import { ArrowLeft, Loader2 } from 'lucide-react';
+import { useFirebase } from './FirebaseProvider'; // ✅ 1. Import our hook
 
 interface NewAppointmentPageContentProps {
     userId: string;
 }
 
 export default function NewAppointmentPageContent({ userId }: NewAppointmentPageContentProps) {
+    const { isFirebaseAuthenticated } = useFirebase(); // ✅ 2. Get the "Green Light"
     const router = useRouter();
     const searchParams = useSearchParams();
 
@@ -31,19 +35,25 @@ export default function NewAppointmentPageContent({ userId }: NewAppointmentPage
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const fetchData = useCallback(() => {
+        console.log("Fetching initial form data...");
         const unsubClients = getClients(userId, setClients);
         const unsubContacts = getPersonalNetwork(userId, setContacts);
         const unsubJobFiles = getJobFiles(userId, setJobFiles);
         const unsubAppointments = getAppointments(userId, (data) => {
             setAllAppointments(data);
-            setIsLoading(false);
+            setIsLoading(false); // Stop loading once the main data is here
         });
         return () => { unsubClients(); unsubContacts(); unsubJobFiles(); unsubAppointments(); };
     }, [userId]);
 
+    // ✅ 3. This useEffect now waits for the Green Light before fetching data
     useEffect(() => {
-        fetchData();
-    }, [fetchData]);
+        if (isFirebaseAuthenticated) {
+            console.log("✅ New Appointment form is authenticated, fetching data...");
+            const cleanup = fetchData();
+            return cleanup;
+        }
+    }, [isFirebaseAuthenticated, fetchData]);
 
     const handleParseWithAI = async () => {
         if (!pastedText.trim()) {
@@ -168,7 +178,6 @@ ${pastedText}
                 const newClientRef = await addClient(userId, newClientData);
                 parsedJson.clientId = newClientRef.id;
                 
-                // ✅ FIX: Manually add the new client to our local state so the UI updates instantly.
                 const newClient = { id: newClientRef.id, ...newClientData } as Client;
                 setClients(prevClients => [newClient, ...prevClients]);
             }
@@ -185,6 +194,10 @@ ${pastedText}
     };
     
     const handleSaveAppointment = async (appointmentData: Partial<Appointment>, recurrenceEndDate?: string) => {
+        if (!isFirebaseAuthenticated) {
+             alert("Authentication error. Please refresh and try again.");
+             return;
+        }
         setIsSubmitting(true);
         if (!appointmentData.date || !appointmentData.time) {
             alert("Date and Time are required.");
@@ -220,8 +233,17 @@ ${pastedText}
         }
     };
 
-    if (isLoading) {
-        return <div className="p-8 text-center text-muted-foreground">Loading...</div>;
+    // ✅ 4. This loading check now waits for the Green Light AND the initial data fetch.
+    if (!isFirebaseAuthenticated || isLoading) {
+        return (
+            <div className="flex justify-center items-center h-full p-8">
+               <div className="text-center">
+                   <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+                   <p className="text-lg font-semibold mt-4">Loading Form...</p>
+                   <p className="text-muted-foreground text-sm mt-1">Authenticating and fetching data...</p>
+               </div>
+           </div>
+        );
     }
 
     return (

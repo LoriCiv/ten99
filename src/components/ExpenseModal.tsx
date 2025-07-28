@@ -10,13 +10,23 @@ interface ExpenseModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSave: (data: Partial<Expense>) => Promise<void>;
+    onDelete: (expenseId: string) => void; // ✅ 1. Add the onDelete prop here
     expense?: Partial<Expense>;
     userId: string;
     clients: Client[];
-    userProfile: UserProfile | null; // ✅ Added userProfile to props
+    userProfile: UserProfile | null;
 }
 
-export default function ExpenseModal({ isOpen, onClose, onSave, expense, userId, clients, userProfile }: ExpenseModalProps) {
+export default function ExpenseModal({ 
+    isOpen, 
+    onClose, 
+    onSave, 
+    onDelete, // ✅ 2. Receive the onDelete prop
+    expense, 
+    userId, 
+    clients, 
+    userProfile 
+}: ExpenseModalProps) {
     const [isSubmitting, setIsSubmitting] = useState(false);
     
     if (!isOpen) return null;
@@ -40,8 +50,9 @@ export default function ExpenseModal({ isOpen, onClose, onSave, expense, userId,
                         initialData={expense}
                         onSave={handleSave}
                         onCancel={onClose}
+                        onDelete={onDelete} // ✅ 3. Pass onDelete down to the form
                         isSubmitting={isSubmitting} 
-                        userProfile={userProfile} // ✅ Passed userProfile down to the form
+                        userProfile={userProfile}
                     />
                 </div>
             </div>

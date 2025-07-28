@@ -1,3 +1,5 @@
+// src/components/MyMoneyPageContent.tsx
+
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
@@ -10,7 +12,7 @@ import {
 import Link from 'next/link';
 import {
     DollarSign, FileText, Landmark, Save, Loader2, ArrowRight, Award, Zap, Info,
-    BarChart3, CalendarClock, PieChart, FileDown, MonitorSmartphone, Car
+    BarChart3, CalendarClock, PieChart, FileDown, MonitorSmartphone, Car, ThumbsUp, X as XIcon
 } from 'lucide-react';
 import InvoiceDetailModal from '@/components/InvoiceDetailModal';
 import ExpenseForm from '@/components/ExpenseForm';
@@ -18,7 +20,8 @@ import ExpensePieChart from '@/components/ExpensePieChart';
 import FinancialTrendsModal from '@/components/FinancialTrendsModal';
 import MileageFormModal from './MileageFormModal';
 import Modal from './Modal';
-import { getMonth, getYear, format, subMonths, isWithinInterval, startOfWeek, endOfWeek } from 'date-fns';
+import { getMonth, getYear, format } from 'date-fns';
+import { useFirebase } from './FirebaseProvider';
 
 const IRS_MILEAGE_RATE = 0.67; // For 2024 tax year
 
@@ -63,11 +66,8 @@ const ReportButton = ({ title, description, icon: Icon, onClick }: { title: stri
     </button>
 );
 
-interface MyMoneyPageContentProps {
-    userId: string;
-}
-
-export default function MyMoneyPageContent({ userId }: MyMoneyPageContentProps) {
+export default function MyMoneyPageContent({ userId }: { userId: string }) {
+    const { isFirebaseAuthenticated } = useFirebase();
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [manualExpenses, setManualExpenses] = useState<Expense[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
@@ -87,26 +87,38 @@ export default function MyMoneyPageContent({ userId }: MyMoneyPageContentProps) 
     const [stateRate, setStateRate] = useState<number | ''>('');
     const [filingStatus, setFilingStatus] = useState<FilingStatus>('single');
     const [dependents, setDependents] = useState<number | ''>(0);
+    
+    // ✅ 1. Update the state to accept 'info' as a type
+    const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
 
     useEffect(() => {
-        const unsubscribers = [
-            getInvoices(userId, setInvoices),
-            getExpenses(userId, setManualExpenses),
-            getClients(userId, setClients),
-            getCertifications(userId, setCertifications),
-            getAllCEUs(userId, setAllCeus),
-            getAppointments(userId, setAppointments),
-            getMileage(userId, setMileageEntries),
-            getUserProfile(userId, (profile) => {
-                setUserProfile(profile);
-                if (profile) {
-                    setStateRate(profile.estimatedStateTaxRate || '');
-                }
-                setIsLoading(false);
-            })
-        ];
-        return () => unsubscribers.forEach(unsub => unsub());
-    }, [userId]);
+        if (isFirebaseAuthenticated) {
+            console.log("✅ My Money page is authenticated, fetching data...");
+            const unsubscribers = [
+                getInvoices(userId, setInvoices),
+                getExpenses(userId, setManualExpenses),
+                getClients(userId, setClients),
+                getCertifications(userId, setCertifications),
+                getAllCEUs(userId, setAllCeus),
+                getAppointments(userId, setAppointments),
+                getMileage(userId, setMileageEntries),
+                getUserProfile(userId, (profile) => {
+                    setUserProfile(profile);
+                    if (profile) {
+                        setStateRate(profile.estimatedStateTaxRate || '');
+                    }
+                    setIsLoading(false);
+                })
+            ];
+            return () => unsubscribers.forEach(unsub => unsub());
+        }
+    }, [isFirebaseAuthenticated, userId]);
+
+    // ✅ 2. Update the function to accept 'info' as a type
+    const showStatusMessage = (type: 'success' | 'error' | 'info', text: string) => {
+        setStatusMessage({ type, text });
+        setTimeout(() => setStatusMessage(null), 4000);
+    };
 
     const allExpenses = useMemo(() => {
         const certExpenses: Expense[] = (certifications || []).filter(cert => cert.renewalCost && cert.renewalCost > 0).map(cert => ({ id: `cert-${cert.id}`, description: `Renewal for ${cert.name}`, amount: cert.renewalCost!, date: cert.issueDate || new Date().toISOString().split('T')[0], category: 'Professional Development', isReadOnly: true, }));
@@ -161,10 +173,10 @@ export default function MyMoneyPageContent({ userId }: MyMoneyPageContentProps) 
         setIsSubmittingTax(true);
         try {
             await updateUserProfile(userId, { estimatedStateTaxRate: Number(stateRate) });
-            alert("Tax settings saved!");
+            showStatusMessage("success", "Tax settings saved!");
         } catch (error) {
             console.error("Failed to save tax settings:", error);
-            alert("Error saving tax settings.");
+            showStatusMessage("error", "Error saving tax settings.");
         } finally {
             setIsSubmittingTax(false);
         }
@@ -174,25 +186,15 @@ export default function MyMoneyPageContent({ userId }: MyMoneyPageContentProps) 
         setIsSubmittingExpense(true);
         try {
             await addExpense(userId, data);
-            alert("Expense added successfully!");
+            showStatusMessage("success", "Expense added successfully!");
         } catch (error) {
             console.error("Failed to add expense:", error);
-            alert("Failed to add expense.");
+            showStatusMessage("error", "Failed to add expense.");
         } finally {
             setIsSubmittingExpense(false);
         }
     };
     
-    const downloadTxtFile = (content: string, fileName: string) => {
-        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
-
     const handleGenerateFinancialTrends = () => {
         const currentYear = new Date().getFullYear();
         const months = Array.from({ length: 12 }, (_, i) => format(new Date(currentYear, i), 'MMM'));
@@ -217,12 +219,34 @@ export default function MyMoneyPageContent({ userId }: MyMoneyPageContentProps) 
         setIsTrendsModalOpen(true);
     };
 
-    if (isLoading) {
-        return <div className="p-8 text-center text-muted-foreground">Loading Financials...</div>;
+    if (!isFirebaseAuthenticated || isLoading) {
+        return (
+            <div className="flex justify-center items-center h-full p-8">
+               <div className="text-center">
+                   <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+                   <p className="text-lg font-semibold mt-4">Loading Financials...</p>
+                   <p className="text-muted-foreground text-sm mt-1">Authenticating and crunching the numbers...</p>
+               </div>
+           </div>
+        );
     }
+
+    // ✅ 3. Create a helper for status message styles
+    const statusStyles = {
+        success: 'bg-green-100 text-green-800',
+        error: 'bg-red-100 text-red-800',
+        info: 'bg-sky-100 text-sky-800'
+    };
 
     return (
         <>
+            {statusMessage && (
+                <div className={`fixed bottom-5 right-5 z-50 p-4 rounded-lg shadow-lg flex items-center gap-3 ${statusStyles[statusMessage.type]}`}>
+                    {statusMessage.type === 'success' ? <ThumbsUp size={20} /> : <Info size={20} />}
+                    <span>{statusMessage.text}</span>
+                    <button onClick={() => setStatusMessage(null)} className="p-1 rounded-full hover:bg-black/10"><XIcon size={16}/></button>
+                </div>
+            )}
             <div className="p-4 sm:p-6 lg:p-8 space-y-8">
                 <header>
                     <h1 className="text-3xl font-bold text-foreground">My Money</h1>
@@ -242,6 +266,7 @@ export default function MyMoneyPageContent({ userId }: MyMoneyPageContentProps) 
                             userId={userId}
                             onSave={handleAddExpense}
                             onCancel={() => {}}
+                            onDelete={() => {}}
                             clients={clients}
                             isSubmitting={isSubmittingExpense}
                             userProfile={userProfile}
@@ -300,7 +325,7 @@ export default function MyMoneyPageContent({ userId }: MyMoneyPageContentProps) 
                                     const client = clients.find(c => c.id === invoice.clientId);
                                     return (
                                         <div key={invoice.id} onClick={() => setSelectedInvoice(invoice)} className="flex justify-between items-center text-sm p-2 rounded-md hover:bg-muted cursor-pointer">
-                                            <p>#{invoice.invoiceNumber} - {client?.name}</p>
+                                            <p>#{invoice.invoiceNumber} - {client?.name || client?.companyName}</p>
                                             <p className="font-medium">${(invoice.total || 0).toFixed(2)}</p>
                                         </div>
                                     );
@@ -318,20 +343,20 @@ export default function MyMoneyPageContent({ userId }: MyMoneyPageContentProps) 
                         </div>
                         <div className="bg-zinc-50 dark:bg-zinc-900/50 p-6 rounded-lg border-2 border-dashed border-zinc-300 dark:border-zinc-700">
                            <div className="flex justify-between items-center mb-4">
-                                <div>
-                                    <h3 className="text-lg font-semibold flex items-center gap-2 text-zinc-500 dark:text-zinc-400">
-                                        <Zap size={20}/>
-                                        Introducing Ten Sum
-                                    </h3>
-                                    <p className="text-sm text-zinc-400 dark:text-zinc-500 mt-1">Go beyond tracking. Start planning.</p>
-                                </div>
-                                <span className="text-xs font-semibold bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400 px-2 py-1 rounded-full">COMING SOON</span>
+                               <div>
+                                   <h3 className="text-lg font-semibold flex items-center gap-2 text-zinc-500 dark:text-zinc-400">
+                                       <Zap size={20}/>
+                                       Introducing Ten Sum
+                                   </h3>
+                                   <p className="text-sm text-zinc-400 dark:text-zinc-500 mt-1">Go beyond tracking. Start planning.</p>
+                               </div>
+                               <span className="text-xs font-semibold bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400 px-2 py-1 rounded-full">COMING SOON</span>
                            </div>
                            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
-                                A new financial planning app designed for freelancers. Connect your Ten99 data to plan for sick days, get AI alerts on late payments, and automate your savings goals.
+                               A new financial planning app designed for freelancers. Connect your Ten99 data to plan for sick days, get AI alerts on late payments, and automate your savings goals.
                            </p>
                            <button disabled className="w-full bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 font-semibold py-2 px-4 rounded-lg cursor-not-allowed">
-                                Learn More
+                               Learn More
                            </button>
                         </div>
                     </div>
@@ -351,7 +376,7 @@ export default function MyMoneyPageContent({ userId }: MyMoneyPageContentProps) 
                             title="Weekly Summaries"
                             description="View income, expenses, and hours on a week-by-week basis."
                             icon={CalendarClock}
-                            onClick={()=>{alert("Coming Soon!")}}
+                            onClick={()=>{showStatusMessage("info", "This feature is coming soon!")}}
                         />
                         <ReportButton
                             title="Financial Trends"
@@ -363,19 +388,19 @@ export default function MyMoneyPageContent({ userId }: MyMoneyPageContentProps) 
                             title="Job Completion Stats"
                             description="Analyze your job volume, completion rates, and client breakdown."
                             icon={PieChart}
-                            onClick={()=>{alert("Coming Soon!")}}
+                            onClick={()=>{showStatusMessage("info", "This feature is coming soon!")}}
                         />
                         <ReportButton
                             title="Simple Year-End Totals"
                             description="A clean summary of total income and categorized expenses."
                             icon={FileText}
-                            onClick={()=>{alert("Coming Soon!")}}
+                            onClick={()=>{showStatusMessage("info", "This feature is coming soon!")}}
                         />
                         <ReportButton
                             title="Comprehensive Tax Package"
                             description="Generate and download a detailed report for your tax preparer."
                             icon={FileDown}
-                            onClick={()=>{alert("Coming Soon!")}}
+                            onClick={()=>{showStatusMessage("info", "This feature is coming soon!")}}
                         />
                     </div>
                 </div>

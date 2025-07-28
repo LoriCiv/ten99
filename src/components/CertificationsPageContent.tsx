@@ -1,14 +1,16 @@
+// src/components/CertificationsPageContent.tsx
+
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
 import type { Certification, CEU } from '@/types/app-interfaces';
-import { PlusCircle, Edit, Trash2, Award, BookOpen, Library, Users } from 'lucide-react';
-import { addCertification, updateCertification, deleteCertification, addCEU, updateCEU, deleteCEU } from '@/utils/firestoreService';
+import { PlusCircle, Edit, Trash2, Award, BookOpen, Library, Users, Loader2, ThumbsUp, Info, X } from 'lucide-react';
+import { addCertification, updateCertification, deleteCertification, addCEU, updateCEU, deleteCEU, getCertifications, getAllCEUs } from '@/utils/firestoreService';
 import CertificationForm from './CertificationForm';
 import CEUForm from './CEUForm';
 import CEUDetailModal from './CEUDetailModal';
 import Modal from './Modal';
+import { useFirebase } from './FirebaseProvider'; // ✅ 1. Import our hook
 
 const getIconForType = (type: 'certification' | 'license' | 'membership') => {
     switch (type) {
@@ -18,16 +20,27 @@ const getIconForType = (type: 'certification' | 'license' | 'membership') => {
     }
 };
 
-interface CertificationsPageContentProps {
-    initialCertifications: Certification[];
-    initialCeus: CEU[];
-    userId: string;
-}
+// ✅ New component for confirmation dialogs
+const ConfirmationModal = ({ title, message, onConfirm, onCancel }: { title: string, message: string, onConfirm: () => void, onCancel: () => void }) => (
+    <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4">
+        <div className="bg-card rounded-lg shadow-xl w-full max-w-md border p-6 text-center">
+            <h3 className="text-lg font-bold text-foreground">{title}</h3>
+            <p className="text-muted-foreground my-4">{message}</p>
+            <div className="flex justify-center gap-4">
+                <button onClick={onCancel} className="bg-muted text-muted-foreground font-semibold py-2 px-4 rounded-lg hover:bg-muted/80">Cancel</button>
+                <button onClick={onConfirm} className="bg-destructive text-destructive-foreground font-semibold py-2 px-4 rounded-lg hover:bg-destructive/90">Confirm</button>
+            </div>
+        </div>
+    </div>
+);
 
-export default function CertificationsPageContent({ initialCertifications, initialCeus, userId }: CertificationsPageContentProps) {
-    const router = useRouter();
-    const [certifications, setCertifications] = useState<Certification[]>(initialCertifications);
-    const [ceus, setCeus] = useState<CEU[]>(initialCeus);
+
+export default function CertificationsPageContent({ userId }: { userId: string }) {
+    const { isFirebaseAuthenticated } = useFirebase(); // ✅ 2. Get the "Green Light"
+    const [certifications, setCertifications] = useState<Certification[]>([]);
+    const [ceus, setCeus] = useState<CEU[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    
     const [activeTab, setActiveTab] = useState<'certs' | 'ceus'>('certs');
     const [isCertModalOpen, setIsCertModalOpen] = useState(false);
     const [editingCert, setEditingCert] = useState<Partial<Certification> | null>(null);
@@ -38,11 +51,32 @@ export default function CertificationsPageContent({ initialCertifications, initi
     const [ceuFilter, setCeuFilter] = useState<string>('all');
     const [isCeuDetailModalOpen, setIsCeuDetailModalOpen] = useState(false);
     const [selectedCeuForDetail, setSelectedCeuForDetail] = useState<CEU | null>(null);
+    
+    // ✅ State for our new status messages and confirmation dialogs
+    const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+    const [confirmation, setConfirmation] = useState<{ title: string, message: string, onConfirm: () => void } | null>(null);
 
+    // ✅ 3. This useEffect now waits for the Green Light before fetching data
     useEffect(() => { 
-        setCertifications(initialCertifications); 
-        setCeus(initialCeus);
-    }, [initialCertifications, initialCeus]);
+        if (isFirebaseAuthenticated) {
+            console.log("✅ Certifications page is authenticated, fetching data...");
+            setIsLoading(true);
+            const unsubCerts = getCertifications(userId, setCertifications);
+            const unsubCeus = getAllCEUs(userId, (allCeus) => {
+                setCeus(allCeus);
+                setIsLoading(false); // Stop loading once all data is fetched
+            });
+            return () => {
+                unsubCerts();
+                unsubCeus();
+            };
+        }
+    }, [isFirebaseAuthenticated, userId]);
+
+    const showStatusMessage = (type: 'success' | 'error', text: string) => {
+        setStatusMessage({ type, text });
+        setTimeout(() => setStatusMessage(null), 4000);
+    };
 
     const certificationsWithCeus = useMemo(() => {
         return certifications.map(cert => {
@@ -65,30 +99,41 @@ export default function CertificationsPageContent({ initialCertifications, initi
 
     const handleOpenCertModal = (cert: Partial<Certification> | null) => { setEditingCert(cert); setIsCertModalOpen(true); };
     const handleCloseCertModal = () => { setIsCertModalOpen(false); setEditingCert(null); };
+    
     const handleSaveCertification = async (data: Partial<Certification>) => {
         setIsSubmitting(true);
         try {
-            if (editingCert?.id) { await updateCertification(userId, editingCert.id, data); alert("Credential updated!"); }
-            else { await addCertification(userId, data); alert("Credential added!"); }
+            if (editingCert?.id) { 
+                await updateCertification(userId, editingCert.id, data); 
+                showStatusMessage("success", "Credential updated!"); 
+            } else { 
+                await addCertification(userId, data); 
+                showStatusMessage("success", "Credential added!"); 
+            }
             handleCloseCertModal();
-            router.refresh();
         } catch (error) {
             console.error("Error saving credential:", error);
-            alert("Failed to save credential.");
+            showStatusMessage("error", "Failed to save credential.");
         } finally { setIsSubmitting(false); }
     };
-    const handleDeleteCertification = async (id: string) => {
-        if (window.confirm("Delete this credential and all its CEUs?")) {
-            try {
-                await deleteCertification(userId, id);
-                alert("Credential deleted.");
-                router.refresh();
-            } catch (error) {
-                console.error("Error deleting credential:", error);
-                alert("Failed to delete credential.");
+
+    const handleDeleteCertification = (id: string) => {
+        setConfirmation({
+            title: "Delete Credential?",
+            message: "This will also delete all associated CEUs. This action cannot be undone.",
+            onConfirm: async () => {
+                try {
+                    await deleteCertification(userId, id);
+                    showStatusMessage("success", "Credential deleted.");
+                } catch (error) {
+                    console.error("Error deleting credential:", error);
+                    showStatusMessage("error", "Failed to delete credential.");
+                }
+                setConfirmation(null);
             }
-        }
+        });
     };
+
     const handleOpenCeuModal = (certId: string, ceu: Partial<CEU> | null) => {
         setSelectedCertForCeu(certId);
         setEditingCeu(ceu);
@@ -99,35 +144,40 @@ export default function CertificationsPageContent({ initialCertifications, initi
         setSelectedCertForCeu(null);
         setEditingCeu(null);
     };
+
     const handleSaveCeu = async (data: Partial<CEU>) => {
         if (!selectedCertForCeu) return;
         setIsSubmitting(true);
         try {
             if (editingCeu?.id) {
                 await updateCEU(userId, { ...data, id: editingCeu.id });
-                alert("CEU updated!");
+                showStatusMessage("success", "CEU updated!");
             } else {
                 await addCEU(userId, selectedCertForCeu, data);
-                alert("CEU logged!");
+                showStatusMessage("success", "CEU logged!");
             }
             handleCloseCeuModal();
-            router.refresh();
         } catch (error) {
             console.error("Error saving CEU:", error);
-            alert("Failed to save CEU.");
+            showStatusMessage("error", "Failed to save CEU.");
         } finally { setIsSubmitting(false); }
     };
-    const handleDeleteCeu = async (ceuId: string) => {
-        if (window.confirm("Delete this CEU entry?")) {
-            try {
-                await deleteCEU(userId, ceuId);
-                alert("CEU deleted.");
-                router.refresh();
-            } catch (error) {
-                console.error("Error deleting CEU:", error);
-                alert("Failed to delete CEU.");
+
+    const handleDeleteCeu = (ceuId: string) => {
+        setConfirmation({
+            title: "Delete CEU Entry?",
+            message: "Are you sure you want to delete this CEU log?",
+            onConfirm: async () => {
+                try {
+                    await deleteCEU(userId, ceuId);
+                    showStatusMessage("success", "CEU deleted.");
+                } catch (error) {
+                    console.error("Error deleting CEU:", error);
+                    showStatusMessage("error", "Failed to delete CEU.");
+                }
+                setConfirmation(null);
             }
-        }
+        });
     };
 
     const handleOpenCeuDetailModal = (ceu: CEU) => {
@@ -145,8 +195,30 @@ export default function CertificationsPageContent({ initialCertifications, initi
     if (certForCeu?.specialtyCeusCategory) { availableCategories.push(certForCeu.specialtyCeusCategory); }
     if (certForCeu?.specialtyCeusCategory2) { availableCategories.push(certForCeu.specialtyCeusCategory2); }
 
+    // ✅ 4. Show a loading indicator until Firebase is ready AND data is loaded
+    if (!isFirebaseAuthenticated || isLoading) {
+        return (
+            <div className="flex justify-center items-center h-full p-8">
+               <div className="text-center">
+                   <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+                   <p className="text-lg font-semibold mt-4">Loading Credentials...</p>
+                   <p className="text-muted-foreground text-sm mt-1">Authenticating and fetching your data...</p>
+               </div>
+           </div>
+        );
+    }
+
     return (
         <>
+            {confirmation && <ConfirmationModal {...confirmation} onCancel={() => setConfirmation(null)} />}
+            {statusMessage && (
+                <div className={`fixed bottom-5 right-5 z-50 p-4 rounded-lg shadow-lg flex items-center gap-3 ${statusMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                    {statusMessage.type === 'success' ? <ThumbsUp size={20} /> : <Info size={20} />}
+                    <span>{statusMessage.text}</span>
+                    <button onClick={() => setStatusMessage(null)} className="p-1 rounded-full hover:bg-black/10"><X size={16}/></button>
+                </div>
+            )}
+
             <div className="p-4 sm:p-6 lg:p-8">
                 <header className="mb-6">
                     <div>

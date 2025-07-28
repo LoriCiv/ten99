@@ -1,56 +1,107 @@
-// src/components/CEUDetailModal.tsx
+// src/components/CertificationForm.tsx
 "use client";
 
-import type { CEU } from '@/types/app-interfaces';
-import { X, Calendar, BookOpen, Building, Tag, DollarSign, Link as LinkIcon } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import type { Certification } from '@/types/app-interfaces';
+import { Save, Loader2, Info } from 'lucide-react'; // ✅ 1. Import an icon for the error message
 
-interface CEUDetailModalProps {
-    ceu: CEU;
-    certificationName: string;
-    onClose: () => void;
+interface CertificationFormProps {
+    onSave: (data: Partial<Certification>) => Promise<void>;
+    onCancel: () => void;
+    initialData?: Partial<Certification>;
+    isSubmitting: boolean;
 }
 
-const DetailItem = ({ icon: Icon, label, value, isLink = false }: { icon: React.ElementType, label: string, value?: string | number | null, isLink?: boolean }) => {
-    if (!value) return null;
-    return (
-        <div className="flex items-start text-sm">
-            <Icon size={16} className="mr-3 mt-1 text-primary shrink-0"/>
-            <div>
-                <p className="font-semibold text-muted-foreground">{label}</p>
-                {isLink && typeof value === 'string' ? (
-                    <a href={value} target="_blank" rel="noopener noreferrer" className="font-medium text-blue-600 hover:underline break-all">
-                        {value}
-                    </a>
-                ) : (
-                    <p className="font-medium text-foreground">{value}</p>
-                )}
-            </div>
-        </div>
-    );
-};
+export default function CertificationForm({ onSave, onCancel, initialData, isSubmitting }: CertificationFormProps) {
+    const [formData, setFormData] = useState<Partial<Certification>>({
+        name: '',
+        issuingOrganization: '',
+        type: 'certification',
+        issueDate: '',
+        expirationDate: '',
+        credentialId: '',
+        credentialUrl: '',
+        totalCeusRequired: 0,
+        renewalCost: 0,
+        specialtyCeusCategory: '',
+        specialtyCeusRequired: 0,
+        specialtyCeusCategory2: '',
+        specialtyCeusRequired2: 0,
+        notes: '',
+        ...initialData
+    });
+    
+    const isEditMode = !!initialData?.id;
+    const [errorMessage, setErrorMessage] = useState<string | null>(null); // ✅ 2. Add state for the error message
 
-export default function CEUDetailModal({ ceu, certificationName, onClose }: CEUDetailModalProps) {
+    useEffect(() => {
+        setFormData({ type: 'certification', ...initialData });
+    }, [initialData]);
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+        const { name, value, type } = e.target;
+        const finalValue = type === 'number' ? (value === '' ? undefined : parseFloat(value)) : value;
+        setFormData(prev => ({ ...prev, [name]: finalValue }));
+    };
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        setErrorMessage(null); // Clear previous errors
+
+        // ✅ 3. Replace alert() with a state-based error message
+        if (!formData.name || !formData.issuingOrganization) {
+            setErrorMessage("Name and Issuing Organization are required.");
+            return;
+        }
+        onSave(formData);
+    };
+
     return (
-        <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4">
-            <div className="bg-card rounded-lg shadow-xl w-full max-w-lg border relative">
-                <button onClick={onClose} className="absolute top-3 right-3 p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full">
-                    <X size={20} />
+        <form onSubmit={handleSubmit} className="space-y-6">
+            <h2 className="text-2xl font-bold text-foreground">{isEditMode ? 'Edit Credential' : 'New Credential'}</h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div><label className="block text-sm font-medium text-muted-foreground">Type*</label><select name="type" value={formData.type || 'certification'} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" required><option value="certification">Certification</option><option value="license">License</option><option value="membership">Membership</option></select></div>
+                <div><label className="block text-sm font-medium text-muted-foreground">Name*</label><input name="name" value={formData.name || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" required /></div>
+                <div className="md:col-span-2"><label className="block text-sm font-medium text-muted-foreground">Issuing Organization / Body*</label><input name="issuingOrganization" value={formData.issuingOrganization || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" required /></div>
+                <div><label className="block text-sm font-medium text-muted-foreground">Issue Date</label><input type="date" name="issueDate" value={formData.issueDate || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" /></div>
+                <div><label className="block text-sm font-medium text-muted-foreground">Expiration / Renewal Date</label><input type="date" name="expirationDate" value={formData.expirationDate || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" /></div>
+                <div><label className="block text-sm font-medium text-muted-foreground">Credential ID / Number</label><input name="credentialId" value={formData.credentialId || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" /></div>
+                <div><label className="block text-sm font-medium text-muted-foreground">Credential URL (e.g., Credly)</label><input type="url" name="credentialUrl" value={formData.credentialUrl || ''} onChange={handleInputChange} placeholder="https://..." className="w-full mt-1 p-2 bg-background border rounded-md" /></div>
+                <div><label className="block text-sm font-medium text-muted-foreground">Renewal Cost ($)</label><input type="number" step="0.01" name="renewalCost" value={formData.renewalCost ?? ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" /></div>
+            </div>
+
+            {formData.type === 'certification' && (
+                <div className="space-y-4 pt-4 border-t">
+                    <h3 className="text-lg font-semibold">CEU Requirements</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div><label className="block text-sm font-medium text-muted-foreground">Total CEUs Required</label><input type="number" step="0.1" name="totalCeusRequired" value={formData.totalCeusRequired ?? ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" /></div>
+                        <div></div> {/* Spacer */}
+                        <div><label className="block text-sm font-medium text-muted-foreground">Specialty Category 1 Name</label><input name="specialtyCeusCategory" value={formData.specialtyCeusCategory || ''} onChange={handleInputChange} placeholder="e.g., Professional Studies" className="w-full mt-1 p-2 bg-background border rounded-md" /></div>
+                        <div><label className="block text-sm font-medium text-muted-foreground">CEUs Required for Cat. 1</label><input type="number" step="0.1" name="specialtyCeusRequired" value={formData.specialtyCeusRequired ?? ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" /></div>
+                        <div><label className="block text-sm font-medium text-muted-foreground">Specialty Category 2 Name</label><input name="specialtyCeusCategory2" value={formData.specialtyCeusCategory2 || ''} onChange={handleInputChange} placeholder="e.g., PPO" className="w-full mt-1 p-2 bg-background border rounded-md" /></div>
+                        <div><label className="block text-sm font-medium text-muted-foreground">CEUs Required for Cat. 2</label><input type="number" step="0.1" name="specialtyCeusRequired2" value={formData.specialtyCeusRequired2 ?? ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" /></div>
+                    </div>
+                </div>
+            )}
+
+            <div className="md:col-span-2 pt-4 border-t"><label className="block text-sm font-medium text-muted-foreground">Notes</label><textarea name="notes" value={formData.notes || ''} onChange={handleInputChange} rows={3} className="w-full mt-1 p-2 bg-background border rounded-md"></textarea></div>
+            
+            {/* ✅ 4. Display the error message here if it exists */}
+            {errorMessage && (
+                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md flex items-center gap-2">
+                    <Info size={16} />
+                    <span className="text-sm">{errorMessage}</span>
+                </div>
+            )}
+
+            <div className="flex justify-end gap-4 pt-4 border-t">
+                <button type="button" onClick={onCancel} className="bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-secondary/80">Cancel</button>
+                <button type="submit" disabled={isSubmitting} className="bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg flex items-center gap-2 disabled:opacity-50 w-32 justify-center">
+                    {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                    {isSubmitting ? 'Saving...' : 'Save'}
                 </button>
-                <div className="p-6">
-                    <h2 className="text-2xl font-bold text-foreground">{ceu.activityName}</h2>
-                    <p className="text-muted-foreground">Continuing Education Unit Details</p>
-                </div>
-
-                <div className="px-6 pb-6 space-y-4 border-t pt-4">
-                    <DetailItem icon={BookOpen} label="Certification" value={certificationName} />
-                    <DetailItem icon={Calendar} label="Date Completed" value={ceu.dateCompleted} />
-                    <DetailItem icon={Tag} label="CEU Hours" value={`${ceu.ceuHours} hours`} />
-                    <DetailItem icon={Tag} label="Category" value={ceu.category} />
-                    <DetailItem icon={Building} label="Provider" value={ceu.provider} />
-                    <DetailItem icon={DollarSign} label="Cost" value={ceu.cost ? `$${ceu.cost.toFixed(2)}` : null} />
-                    <DetailItem icon={LinkIcon} label="Website" value={ceu.website} isLink={true} />
-                </div>
             </div>
-        </div>
+        </form>
     );
 }

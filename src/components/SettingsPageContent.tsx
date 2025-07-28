@@ -2,15 +2,14 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useCallback } from 'react';
 import type { Template, UserProfile, InvoiceLineItemTemplate, Reminder } from '@/types/app-interfaces';
-import { 
-    addTemplate, 
-    updateTemplate, 
-    deleteTemplate, 
-    updateUserProfile, 
-    addReminder, 
+import {
+    addTemplate,
+    updateTemplate,
+    deleteTemplate,
+    updateUserProfile,
+    addReminder,
     deleteReminder,
     getTemplates,
     getUserProfile,
@@ -22,9 +21,10 @@ import { ThemeToggle } from './ThemeToggle';
 import {
     PlusCircle, Edit, Trash2, Save, Loader2, ArrowUp, ArrowDown, Info, ThumbsUp,
     Calendar, Mail, Briefcase, FileText, Users, Receipt, DollarSign, Award, LifeBuoy,
-    Settings as SettingsIcon, BellRing
+    Settings as SettingsIcon, BellRing, X
 } from 'lucide-react';
 import { Switch } from "@/components/ui/switch";
+import { useFirebase } from './FirebaseProvider'; // ✅ 1. Import our hook
 
 const defaultTermsText = `This contract incorporates pre-negotiated terms...`;
 const defaultPaymentText = `Payment can be made via:\n- Venmo: @YourUsername...`;
@@ -90,12 +90,27 @@ const HowToTab = () => {
     );
 };
 
+// ✅ New component for confirmation dialogs
+const ConfirmationModal = ({ title, message, onConfirm, onCancel }: { title: string, message: string, onConfirm: () => void, onCancel: () => void }) => (
+    <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4">
+        <div className="bg-card rounded-lg shadow-xl w-full max-w-md border p-6 text-center">
+            <h3 className="text-lg font-bold text-foreground">{title}</h3>
+            <p className="text-muted-foreground my-4">{message}</p>
+            <div className="flex justify-center gap-4">
+                <button onClick={onCancel} className="bg-muted text-muted-foreground font-semibold py-2 px-4 rounded-lg hover:bg-muted/80">Cancel</button>
+                <button onClick={onConfirm} className="bg-destructive text-destructive-foreground font-semibold py-2 px-4 rounded-lg hover:bg-destructive/90">Confirm</button>
+            </div>
+        </div>
+    </div>
+);
+
 interface SettingsPageContentProps {
     userId: string;
 }
 
 export default function SettingsPageContent({ userId }: SettingsPageContentProps) {
-    const router = useRouter();
+    const { isFirebaseAuthenticated } = useFirebase(); // ✅ 2. Get the "Green Light"
+
     const [templates, setTemplates] = useState<Template[]>([]);
     const [profile, setProfile] = useState<Partial<UserProfile>>({});
     const [reminders, setReminders] = useState<Reminder[]>([]);
@@ -106,58 +121,70 @@ export default function SettingsPageContent({ userId }: SettingsPageContentProps
     const [editingTemplate, setEditingTemplate] = useState<Partial<Template> | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [newReminder, setNewReminder] = useState<Partial<Reminder>>({ type: 'one-time', text: '' });
+    
+    // ✅ State for our new status messages and confirmation dialogs
+    const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+    const [confirmation, setConfirmation] = useState<{ title: string, message: string, onConfirm: () => void } | null>(null);
 
+    // ✅ 3. This useEffect now waits for the Green Light before fetching any data
     useEffect(() => {
-        if (!userId) return;
+        if (isFirebaseAuthenticated) {
+            console.log("✅ Settings page is authenticated, fetching data...");
+            setIsLoading(true);
 
-        setIsLoading(true);
+            const unsubProfile = getUserProfile(userId, (profileData) => {
+                if (profileData) {
+                    setProfile({
+                        ...profileData,
+                        expenseCategories: profileData.expenseCategories || DEFAULT_EXPENSE_CATEGORIES,
+                        defaultInvoiceNotes: profileData.defaultInvoiceNotes || defaultTermsText,
+                        defaultPaymentDetails: profileData.defaultPaymentDetails || defaultPaymentText,
+                        invoiceLineItems: profileData.invoiceLineItems || [],
+                    });
+                }
+                setIsLoading(false);
+            });
 
-        const unsubProfile = getUserProfile(userId, (profileData) => {
-            if (profileData) {
-                setProfile({
-                    ...profileData,
-                    expenseCategories: profileData.expenseCategories || DEFAULT_EXPENSE_CATEGORIES,
-                    defaultInvoiceNotes: profileData.defaultInvoiceNotes || defaultTermsText,
-                    defaultPaymentDetails: profileData.defaultPaymentDetails || defaultPaymentText,
-                    invoiceLineItems: profileData.invoiceLineItems || [],
-                });
-            }
-            setIsLoading(false);
-        });
-
-        const unsubTemplates = getTemplates(userId, (templateData) => {
-            setTemplates(templateData);
-            if (templateData.length === 0) {
-                const setupNewUser = async () => {
-                    try {
-                        for (const template of defaultTemplates) {
-                            await addTemplate(userId, template);
+            const unsubTemplates = getTemplates(userId, (templateData) => {
+                setTemplates(templateData);
+                if (templateData.length === 0) {
+                    const setupNewUser = async () => {
+                        try {
+                            for (const template of defaultTemplates) {
+                                await addTemplate(userId, template);
+                            }
+                        } catch (error) {
+                            console.error("Failed to create default templates:", error);
                         }
-                    } catch (error) {
-                        console.error("Failed to create default templates:", error);
-                    }
-                };
-                setupNewUser();
-            }
-        });
+                    };
+                    setupNewUser();
+                }
+            });
 
-        const unsubReminders = getReminders(userId, setReminders);
+            const unsubReminders = getReminders(userId, setReminders);
 
-        return () => {
-            unsubProfile();
-            unsubTemplates();
-            unsubReminders();
-        };
-    }, [userId]);
+            return () => {
+                unsubProfile();
+                unsubTemplates();
+                unsubReminders();
+            };
+        }
+    }, [isFirebaseAuthenticated, userId]);
+    
+    // Function to show a status message and clear it after a few seconds
+    const showStatusMessage = (type: 'success' | 'error', text: string) => {
+        setStatusMessage({ type, text });
+        setTimeout(() => setStatusMessage(null), 4000);
+    };
 
     const handleSaveSettings = async (dataToSave: Partial<UserProfile>) => {
         setIsSubmitting(true);
         try {
             await updateUserProfile(userId, dataToSave);
-            alert("Settings saved successfully!");
+            showStatusMessage('success', 'Settings saved successfully!');
         } catch (error) {
             console.error("Error saving settings:", error);
-            alert("Failed to save settings.");
+            showStatusMessage('error', 'Failed to save settings.');
         } finally {
             setIsSubmitting(false);
         }
@@ -171,19 +198,29 @@ export default function SettingsPageContent({ userId }: SettingsPageContentProps
         try {
             if (editingTemplate?.id) { await updateTemplate(userId, editingTemplate.id, data); }
             else { await addTemplate(userId, data); }
-            alert("Template saved!");
+            showStatusMessage('success', 'Template saved!');
             handleCloseTemplateModal();
-        } catch (error) { console.error("Error saving template:", error); alert("Failed to save template.");
+        } catch (error) { 
+            console.error("Error saving template:", error); 
+            showStatusMessage('error', 'Failed to save template.');
         } finally { setIsSubmitting(false); }
     };
 
-    const handleDeleteTemplate = async (id: string) => {
-        if (window.confirm("Are you sure?")) {
-            try {
-                await deleteTemplate(userId, id);
-                alert("Template deleted.");
-            } catch (error) { console.error("Error deleting template:", error); alert("Failed to delete template."); }
-        }
+    const handleDeleteTemplate = (id: string) => {
+        setConfirmation({
+            title: "Delete Template?",
+            message: "Are you sure you want to delete this template? This action cannot be undone.",
+            onConfirm: async () => {
+                try {
+                    await deleteTemplate(userId, id);
+                    showStatusMessage('success', 'Template deleted.');
+                } catch (error) { 
+                    console.error("Error deleting template:", error); 
+                    showStatusMessage('error', 'Failed to delete template.');
+                }
+                setConfirmation(null);
+            }
+        });
     };
     
     const handleAddCategory = () => {
@@ -196,7 +233,10 @@ export default function SettingsPageContent({ userId }: SettingsPageContentProps
     };
 
     const handleDeleteCategory = (categoryToDelete: string) => {
-        if (DEFAULT_EXPENSE_CATEGORIES.includes(categoryToDelete)) { return alert("Default categories cannot be deleted."); }
+        if (DEFAULT_EXPENSE_CATEGORIES.includes(categoryToDelete)) { 
+            showStatusMessage('error', 'Default categories cannot be deleted.');
+            return;
+        }
         setProfile(p => ({ ...p, expenseCategories: (p.expenseCategories || []).filter(cat => cat !== categoryToDelete) }));
     };
 
@@ -233,38 +273,66 @@ export default function SettingsPageContent({ userId }: SettingsPageContentProps
 
     const handleSaveReminder = async () => {
         if (!newReminder.text) {
-            alert("Please enter the reminder text.");
+            showStatusMessage('error', 'Please enter the reminder text.');
             return;
         }
         setIsSubmitting(true);
         try {
             await addReminder(userId, newReminder);
             setNewReminder({ type: 'one-time', text: '' });
+            showStatusMessage('success', 'Reminder saved.');
         } catch (error) {
             console.error("Error saving reminder:", error);
-            alert("Failed to save reminder.");
+            showStatusMessage('error', 'Failed to save reminder.');
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    const handleDeleteReminder = async (id: string) => {
-        if (window.confirm("Are you sure you want to delete this reminder?")) {
-            try {
-                await deleteReminder(userId, id);
-            } catch (error) {
-                console.error("Error deleting reminder:", error);
-                alert("Failed to delete reminder.");
+    const handleDeleteReminder = (id: string) => {
+        setConfirmation({
+            title: "Delete Reminder?",
+            message: "Are you sure you want to delete this reminder?",
+            onConfirm: async () => {
+                try {
+                    await deleteReminder(userId, id);
+                    showStatusMessage('success', 'Reminder deleted.');
+                } catch (error) {
+                    console.error("Error deleting reminder:", error);
+                    showStatusMessage('error', 'Failed to delete reminder.');
+                }
+                setConfirmation(null);
             }
-        }
+        });
     };
 
-    if (isLoading) {
-        return <div className="p-8 text-center text-muted-foreground">Loading Settings...</div>;
+    // ✅ 4. This loading check now waits for the Green Light AND the initial data fetch.
+    if (!isFirebaseAuthenticated || isLoading) {
+        return (
+            <div className="flex justify-center items-center h-full p-8">
+               <div className="text-center">
+                   <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+                   <p className="text-lg font-semibold mt-4">Loading Settings...</p>
+                   <p className="text-muted-foreground text-sm mt-1">Authenticating and fetching your profile...</p>
+               </div>
+           </div>
+        );
     }
 
     return (
         <>
+            {/* ✅ Render confirmation modal when needed */}
+            {confirmation && <ConfirmationModal {...confirmation} onCancel={() => setConfirmation(null)} />}
+            
+            {/* ✅ Render status message when needed */}
+            {statusMessage && (
+                <div className={`fixed bottom-5 right-5 z-50 p-4 rounded-lg shadow-lg flex items-center gap-3 ${statusMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                    {statusMessage.type === 'success' ? <ThumbsUp size={20} /> : <Info size={20} />}
+                    <span>{statusMessage.text}</span>
+                    <button onClick={() => setStatusMessage(null)} className="p-1 rounded-full hover:bg-black/10"><X size={16}/></button>
+                </div>
+            )}
+
             <div className="p-4 sm:p-6 lg:p-8">
                 <header className="mb-6"><h1 className="text-3xl font-bold text-foreground">Settings</h1></header>
 

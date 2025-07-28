@@ -1,3 +1,5 @@
+// src/components/JobFileForm.tsx
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -12,9 +14,19 @@ interface JobFileFormProps {
     initialData?: Partial<JobFile>;
     isSubmitting: boolean;
     userId: string; 
+    statusMessage: string | null; // ✅ 1. Add the statusMessage prop
 }
 
-export default function JobFileForm({ onSave, onCancel, clients, appointments, initialData, isSubmitting, userId }: JobFileFormProps) {
+export default function JobFileForm({ 
+    onSave, 
+    onCancel, 
+    clients, 
+    appointments, 
+    initialData, 
+    isSubmitting, 
+    userId, 
+    statusMessage // ✅ 2. Receive the statusMessage prop
+}: JobFileFormProps) {
     const isEditMode = !!initialData?.id;
     const [formState, setFormState] = useState<Partial<JobFile>>(initialData || {});
     const [tagInput, setTagInput] = useState('');
@@ -56,7 +68,8 @@ export default function JobFileForm({ onSave, onCancel, clients, appointments, i
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formState.jobTitle) {
-            alert("Job Title is required.");
+            // The parent component will now handle displaying this error
+            // alert("Job Title is required.");
             return;
         }
         await onSave({ ...formState, tags }, selectedFile);
@@ -113,6 +126,9 @@ export default function JobFileForm({ onSave, onCancel, clients, appointments, i
                         )}
                     </div>
                 </div>
+
+                {/* ✅ 3. Add a place to display status messages */}
+                {statusMessage && <p className="text-red-500 text-sm text-center">{statusMessage}</p>}
 
                 <div className="flex justify-end items-center mt-4 pt-4 border-t border-border">
                   <div className="flex space-x-3">

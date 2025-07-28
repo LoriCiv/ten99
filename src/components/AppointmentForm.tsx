@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import type { Appointment, Client, PersonalNetworkContact, JobFile } from '@/types/app-interfaces';
+import { Info } from 'lucide-react';
 
 interface AppointmentFormProps {
     onCancel: () => void;
@@ -30,6 +31,7 @@ export default function AppointmentForm({
     });
     const [locationType, setLocationType] = useState<'physical' | 'virtual' | ''>(initialData?.locationType || '');
     const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     useEffect(() => {
         const startingData = { eventType: 'job' as const, status: 'scheduled' as const, ...initialData };
@@ -40,7 +42,6 @@ export default function AppointmentForm({
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
         
-        // ✅ 1. Updated the type definition to include 'education'
         if (name === 'eventType') {
             setFormState(prev => ({ ...prev, eventType: value as 'job' | 'personal' | 'billing' | 'education' }));
         } else if (name === 'status') {
@@ -52,12 +53,14 @@ export default function AppointmentForm({
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setErrorMessage(null);
+
         if (!formState.subject || !formState.date || !formState.time) {
-            alert("Subject, Date, and Time are required fields.");
+            setErrorMessage("Subject, Date, and Time are required fields.");
             return;
         }
         if (formState.recurrence && !isEditMode && !recurrenceEndDate) {
-            alert("Please select an end date for the recurring event.");
+            setErrorMessage("Please select an end date for the recurring event.");
             return;
         }
         
@@ -80,7 +83,6 @@ export default function AppointmentForm({
                         <option value="job">Job / Appointment</option>
                         <option value="personal">Personal Event</option>
                         <option value="billing">Billing Reminder</option>
-                        {/* ✅ 2. Added the new "Education" option */}
                         <option value="education">Education / Training</option>
                     </select>
                 </div>
@@ -137,7 +139,6 @@ export default function AppointmentForm({
                     )}
                 </div>
 
-                {/* ✅ 3. Updated this logic to include 'education' so it behaves like a personal event */}
                 {(formState.eventType === 'job' || formState.eventType === 'personal' || formState.eventType === 'education') && (
                     <>
                         <div className="md:col-span-2">
@@ -188,6 +189,13 @@ export default function AppointmentForm({
                     <textarea name="notes" value={formState.notes || ''} onChange={handleInputChange} placeholder="Add any specific details..." rows={4} className="w-full mt-1 p-2 border rounded-md bg-background"></textarea>
                 </div>
                 
+                {errorMessage && (
+                    <div className="md:col-span-2 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md flex items-center gap-2">
+                        <Info size={16} />
+                        <span className="text-sm">{errorMessage}</span>
+                    </div>
+                )}
+
                 <div className="md:col-span-2 flex justify-end items-center mt-4 pt-4 border-t border-border">
                     <div className="flex space-x-3">
                         <button type="button" onClick={onCancel} className="bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-secondary/80">Cancel</button>

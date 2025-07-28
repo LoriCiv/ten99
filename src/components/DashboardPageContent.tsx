@@ -1,16 +1,17 @@
+// src/components/DashboardPageContent.tsx
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
 import { getAppointments, getMessagesForUser, getJobPostings, getPriorityJobFiles, getUserProfile, getClients, addExpense, getReminders, deleteReminder } from '@/utils/firestoreService';
 import type { Appointment, JobFile, UserProfile, Message, JobPosting, Client, Expense, Reminder } from '@/types/app-interfaces';
 import Link from 'next/link';
-import { Calendar, FileText, ArrowRight, Inbox, AlertCircle, X, Bell, PlusCircle, BellRing, Trash2 } from 'lucide-react';
+import { Calendar, FileText, ArrowRight, Inbox, AlertCircle, X, Bell, PlusCircle, BellRing, Trash2, Loader2 } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, isToday } from 'date-fns';
 import Modal from '@/components/Modal';
 import ExpenseForm from '@/components/ExpenseForm';
 import clsx from 'clsx';
+import { useFirebase } from './FirebaseProvider'; // ✅ 1. Import our hook
 
-// ✅ FIX: Added the missing formatTime helper function
 const formatTime = (timeString?: string) => {
     if (!timeString) return '';
     const [hours, minutes] = timeString.split(':');
@@ -66,11 +67,8 @@ const AgendaItem = ({ appointment, jobFile }: { appointment: Appointment, jobFil
     );
 };
 
-interface DashboardPageContentProps {
-  userId: string;
-}
-
-export default function DashboardPageContent({ userId }: DashboardPageContentProps) {
+export default function DashboardPageContent({ userId }: { userId: string }) {
+    const { isFirebaseAuthenticated } = useFirebase(); // ✅ 2. Get the "Green Light"
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [priorityJobFiles, setPriorityJobFiles] = useState<JobFile[]>([]);
@@ -84,41 +82,36 @@ export default function DashboardPageContent({ userId }: DashboardPageContentPro
     const [isSubmittingExpense, setIsSubmittingExpense] = useState(false);
     const [dismissedReminders, setDismissedReminders] = useState<string[]>([]);
 
+    // ✅ 3. This useEffect now waits for the Green Light before fetching data
     useEffect(() => {
-        if (!userId) return;
-        setIsLoading(true);
-        const unsubProfile = getUserProfile(userId, setUserProfile);
-        const unsubAppointments = getAppointments(userId, setAppointments);
-        const unsubJobFiles = getPriorityJobFiles(userId, setPriorityJobFiles);
-        const unsubMessages = getMessagesForUser(userId, setMessages);
-        const unsubJobPostings = getJobPostings(setJobPostings);
-        const unsubClients = getClients(userId, setClients);
-        const unsubReminders = getReminders(userId, setReminders);
-        
-        setTimeout(() => setIsLoading(false), 500);
-
-        return () => {
-            unsubProfile();
-            unsubAppointments();
-            unsubJobFiles();
-            unsubMessages();
-            unsubJobPostings();
-            unsubClients();
-            unsubReminders();
-        };
-    }, [userId]);
-
-    const upcomingAppointments = useMemo(() => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0); 
-        return appointments
-            .filter(appt => appt.status === 'scheduled' && new Date(appt.date + 'T00:00:00') >= today)
-            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    }, [appointments]);
+        if (isFirebaseAuthenticated) {
+            console.log("✅ Dashboard is authenticated, fetching all data...");
+            const unsubProfile = getUserProfile(userId, setUserProfile);
+            const unsubAppointments = getAppointments(userId, setAppointments);
+            const unsubJobFiles = getPriorityJobFiles(userId, setPriorityJobFiles);
+            const unsubMessages = getMessagesForUser(userId, setMessages);
+            const unsubJobPostings = getJobPostings(setJobPostings);
+            const unsubClients = getClients(userId, setClients);
+            const unsubReminders = getReminders(userId, (remindersData) => {
+                setReminders(remindersData);
+                setIsLoading(false); // Stop loading once all data listeners are set up
+            });
+            
+            return () => {
+                unsubProfile();
+                unsubAppointments();
+                unsubJobFiles();
+                unsubMessages();
+                unsubJobPostings();
+                unsubClients();
+                unsubReminders();
+            };
+        }
+    }, [isFirebaseAuthenticated, userId]);
 
     const weekView = useMemo(() => {
         const today = new Date();
-        const weekStart = startOfWeek(today, { weekStartsOn: 0 }); // Sunday start
+        const weekStart = startOfWeek(today, { weekStartsOn: 0 });
         const weekEnd = endOfWeek(today, { weekStartsOn: 0 });
         const days = eachDayOfInterval({ start: weekStart, end: weekEnd });
 
@@ -178,17 +171,21 @@ export default function DashboardPageContent({ userId }: DashboardPageContentPro
         );
     }, [jobPostings, userProfile]);
 
-    const nextAppointment = upcomingAppointments[0];
+    const nextAppointment = useMemo(() => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); 
+        return appointments
+            .filter(appt => appt.status === 'scheduled' && new Date(appt.date + 'T00:00:00') >= today)
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
+    }, [appointments]);
 
     const handleAddExpense = async (data: Partial<Expense>) => {
         setIsSubmittingExpense(true);
         try {
             await addExpense(userId, data);
-            alert("Expense added successfully!");
             setIsExpenseModalOpen(false);
         } catch (error) {
             console.error("Failed to add expense:", error);
-            alert("Failed to add expense.");
         } finally {
             setIsSubmittingExpense(false);
         }
@@ -203,7 +200,7 @@ export default function DashboardPageContent({ userId }: DashboardPageContentPro
         }
     };
 
-    if (isLoading) {
+    if (!isFirebaseAuthenticated || isLoading) {
         return <div className="p-8 text-center text-muted-foreground">Loading your dashboard...</div>;
     }
 
@@ -354,6 +351,8 @@ export default function DashboardPageContent({ userId }: DashboardPageContentPro
                         userId={userId} 
                         onSave={handleAddExpense} 
                         onCancel={() => setIsExpenseModalOpen(false)} 
+                        // ✅ 4. Add the missing onDelete prop with a placeholder function
+                        onDelete={() => {}}
                         clients={clients}
                         isSubmitting={isSubmittingExpense}
                         userProfile={userProfile}

@@ -1,8 +1,10 @@
+// src/components/MailboxPageContent.tsx
+
 "use client";
 
 import { useState, useEffect, useMemo, Suspense, ElementType } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { ArrowLeft, Trash2, Search, Check, X as XIcon, Send, RotateCcw, Clock, CalendarCheck, CornerDownLeft, Pencil, PackageOpen, Loader2, Inbox, SendHorizontal, CheckCircle, Hourglass, BookOpen } from 'lucide-react';
+import { ArrowLeft, Trash2, Search, Check, X as XIcon, Send, RotateCcw, Clock, CalendarCheck, CornerDownLeft, Pencil, PackageOpen, Loader2, Inbox, SendHorizontal, CheckCircle, Hourglass, BookOpen, ThumbsUp, Info } from 'lucide-react';
 import type { Message, JobPosting, Appointment, UserProfile } from '@/types/app-interfaces';
 import {
     getMessagesForUser,
@@ -27,19 +29,32 @@ import { Timestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import Modal from '@/components/Modal';
+import { useFirebase } from './FirebaseProvider'; // ✅ 1. Import our hook
 
 type MailboxFolder = 'inbox' | 'sent' | 'approved' | 'pending' | 'education';
 
-interface MailboxPageContentProps {
-    userId: string;
-}
+// ✅ New component for confirmation dialogs
+const ConfirmationModal = ({ title, message, onConfirm, onCancel }: { title: string, message: string, onConfirm: () => void, onCancel: () => void }) => (
+    <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4">
+        <div className="bg-card rounded-lg shadow-xl w-full max-w-md border p-6 text-center">
+            <h3 className="text-lg font-bold text-foreground">{title}</h3>
+            <p className="text-muted-foreground my-4">{message}</p>
+            <div className="flex justify-center gap-4">
+                <button onClick={onCancel} className="bg-muted text-muted-foreground font-semibold py-2 px-4 rounded-lg hover:bg-muted/80">Cancel</button>
+                <button onClick={onConfirm} className="bg-destructive text-destructive-foreground font-semibold py-2 px-4 rounded-lg hover:bg-destructive/90">Confirm</button>
+            </div>
+        </div>
+    </div>
+);
 
-// We wrap the main logic in an internal component to use the useSearchParams hook
-function MailboxPageInternal({ userId }: MailboxPageContentProps) {
+function MailboxPageInternal({ userId }: { userId: string }) {
+    const { isFirebaseAuthenticated } = useFirebase(); // ✅ 2. Get the "Green Light"
     const searchParams = useSearchParams();
     const [messages, setMessages] = useState<Message[]>([]);
     const [jobPostings, setJobPostings] = useState<JobPosting[]>([]);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    
     const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
     const [isComposing, setIsComposing] = useState(false);
     const [activeFolder, setActiveFolder] = useState<MailboxFolder>('inbox');
@@ -48,6 +63,9 @@ function MailboxPageInternal({ userId }: MailboxPageContentProps) {
     const [composeInitialData, setComposeInitialData] = useState<{recipient: string, subject: string, body: string}>();
     const [isEducationModalOpen, setIsEducationModalOpen] = useState(false);
     const [educationFormData, setEducationFormData] = useState({ date: '', time: '' });
+    
+    const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+    const [confirmation, setConfirmation] = useState<{ title: string, message: string, onConfirm: () => void } | null>(null);
 
     const initialRecipient = searchParams.get('to');
 
@@ -58,23 +76,33 @@ function MailboxPageInternal({ userId }: MailboxPageContentProps) {
         }
     }, [initialRecipient, isComposing]);
 
+    // ✅ 3. This useEffect now waits for the Green Light before fetching data
     useEffect(() => {
-        if (!userId) return;
+        if (isFirebaseAuthenticated) {
+            console.log("✅ Mailbox page is authenticated, fetching data...");
+            const unsubMessages = activeFolder === 'sent'
+                ? getSentMessagesForUser(userId, setMessages)
+                : getMessagesForUser(userId, setMessages);
+            
+            const unsubJobs = getJobPostings(setJobPostings);
+            const unsubProfile = getUserProfile(userId, (profile) => {
+                setUserProfile(profile);
+                setIsLoading(false); // Stop loading once all data is here
+            });
+            
+            setSelectedMessage(null);
+            return () => {
+                unsubMessages();
+                unsubJobs();
+                unsubProfile();
+            };
+        }
+    }, [isFirebaseAuthenticated, activeFolder, userId]);
 
-        const unsubMessages = activeFolder === 'sent'
-            ? getSentMessagesForUser(userId, setMessages)
-            : getMessagesForUser(userId, setMessages);
-        
-        const unsubJobs = getJobPostings(setJobPostings);
-        const unsubProfile = getUserProfile(userId, setUserProfile);
-        
-        setSelectedMessage(null);
-        return () => {
-            unsubMessages();
-            unsubJobs();
-            unsubProfile();
-        };
-    }, [activeFolder, userId]);
+    const showStatusMessage = (type: 'success' | 'error', text: string) => {
+        setStatusMessage({ type, text });
+        setTimeout(() => setStatusMessage(null), 5000);
+    };
 
     const filteredMessages = useMemo(() => {
         let items = messages;
@@ -123,43 +151,48 @@ function MailboxPageInternal({ userId }: MailboxPageContentProps) {
         setIsActionLoading(true);
         try {
             await sendAppMessage(userId, userProfile.name || "A Ten99 User", to, subject, body);
-            alert("Message sent!");
+            showStatusMessage("success", "Message sent!");
             setIsComposing(false);
             setActiveFolder('sent');
             return true;
         } catch (error) {
             console.error("Error sending message:", error);
-            alert(`Failed to send message: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            showStatusMessage("error", `Failed to send message: ${error instanceof Error ? error.message : 'Unknown error'}`);
             return false;
         } finally {
             setIsActionLoading(false);
         }
     };
     
-    const handleDelete = async () => {
+    const handleDelete = () => {
         if (!selectedMessage || !selectedMessage.id || !userId) return;
-        if (window.confirm("Are you sure you want to permanently delete this message?")) {
-            try {
-                await deleteMessage(userId, selectedMessage.id);
-                alert("Message deleted.");
-                setSelectedMessage(null);
-            } catch (error) {
-                console.error("Error deleting message:", error);
-                alert("Failed to delete message.");
+        setConfirmation({
+            title: "Delete Message?",
+            message: "Are you sure you want to permanently delete this message?",
+            onConfirm: async () => {
+                try {
+                    await deleteMessage(userId, selectedMessage.id!);
+                    showStatusMessage("success", "Message deleted.");
+                    setSelectedMessage(null);
+                } catch (error) {
+                    console.error("Error deleting message:", error);
+                    showStatusMessage("error", "Failed to delete message.");
+                }
+                setConfirmation(null);
             }
-        }
+        });
     };
 
-    const performAction = async (actionLogic: () => Promise<void>, newStatus: Message['status'], successMessage: string) => {
+    const performAction = async (actionLogic: () => Promise<void>, successMessage: string) => {
         if (!selectedMessage?.id) return;
         setIsActionLoading(true);
         try {
             await actionLogic();
-            alert(successMessage);
-            setSelectedMessage(null); // Deselect message, listener will update the list
+            showStatusMessage("success", successMessage);
+            setSelectedMessage(null);
         } catch (error) {
             console.error("Mailbox action failed:", error);
-            alert(`Action failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            showStatusMessage("error", `Action failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         } finally {
             setIsActionLoading(false);
         }
@@ -167,7 +200,6 @@ function MailboxPageInternal({ userId }: MailboxPageContentProps) {
     
     const handleMarkAsEducation = async () => {
         if (!selectedMessage || !userId) return;
-        // If the AI already parsed a date and time, we can schedule it directly
         if (selectedMessage.proposedDate && selectedMessage.proposedTime) {
              await performAction(() => createEducationAppointmentFromMessage(userId, selectedMessage, {
                 eventType: 'education',
@@ -175,9 +207,8 @@ function MailboxPageInternal({ userId }: MailboxPageContentProps) {
                 subject: selectedMessage.subject,
                 date: selectedMessage.proposedDate!,
                 time: selectedMessage.proposedTime!,
-             }), 'archived-education', 'Event marked as education and scheduled!');
+             }), 'Event marked as education and scheduled!');
         } else {
-            // Otherwise, open the modal to ask the user for the date and time
             setEducationFormData({ date: '', time: '' });
             setIsEducationModalOpen(true);
         }
@@ -185,7 +216,7 @@ function MailboxPageInternal({ userId }: MailboxPageContentProps) {
 
     const handleScheduleEducation = async () => {
         if (!selectedMessage || !educationFormData.date || !educationFormData.time || !userId) {
-            alert("Please provide both a date and a time.");
+            showStatusMessage("error", "Please provide both a date and a time.");
             return;
         }
         const appointmentData: Partial<Appointment> = {
@@ -196,7 +227,7 @@ function MailboxPageInternal({ userId }: MailboxPageContentProps) {
             status: 'scheduled',
             notes: `This event was manually scheduled from the following email:\n\n--- Original Email ---\nFrom: ${selectedMessage.senderName}\nSubject: ${selectedMessage.subject}\n\n${selectedMessage.body}`
         };
-        await performAction(() => createEducationAppointmentFromMessage(userId, selectedMessage, appointmentData), 'archived-education', 'Education event scheduled successfully!');
+        await performAction(() => createEducationAppointmentFromMessage(userId, selectedMessage, appointmentData), 'Education event scheduled successfully!');
         setIsEducationModalOpen(false);
     };
 
@@ -215,6 +246,18 @@ function MailboxPageInternal({ userId }: MailboxPageContentProps) {
             {count !== undefined && count > 0 && ( <span className="px-2 py-0.5 text-xs rounded-full bg-primary text-primary-foreground">{count}</span> )}
         </button>
     );
+
+    if (!isFirebaseAuthenticated || isLoading) {
+        return (
+            <div className="flex justify-center items-center h-full p-8">
+               <div className="text-center">
+                   <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+                   <p className="text-lg font-semibold mt-4">Loading Mailbox...</p>
+                   <p className="text-muted-foreground text-sm mt-1">Authenticating and fetching messages...</p>
+               </div>
+           </div>
+        );
+    }
 
     const messageListComponent = (
         <div className="flex flex-col h-full border-r">
@@ -277,7 +320,7 @@ function MailboxPageInternal({ userId }: MailboxPageContentProps) {
                         {activeFolder === 'inbox' && (
                            <div className="mt-8 pt-6 border-t space-y-4">
                                 { (selectedMessage.type === 'application' || selectedMessage.type === 'offer') && (
-                                   <><h3 className="font-semibold">Job Board Actions</h3><div className="flex flex-wrap gap-2">{selectedMessage.type === 'application' && selectedMessage.status === 'new' && !relatedJobPost?.isFilled && (!relatedJobPost?.pendingApplicantId ? (<><ActionButton onClick={() => performAction(() => sendJobOffer(selectedMessage), 'offer-pending', 'Offer sent!')} disabled={isActionLoading} icon={Send} text="Send Offer" variant="primary" /><ActionButton onClick={() => performAction(() => declineJobApplication(selectedMessage), 'declined', 'Application declined.')} disabled={isActionLoading} icon={XIcon} text="Decline" variant="danger"/></>) : relatedJobPost.pendingApplicantId === selectedMessage.senderId ? (<p className="text-sm text-amber-600">You have a pending offer with this applicant.</p>) : (<p className="text-sm text-muted-foreground">An offer is pending with another applicant for this job.</p>))} {selectedMessage.type === 'application' && selectedMessage.status === 'offer-pending' && (<ActionButton onClick={() => performAction(() => rescindJobOffer(selectedMessage), 'new', 'Offer rescinded.')} disabled={isActionLoading} icon={RotateCcw} text="Rescind Offer" variant="warning"/>)} {selectedMessage.type === 'offer' && selectedMessage.status === 'new' && (<><ActionButton onClick={() => performAction(() => acceptJobOffer(selectedMessage), 'approved', 'Offer Accepted!')} disabled={isActionLoading} icon={Check} text="Accept Offer" variant="success" /><ActionButton onClick={() => performAction(() => declineJobOffer(selectedMessage), 'declined', 'Offer Declined.')} disabled={isActionLoading} icon={XIcon} text="Decline Offer" variant="danger"/></>)}</div></>
+                                    <><h3 className="font-semibold">Job Board Actions</h3><div className="flex flex-wrap gap-2">{selectedMessage.type === 'application' && selectedMessage.status === 'new' && !relatedJobPost?.isFilled && (!relatedJobPost?.pendingApplicantId ? (<><ActionButton onClick={() => performAction(() => sendJobOffer(selectedMessage), 'Offer sent!')} disabled={isActionLoading} icon={Send} text="Send Offer" variant="primary" /><ActionButton onClick={() => performAction(() => declineJobApplication(selectedMessage), 'Application declined.')} disabled={isActionLoading} icon={XIcon} text="Decline" variant="danger"/></>) : relatedJobPost.pendingApplicantId === selectedMessage.senderId ? (<p className="text-sm text-amber-600">You have a pending offer with this applicant.</p>) : (<p className="text-sm text-muted-foreground">An offer is pending with another applicant for this job.</p>))} {selectedMessage.type === 'application' && selectedMessage.status === 'offer-pending' && (<ActionButton onClick={() => performAction(() => rescindJobOffer(selectedMessage), 'Offer rescinded.')} disabled={isActionLoading} icon={RotateCcw} text="Rescind Offer" variant="warning"/>)} {selectedMessage.type === 'offer' && selectedMessage.status === 'new' && (<><ActionButton onClick={() => performAction(() => acceptJobOffer(selectedMessage), 'Offer Accepted!')} disabled={isActionLoading} icon={Check} text="Accept Offer" variant="success" /><ActionButton onClick={() => performAction(() => declineJobOffer(selectedMessage), 'Offer Declined.')} disabled={isActionLoading} icon={XIcon} text="Decline Offer" variant="danger"/></>)}</div></>
                                 )}
                                 { selectedMessage.type === 'inbound-offer' && (
                                     <>
@@ -285,14 +328,14 @@ function MailboxPageInternal({ userId }: MailboxPageContentProps) {
                                         <div className="flex flex-wrap gap-2">
                                             {selectedMessage.status === 'new' && (
                                                 <>
-                                                    <ActionButton onClick={() => performAction(() => confirmInboundOffer(userId, selectedMessage), 'approved', 'Appointment Confirmed!')} disabled={isActionLoading} icon={CalendarCheck} text="Confirm & Book" variant="success"/>
-                                                    <ActionButton onClick={() => performAction(() => acceptInboundOfferPending(userId, selectedMessage), 'pending', 'Replied to Sender.')} disabled={isActionLoading} icon={Clock} text="Accept Pending" variant="warning"/>
+                                                    <ActionButton onClick={() => performAction(() => confirmInboundOffer(userId, selectedMessage), 'Appointment Confirmed!')} disabled={isActionLoading} icon={CalendarCheck} text="Confirm & Book" variant="success"/>
+                                                    <ActionButton onClick={() => performAction(() => acceptInboundOfferPending(userId, selectedMessage), 'Replied to Sender.')} disabled={isActionLoading} icon={Clock} text="Accept Pending" variant="warning"/>
                                                     <ActionButton onClick={handleMarkAsEducation} disabled={isActionLoading} icon={BookOpen} text="Mark as Education" variant="secondary"/>
-                                                    <ActionButton onClick={() => performAction(() => declineInboundOffer(userId, selectedMessage), 'declined', 'Declined & Replied.')} disabled={isActionLoading} icon={XIcon} text="Decline" variant="danger"/>
+                                                    <ActionButton onClick={() => performAction(() => declineInboundOffer(userId, selectedMessage), 'Declined & Replied.')} disabled={isActionLoading} icon={XIcon} text="Decline" variant="danger"/>
                                                 </>
                                             )}
                                             {selectedMessage.status === 'pending' && (
-                                                <ActionButton onClick={() => performAction(() => confirmInboundOffer(userId, selectedMessage), 'approved', 'Appointment Confirmed!')} disabled={isActionLoading} icon={CalendarCheck} text="Confirm & Book" variant="success"/>
+                                                <ActionButton onClick={() => performAction(() => confirmInboundOffer(userId, selectedMessage), 'Appointment Confirmed!')} disabled={isActionLoading} icon={CalendarCheck} text="Confirm & Book" variant="success"/>
                                             )}
                                         </div>
                                     </>
@@ -315,6 +358,14 @@ function MailboxPageInternal({ userId }: MailboxPageContentProps) {
 
     return (
         <>
+            {confirmation && <ConfirmationModal {...confirmation} onCancel={() => setConfirmation(null)} />}
+            {statusMessage && (
+                <div className={`fixed bottom-5 right-5 z-50 p-4 rounded-lg shadow-lg flex items-center gap-3 ${statusMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                    {statusMessage.type === 'success' ? <ThumbsUp size={20} /> : <Info size={20} />}
+                    <span>{statusMessage.text}</span>
+                    <button onClick={() => setStatusMessage(null)} className="p-1 rounded-full hover:bg-black/10"><XIcon size={16}/></button>
+                </div>
+            )}
             <div className="h-[calc(100vh-8rem)] bg-card border rounded-lg overflow-hidden">
                 <div className="md:hidden h-full">
                     {selectedMessage || isComposing ? detailComponent : messageListComponent}
@@ -371,12 +422,11 @@ function MailboxPageInternal({ userId }: MailboxPageContentProps) {
     );
 }
 
-// The wrapper component that handles Suspense
-export default function MailboxPageContent({ userId }: MailboxPageContentProps) {
+export default function MailboxPageContent({ userId }: { userId: string }) {
     return (
         <div className="p-4 sm:p-6 lg:p-8">
              <Suspense fallback={<div className="text-center p-8">Loading Mailbox...</div>}>
-                 <MailboxPageInternal userId={userId} />
+                  <MailboxPageInternal userId={userId} />
              </Suspense>
         </div>
     );

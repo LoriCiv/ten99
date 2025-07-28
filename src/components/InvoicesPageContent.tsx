@@ -1,13 +1,16 @@
+// src/components/InvoicesPageContent.tsx
+
 "use client";
 
-import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { Invoice, Client, UserProfile } from '@/types/app-interfaces';
 import { getInvoices, getClients, getUserProfile } from '@/utils/firestoreService';
 import Link from 'next/link';
-import { PlusCircle, ArrowUpDown } from 'lucide-react';
+import { PlusCircle, ArrowUpDown, Loader2 } from 'lucide-react';
 import InvoiceDetailModal from '@/components/InvoiceDetailModal';
 import { format } from 'date-fns';
+import { useFirebase } from './FirebaseProvider'; // ✅ 1. Import our hook
 
 const getStatusStyles = (status: Invoice['status']) => {
     switch (status) {
@@ -31,11 +34,8 @@ const SortButton = ({ active, direction, onClick, children }: { active: boolean,
     </button>
 );
 
-interface InvoicesPageContentProps {
-    userId: string;
-}
-
-function InvoicesPageInternal({ userId }: InvoicesPageContentProps) {
+export default function InvoicesPageContent({ userId }: { userId: string }) {
+    const { isFirebaseAuthenticated } = useFirebase(); // ✅ 2. Get the "Green Light"
     const searchParams = useSearchParams();
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
@@ -46,25 +46,29 @@ function InvoicesPageInternal({ userId }: InvoicesPageContentProps) {
     const [clientFilter, setClientFilter] = useState('all');
     const [sortConfig, setSortConfig] = useState<{ key: keyof Invoice; direction: 'ascending' | 'descending' }>({ key: 'invoiceDate', direction: 'descending' });
 
-    const initialFilter = searchParams.get('filter');
-
+    // ✅ 3. This useEffect now waits for the Green Light before fetching data
     useEffect(() => {
-        if (initialFilter) {
-            setStatusFilter(initialFilter);
-        }
-        const unsubInvoices = getInvoices(userId, setInvoices);
-        const unsubClients = getClients(userId, setClients);
-        const unsubProfile = getUserProfile(userId, (profile) => {
-            setUserProfile(profile);
-            setIsLoading(false);
-        });
+        if (isFirebaseAuthenticated) {
+            console.log("✅ Invoices page is authenticated, fetching data...");
+            const initialFilter = searchParams.get('filter');
+            if (initialFilter) {
+                setStatusFilter(initialFilter);
+            }
+            
+            const unsubInvoices = getInvoices(userId, setInvoices);
+            const unsubClients = getClients(userId, setClients);
+            const unsubProfile = getUserProfile(userId, (profile) => {
+                setUserProfile(profile);
+                setIsLoading(false); // Stop loading once all data is here
+            });
 
-        return () => {
-            unsubInvoices();
-            unsubClients();
-            unsubProfile();
-        };
-    }, [initialFilter, userId]);
+            return () => {
+                unsubInvoices();
+                unsubClients();
+                unsubProfile();
+            };
+        }
+    }, [isFirebaseAuthenticated, userId, searchParams]);
 
     const processedInvoices = useMemo(() => {
         return invoices
@@ -91,8 +95,17 @@ function InvoicesPageInternal({ userId }: InvoicesPageContentProps) {
         setSortConfig({ key, direction });
     };
 
-    if (isLoading) {
-        return <div className="p-8 text-center text-muted-foreground">Loading Invoices...</div>;
+    // ✅ 4. Show a loading indicator until Firebase is ready AND data is loaded
+    if (!isFirebaseAuthenticated || isLoading) {
+        return (
+            <div className="flex justify-center items-center h-full p-8">
+               <div className="text-center">
+                   <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+                   <p className="text-lg font-semibold mt-4">Loading Invoices...</p>
+                   <p className="text-muted-foreground text-sm mt-1">Authenticating and fetching your data...</p>
+               </div>
+           </div>
+        );
     }
 
     return (
@@ -126,7 +139,7 @@ function InvoicesPageInternal({ userId }: InvoicesPageContentProps) {
                         <label className="text-sm font-medium text-muted-foreground">Filter by Client</label>
                         <select value={clientFilter} onChange={(e) => setClientFilter(e.target.value)} className="w-full mt-1 p-2 border rounded-md bg-background">
                             <option value="all">All Clients</option>
-                            {clients.map(client => <option key={client.id} value={client.id!}>{client.name}</option>)}
+                            {clients.map(client => <option key={client.id} value={client.id!}>{client.companyName || client.name}</option>)}
                         </select>
                     </div>
                     <div className="flex items-center gap-2">
@@ -149,7 +162,7 @@ function InvoicesPageInternal({ userId }: InvoicesPageContentProps) {
                                     className={`bg-card p-4 rounded-lg border border-l-4 ${borderColor} ${bgColor} flex justify-between items-center cursor-pointer hover:shadow-md transition-shadow`}
                                 >
                                     <div>
-                                        <p className="font-bold">#{invoice.invoiceNumber} - {client?.name || 'N/A'}</p>
+                                        <p className="font-bold">#{invoice.invoiceNumber} - {client?.companyName || client?.name || 'N/A'}</p>
                                         <p className="text-sm text-muted-foreground">Invoice Date: {format(new Date(invoice.invoiceDate + 'T00:00:00'), 'MMM d, yyyy')}</p>
                                         <p className="text-sm text-muted-foreground">Due: {format(new Date(invoice.dueDate + 'T00:00:00'), 'MMM d, yyyy')}</p>
                                     </div>
@@ -175,18 +188,10 @@ function InvoicesPageInternal({ userId }: InvoicesPageContentProps) {
                     clients={clients}
                     userProfile={userProfile}
                     onClose={() => setSelectedInvoice(null)}
-                    onSave={() => setSelectedInvoice(null)}
+                    onSave={() => setSelectedInvoice(null)} // Listeners will handle updates
                     userId={userId}
                 />
             )}
         </>
-    );
-}
-
-export default function InvoicesPageContent({ userId }: InvoicesPageContentProps) {
-    return (
-        <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading Invoices...</div>}>
-            <InvoicesPageInternal userId={userId} />
-        </Suspense>
     );
 }

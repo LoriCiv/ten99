@@ -1,3 +1,4 @@
+// src/components/ClientDetailModal.tsx
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -9,11 +10,9 @@ import {
     deleteClient,
     updatePersonalNetworkContact,
     deletePersonalNetworkContact,
-    // DELETED: convertClientToContact and convertContactToClient were removed as they don't exist
 } from '@/utils/firestoreService';
-import { X, Edit, Trash2, Mail, FileText, Repeat, ClipboardCopy, MoreHorizontal } from 'lucide-react';
-import ClientForm from './ClientForm';
-import ContactForm from './ContactForm';
+import { X, Edit, Trash2, Mail, FileText, Repeat, ClipboardCopy, MoreHorizontal, ThumbsUp, Info } from 'lucide-react';
+import ClientForm from './ClientForm'; // We will use this for both companies and contacts
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -55,10 +54,12 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
     const [isConverting, setIsConverting] = useState(false);
     const [isCopied, setIsCopied] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
     useEffect(() => {
         setIsEditing(false);
         setIsCopied(false);
+        setStatusMessage(null);
     }, [item]);
     
     const relevantJobFiles = useMemo(() => {
@@ -66,20 +67,23 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
         return jobFiles.filter(jf => jf.clientId === item.id);
     }, [jobFiles, item, itemType]);
     
-    const handleSave = async (formData: Partial<Client | PersonalNetworkContact>) => {
+    const handleSave = async (formData: Partial<Client>) => {
         if (!item?.id) return;
         setIsSubmitting(true);
+        setStatusMessage(null);
         try {
             if (itemType === 'Company') {
-                await updateClient(userId, item.id, formData as Partial<Client>);
+                await updateClient(userId, item.id, formData);
             } else {
+                // When saving a 'Contact', we use the updatePersonalNetworkContact function
+                // but the form data comes from our unified ClientForm
                 await updatePersonalNetworkContact(userId, item.id, formData as Partial<PersonalNetworkContact>);
             }
-            alert(`${itemType} updated successfully!`);
             onSave();
             setIsEditing(false);
         } catch (error) {
             console.error(`Error saving ${itemType}:`, error);
+            setStatusMessage(`Failed to save ${itemType}.`);
         } finally {
             setIsSubmitting(false);
         }
@@ -92,7 +96,6 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
             try {
                 if (itemType === 'Company') await deleteClient(userId, item.id);
                 else await deletePersonalNetworkContact(userId, item.id);
-                alert('Item deleted.');
                 onSave();
                 onClose();
             } catch (err) {
@@ -102,32 +105,8 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
         }
     };
     
-    // TODO: This function is disabled because the underlying firestore functions are missing.
-    // To re-enable, `convertClientToContact` and `convertContactToClient` must be created in firestoreService.ts.
     const handleConvert = async () => {
         alert("This feature is temporarily disabled.");
-        // if (!item?.id) return;
-        // setIsConverting(true);
-        // const targetType = itemType === 'Company' ? 'Contact' : 'Company';
-        // if (window.confirm(`Are you sure you want to convert this ${itemType} to a ${targetType}?`)) {
-        //     try {
-        //         if (itemType === 'Company') {
-        //             await convertClientToContact(userId, item as Client);
-        //         } else {
-        //             await convertContactToClient(userId, item as PersonalNetworkContact);
-        //         }
-        //         alert('Conversion successful!');
-        //         onSave();
-        //         onClose();
-        //     } catch (error) {
-        //         console.error("Conversion error:", error);
-        //         alert("An error occurred during conversion.");
-        //     } finally {
-        //         setIsConverting(false);
-        //     }
-        // } else {
-        //     setIsConverting(false);
-        // }
     };
 
     const handleCopyInfo = () => {
@@ -137,7 +116,6 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
         const phone = item.phone || 'N/A';
         const textToCopy = `Name: ${name}\nEmail: ${email}\nPhone: ${phone}`;
         
-        // Use the 'copy' command for broader compatibility
         const textArea = document.createElement("textarea");
         textArea.value = textToCopy;
         document.body.appendChild(textArea);
@@ -178,11 +156,16 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
                     </div>
 
                     {isEditing ? (
-                       itemType === 'Company' ? (
-                            <ClientForm initialData={item as Client} onSave={handleSave} onCancel={() => setIsEditing(false)} isSubmitting={isSubmitting} onDuplicate={handleDuplicate} />
-                        ) : (
-                            <ContactForm initialData={item as PersonalNetworkContact} onSave={handleSave} onCancel={() => setIsEditing(false)} isSubmitting={isSubmitting} clients={clients} />
-                        )
+                        // ✅ Use the smart ClientForm for both Company and Contact
+                        <ClientForm 
+                            formType={itemType === 'Company' ? 'company' : 'contact'}
+                            initialData={item as Client} 
+                            onSave={handleSave} 
+                            onCancel={() => setIsEditing(false)} 
+                            isSubmitting={isSubmitting} 
+                            onDuplicate={itemType === 'Company' ? handleDuplicate : undefined}
+                            statusMessage={statusMessage}
+                        />
                     ) : (
                         <div className="space-y-6">
                             <div>
@@ -249,7 +232,6 @@ export default function ClientDetailModal({ item, itemType, userId, clients, job
                                     <DropdownMenuContent align="end">
                                         <DropdownMenuItem onSelect={handleCopyInfo} className="cursor-pointer"><ClipboardCopy className="mr-2 h-4 w-4" /><span>{isCopied ? 'Copied!' : 'Copy Info'}</span></DropdownMenuItem>
                                         <DropdownMenuItem asChild className="cursor-pointer">{emailToUse ? <Link href={`/dashboard/mailbox?to=${emailToUse}`} className="flex items-center w-full"><Mail className="mr-2 h-4 w-4" />Send Message</Link> : <span className="opacity-50 flex items-center w-full"><Mail className="mr-2 h-4 w-4" />Send Message</span>}</DropdownMenuItem>
-                                        {/* Temporarily disabling the convert button to allow build to pass */}
                                         <DropdownMenuItem onSelect={handleConvert} disabled={true} className="cursor-pointer"><Repeat className="mr-2 h-4 w-4" /><span>Convert</span></DropdownMenuItem>
                                         <DropdownMenuSeparator />
                                         <DropdownMenuItem onSelect={handleDelete} className="cursor-pointer text-destructive focus:text-destructive"><Trash2 className="mr-2 h-4 w-4" /><span>Delete</span></DropdownMenuItem>

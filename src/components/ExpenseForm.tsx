@@ -4,12 +4,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Expense, Client, UserProfile } from '@/types/app-interfaces';
 import { uploadFile } from '@/utils/firestoreService';
-import { Loader2, Save, Paperclip, ArrowRight } from 'lucide-react';
+import { Loader2, Save, Paperclip, ArrowRight, Trash2 } from 'lucide-react'; // ✅ 1. Import Trash2 icon
 import Link from 'next/link';
 
 interface ExpenseFormProps {
     onSave: (data: Partial<Expense>) => Promise<void>;
     onCancel: () => void;
+    onDelete: (expenseId: string) => void; // ✅ 2. Add onDelete to the props
     clients: Client[];
     initialData?: Partial<Expense>;
     isSubmitting: boolean;
@@ -24,12 +25,20 @@ const toBase64 = (file: File): Promise<string> => new Promise((resolve, reject) 
     reader.onerror = error => reject(error);
 });
 
-// A type for our form state that allows `amount` to be a string for the input field
 type ExpenseFormData = Omit<Partial<Expense>, 'amount'> & {
     amount?: string | number;
 };
 
-export default function ExpenseForm({ onSave, onCancel, clients, initialData = {}, isSubmitting, userId, userProfile }: ExpenseFormProps) {
+export default function ExpenseForm({ 
+    onSave, 
+    onCancel, 
+    onDelete, // ✅ 3. Receive the onDelete function
+    clients, 
+    initialData = {}, 
+    isSubmitting, 
+    userId, 
+    userProfile 
+}: ExpenseFormProps) {
     const isEditMode = !!initialData?.id;
     
     const [formData, setFormData] = useState<ExpenseFormData>({});
@@ -126,6 +135,7 @@ export default function ExpenseForm({ onSave, onCancel, clients, initialData = {
                 finalData.receiptUrl = receiptUrl;
             } catch (error) {
                 console.error("Receipt upload failed:", error);
+                // We can replace this alert with a status message on the form
                 alert("Receipt upload failed. The expense was not saved.");
                 return;
             }
@@ -133,14 +143,20 @@ export default function ExpenseForm({ onSave, onCancel, clients, initialData = {
         await onSave(finalData);
     };
 
+    const handleDeleteClick = () => {
+        if (initialData?.id) {
+            onDelete(initialData.id);
+        }
+    };
+
     return (
-        <form onSubmit={handleSubmit} className="space-y-6 bg-card p-6 rounded-lg border">
+        <form onSubmit={handleSubmit} className="space-y-6">
             <div className="flex justify-between items-center">
                  <h3 className="text-lg font-semibold">{isEditMode ? 'Edit Expense' : 'Add New Expense'}</h3>
                  {!isEditMode && (
-                    <Link href="/dashboard/expenses" className="flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
-                        View All <ArrowRight size={14} />
-                    </Link>
+                   <Link href="/dashboard/expenses" className="flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
+                       View All <ArrowRight size={14} />
+                   </Link>
                  )}
             </div>
             
@@ -200,12 +216,29 @@ export default function ExpenseForm({ onSave, onCancel, clients, initialData = {
                 <textarea id="notes" name="notes" value={formData.notes || ''} onChange={handleInputChange} rows={3} className="w-full mt-1 p-2 bg-background border rounded-md" placeholder="Add any relevant notes..."></textarea>
             </div>
 
-            <div className="flex justify-end gap-4 pt-4 border-t">
-                <button type="button" onClick={onCancel} className="bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-secondary/80">Cancel</button>
-                <button type="submit" disabled={isSubmitting || isParsing} className="bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg flex items-center gap-2 disabled:opacity-50 w-36 justify-center">
-                    {isSubmitting || isParsing ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                    {isSubmitting ? 'Saving...' : isParsing ? 'Parsing...' : 'Save Expense'}
-                </button>
+            <div className="flex justify-between items-center pt-4 border-t">
+                {/* ✅ 4. Add the Delete button, only visible in edit mode */}
+                <div>
+                    {isEditMode && (
+                        <button 
+                            type="button" 
+                            onClick={handleDeleteClick} 
+                            disabled={isSubmitting}
+                            className="bg-destructive/10 text-destructive font-semibold py-2 px-4 rounded-lg flex items-center gap-2 hover:bg-destructive/20 disabled:opacity-50"
+                        >
+                            <Trash2 size={16} />
+                            Delete
+                        </button>
+                    )}
+                </div>
+
+                <div className="flex gap-4">
+                    <button type="button" onClick={onCancel} className="bg-secondary text-secondary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-secondary/80">Cancel</button>
+                    <button type="submit" disabled={isSubmitting || isParsing} className="bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg flex items-center gap-2 disabled:opacity-50 w-36 justify-center">
+                        {isSubmitting || isParsing ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                        {isSubmitting ? 'Saving...' : isParsing ? 'Parsing...' : 'Save Expense'}
+                    </button>
+                </div>
             </div>
         </form>
     );

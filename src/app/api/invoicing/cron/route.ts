@@ -1,9 +1,10 @@
+// src/app/api/invoicing/cron/route.ts
+
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase-admin';
+import { initializeFirebaseAdmin } from '@/lib/firebase-admin'; // ✅ 1. Import our new helper
+import { getFirestore, DocumentSnapshot } from 'firebase-admin/firestore'; // ✅ 2. Import firestore components
 import type { Invoice, Client, UserProfile } from '@/types/app-interfaces';
 import sgMail from '@sendgrid/mail';
-
-// REMOVED: render and OverdueReminderEmail imports
 
 if (process.env.SENDGRID_API_KEY) {
     sgMail.setApiKey(process.env.SENDGRID_API_KEY);
@@ -11,7 +12,6 @@ if (process.env.SENDGRID_API_KEY) {
     console.warn("SENDGRID_API_KEY environment variable not set. Emails will not be sent.");
 }
 
-// ✅ NEW: A function to create the email HTML directly
 const createOverdueReminderHtml = (invoice: Invoice, client: Client, user: UserProfile): string => {
     const total = invoice.total || 0;
     return `
@@ -42,11 +42,14 @@ export async function GET() {
         return NextResponse.json({ error: 'SendGrid API Key not configured.' }, { status: 500 });
     }
 
-    const today = new Date().toISOString().split('T')[0];
-    const invoicesRef = db.collectionGroup('invoices');
-    const q = invoicesRef.where('status', '==', 'sent').where('dueDate', '<', today);
-
     try {
+        initializeFirebaseAdmin(); // ✅ 3. Initialize Firebase Admin at the start
+        const db = getFirestore(); // ✅ 4. Get the db instance to use
+
+        const today = new Date().toISOString().split('T')[0];
+        const invoicesRef = db.collectionGroup('invoices');
+        const q = invoicesRef.where('status', '==', 'sent').where('dueDate', '<', today);
+
         const snapshot = await q.get();
         if (snapshot.empty) {
             return NextResponse.json({ message: 'No overdue invoices found.' });
@@ -56,7 +59,8 @@ export async function GET() {
         let overdueCount = 0;
         let emailsSent = 0;
 
-        await Promise.all(snapshot.docs.map(async (doc) => {
+        // ✅ 5. Add the correct type for 'doc'
+        await Promise.all(snapshot.docs.map(async (doc: DocumentSnapshot) => {
             const invoice = { id: doc.id, ...doc.data() } as Invoice;
             const invoiceRef = doc.ref;
 
@@ -66,7 +70,8 @@ export async function GET() {
             const userRef = invoiceRef.parent.parent;
             if (!userRef) return;
 
-            const userProfileRef = userRef.collection('profile').doc('mainProfile');
+            // Corrected path for user profile
+            const userProfileRef = db.doc(`users/${userRef.id}`);
             const clientRef = userRef.collection('clients').doc(invoice.clientId);
 
             const [userProfileSnap, clientSnap] = await Promise.all([
@@ -81,8 +86,6 @@ export async function GET() {
 
                 if (user.sendOverdueReminders && recipientEmail) {
                     const subject = `Reminder: Invoice #${invoice.invoiceNumber} is Overdue`;
-                    
-                    // ✅ FIX: Call our new function to get the HTML string
                     const emailHtml = createOverdueReminderHtml(invoice, client, user);
 
                     const msg = {

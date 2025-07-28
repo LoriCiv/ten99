@@ -1,3 +1,4 @@
+// src/components/InvoiceDetailModal.tsx
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -6,15 +7,14 @@ import { updateInvoice, deleteInvoice } from '@/utils/firestoreService';
 import { X, Edit, Trash2, Send, CheckCircle, Loader2, MoreHorizontal } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import InvoiceForm from './InvoiceForm';
 import Modal from './Modal';
 
-// ✅ 1. Update the props to receive userId
 interface InvoiceDetailModalProps {
     invoice: Invoice | null;
     clients: Client[];
@@ -24,7 +24,7 @@ interface InvoiceDetailModalProps {
     userId: string;
 }
 
-export default function InvoiceDetailModal({ invoice, clients, userProfile, onClose, onSave, userId }: InvoiceDetailModalProps) { // ✅ 2. Receive userId
+export default function InvoiceDetailModal({ invoice, clients, userProfile, onClose, onSave, userId }: InvoiceDetailModalProps) {
     const [isEditing, setIsEditing] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -38,7 +38,6 @@ export default function InvoiceDetailModal({ invoice, clients, userProfile, onCl
         if (!invoice?.id) return;
         setIsSubmitting(true);
         try {
-            // ✅ 3. Use the real userId for all actions
             await updateInvoice(userId, invoice.id, data);
             alert("Invoice updated!");
             onSave();
@@ -160,6 +159,7 @@ export default function InvoiceDetailModal({ invoice, clients, userProfile, onCl
                             isSubmitting={isSubmitting}
                             userProfile={userProfile}
                             nextInvoiceNumber={invoice.invoiceNumber}
+                            statusMessage={null} // ✅ Add the missing prop
                         />
                     </div>
                 ) : (

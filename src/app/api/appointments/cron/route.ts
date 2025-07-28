@@ -1,6 +1,8 @@
+// src/app/api/appointments/cron/route.ts
+
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase-admin';
-import { FieldValue } from 'firebase-admin/firestore';
+import { initializeFirebaseAdmin } from '@/lib/firebase-admin'; // ✅ 1. Import our new helper
+import { getFirestore, FieldValue, Transaction } from 'firebase-admin/firestore'; // ✅ 2. Import firestore components
 import type { Appointment, Client, Invoice } from '@/types/app-interfaces';
 
 // Helper function to calculate duration (server-side version)
@@ -15,10 +17,12 @@ const calculateDurationInHours = (startTime?: string, endTime?: string): number 
 
 // Helper function to get next invoice number (server-side version)
 const generateNextInvoiceNumber = async (userId: string): Promise<string> => {
+    const db = getFirestore(); // Get db instance
     const metaRef = db.doc(`users/${userId}/_metadata/invoiceCounter`);
     const year = new Date().getFullYear();
     
-    return db.runTransaction(async (transaction) => {
+    // ✅ 3. Add the correct type for 'transaction'
+    return db.runTransaction(async (transaction: Transaction) => {
         const metaDoc = await transaction.get(metaRef);
         const data = metaDoc.data();
 
@@ -35,11 +39,14 @@ const generateNextInvoiceNumber = async (userId: string): Promise<string> => {
 };
 
 export async function GET() {
-    const today = new Date().toISOString().split('T')[0];
-    const appointmentsRef = db.collectionGroup('appointments');
-    const q = appointmentsRef.where('status', '==', 'scheduled').where('date', '<', today);
-
     try {
+        initializeFirebaseAdmin(); // ✅ 4. Initialize Firebase Admin at the start
+        const db = getFirestore(); // ✅ 5. Get the db instance to use
+
+        const today = new Date().toISOString().split('T')[0];
+        const appointmentsRef = db.collectionGroup('appointments');
+        const q = appointmentsRef.where('status', '==', 'scheduled').where('date', '<', today);
+
         const snapshot = await q.get();
         if (snapshot.empty) {
             return NextResponse.json({ message: 'No appointments to mark as completed.' });

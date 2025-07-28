@@ -1,13 +1,20 @@
-import { Suspense } from 'react';
-import NewAppointmentPageContent from '@/components/NewAppointmentPageContent';
+// src/app/dashboard/appointments/new/page.tsx
 
-// This is our temporary user ID for development
-const TEMP_USER_ID = "dev-user-1";
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
+import NewAppointmentPageContent from "@/components/NewAppointmentPageContent";
 
-export default function NewAppointmentPage() {
-    return (
-        <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading...</div>}>
-            <NewAppointmentPageContent userId={TEMP_USER_ID} />
-        </Suspense>
-    );
+// ✅ 1. Mark the component as an async function.
+export default async function NewAppointmentPage() {
+  
+  // ✅ 2. Use 'await' to get the value from the auth() promise.
+  const { userId } = await auth();
+
+  // If for any reason the userId is not available, redirect away.
+  if (!userId) {
+    redirect("/");
+  }
+
+  // Now we have a guaranteed userId, and can safely render the client component.
+  return <NewAppointmentPageContent userId={userId} />;
 }

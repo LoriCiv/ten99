@@ -1,11 +1,12 @@
+// src/components/ProfileForm.tsx
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import type { UserProfile, JobHistoryEntry, EducationEntry } from '@/types/app-interfaces';
 import { uploadFile } from '@/utils/firestoreService';
-import { Save, Loader2, Plus, Trash2, User as UserIcon, ExternalLink } from 'lucide-react';
+import { Save, Loader2, Plus, Trash2, User as UserIcon, ExternalLink, Info } from 'lucide-react';
 
 const usStates = [
     "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", "Delaware",
@@ -30,6 +31,12 @@ export default function ProfileForm({ initialProfile, onSave, isSubmitting, user
     const [isUploading, setIsUploading] = useState(false);
     const [skillInput, setSkillInput] = useState('');
     const [languageInput, setLanguageInput] = useState('');
+    const [errorMessage, setErrorMessage] = useState<string | null>(null); // ✅ 1. Add state for error messages
+
+    // Sync form data if initialProfile changes
+    useEffect(() => {
+        setFormData(initialProfile);
+    }, [initialProfile]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, type } = e.target;
@@ -49,6 +56,7 @@ export default function ProfileForm({ initialProfile, onSave, isSubmitting, user
     
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setErrorMessage(null); // Clear previous errors
         const profileDataToSave = { ...formData };
 
         if (selectedFile) {
@@ -58,7 +66,8 @@ export default function ProfileForm({ initialProfile, onSave, isSubmitting, user
                 profileDataToSave.photoUrl = photoUrl;
             } catch (error) {
                 console.error("Photo upload failed:", error);
-                alert("Photo upload failed. Please try again.");
+                // ✅ 2. Replace alert() with a state-based error message
+                setErrorMessage("Photo upload failed. Please try again.");
                 setIsUploading(false);
                 return;
             }
@@ -98,7 +107,6 @@ export default function ProfileForm({ initialProfile, onSave, isSubmitting, user
                 <div><label className="block text-sm font-medium text-muted-foreground">Professional Title</label><input name="professionalTitle" value={formData.professionalTitle || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" /></div>
                 <div><label className="block text-sm font-medium text-muted-foreground">Phone Number</label><input type="tel" name="phone" value={formData.phone || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md" /></div>
                 
-                {/* ✅ ADDRESS FIELD REMOVED AND REPLACED WITH STATE & ZIP */}
                 <div>
                     <label className="block text-sm font-medium text-muted-foreground">State</label>
                     <select name="state" value={formData.state || ''} onChange={handleInputChange} className="w-full mt-1 p-2 bg-background border rounded-md">
@@ -146,6 +154,14 @@ export default function ProfileForm({ initialProfile, onSave, isSubmitting, user
                 </div>
             </div>
             
+            {/* ✅ 3. Display the error message here if it exists */}
+            {errorMessage && (
+                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md flex items-center gap-2">
+                    <Info size={16} />
+                    <span className="text-sm">{errorMessage}</span>
+                </div>
+            )}
+
             <div className="flex justify-end gap-4 pt-4 border-t">
                 <button type="submit" disabled={isLoading} className="bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg flex items-center gap-2 disabled:opacity-50 w-36 justify-center">
                     {isLoading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}

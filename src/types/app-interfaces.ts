@@ -1,3 +1,5 @@
+// src/types/app-interfaces.ts
+
 import type { Timestamp, FieldValue } from 'firebase/firestore';
 
 export interface LineItem {
@@ -18,7 +20,7 @@ export interface Client {
     id?: string;
     userId?: string;
     createdAt?: Timestamp;
-    clientType: 'business_1099' | 'individual_1099' | 'employer_w2';
+    clientType: 'business_1099' | 'individual' | 'employer_w2'; // ✅ This line has been corrected
     companyName?: string;
     name: string;
     status: 'Active' | 'Inactive' | 'Lead';
@@ -76,7 +78,6 @@ export interface Appointment {
     seriesId?: string;
 }
 
-// --- THIS IS THE CORRECTED INTERFACE ---
 export interface JobFile {
     id?: string;
     userId?: string;
@@ -96,10 +97,8 @@ export interface JobFile {
     privateNotes?: string;
     originalUserId?: string;
     fileUrl?: string;
-    // This is the missing property that fixes the errors
     attachments?: { name: string; url: string; }[];
 }
-// --- END OF CORRECTION ---
 
 export interface Certification {
     id?: string;
@@ -236,6 +235,7 @@ export interface UserProfile {
     address?: string;
     phone?: string;
     email?: string;
+    companyName?: string; // Added companyName to UserProfile
     expenseCategories?: string[];
     invoiceLineItems?: InvoiceLineItemTemplate[];
     sendOverdueReminders?: boolean;
