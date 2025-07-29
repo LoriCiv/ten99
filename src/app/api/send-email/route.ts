@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
         const userProfileRef = db.doc(`users/${userId}`);
         const userProfileSnap = await userProfileRef.get();
         
-        // ✅ CORRECTED: .exists is a property, not a function, on the server.
+        // ✅ THE FIX: .exists is a property, not a function, on the server.
         if (!userProfileSnap.exists) {
             return NextResponse.json({ error: 'Sender profile not found.' }, { status: 404 });
         }

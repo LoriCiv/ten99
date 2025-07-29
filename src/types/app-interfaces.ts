@@ -245,8 +245,8 @@ export interface UserProfile {
     notifyOnJobMatch?: boolean;
     defaultForwardingEmail?: string;
     inboundEmailAddress?: string;
-    emailSignature?: string; // ✅ Added for email signatures
-    states?: string[]; // ✅ Added for job board filtering
+    emailSignature?: string; // For email signatures
+    states?: string[]; // For job board filtering
 }
 
 export interface JobPosting {
