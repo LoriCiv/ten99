@@ -27,24 +27,28 @@ export async function POST(request: NextRequest) {
         initializeFirebaseAdmin();
         const db = getFirestore();
         
-        // Fetch the sender's profile to get their name
         const userProfileRef = db.doc(`users/${userId}`);
         const userProfileSnap = await userProfileRef.get();
+        
+        // ✅ CORRECTED: .exists is a property, not a function, on the server.
         if (!userProfileSnap.exists) {
             return NextResponse.json({ error: 'Sender profile not found.' }, { status: 404 });
         }
         const user = userProfileSnap.data() as UserProfile;
         const fromName = user.name || 'A Ten99 User';
 
+        const signature = user.emailSignature ? `<br><br><hr style="border:none;border-top:1px solid #ccc;"><p style="font-size:12px;color:#888;">${user.emailSignature.replace(/\n/g, '<br>')}</p>` : '';
+        const finalHtml = html + signature;
+
         const msg = {
-            to: to, // `to` can be a single email or an array of emails
+            to: to,
             from: {
-                email: 'messages@ten99.app', // A verified sender address
+                email: 'messages@ten99.app',
                 name: fromName,
             },
-            replyTo: replyToEmail || user.email, // Use the user's actual email for replies
+            replyTo: replyToEmail || user.email,
             subject: subject,
-            html: html,
+            html: finalHtml,
         };
 
         await sgMail.send(msg);

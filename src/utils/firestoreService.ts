@@ -100,10 +100,17 @@ export const getUserProfile = (userId: string, callback: (data: UserProfile | nu
 };
 export const getInvoices = (userId: string, callback: (data: Invoice[]) => void) => { const q = query(collection(db, `users/${userId}/invoices`), orderBy('invoiceDate', 'desc')); return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Invoice))); }); };
 export const getExpenses = (userId: string, callback: (data: Expense[]) => void) => { const q = query(collection(db, `users/${userId}/expenses`), orderBy('date', 'desc')); return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Expense))); }); };
-export const getJobPostings = (callback: (data: JobPosting[]) => void) => {
+export const getJobPostings = (callback: (data: JobPosting[]) => void, userProfile?: UserProfile | null) => {
     const now = new Date();
-    const q = query(collection(db, 'jobPostings'), where('expiresAt', '>', now), orderBy('expiresAt', 'asc'));
-    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as JobPosting))) });
+    let q = query(collection(db, 'jobPostings'), where('expiresAt', '>', now), orderBy('expiresAt', 'asc'));
+
+    if (userProfile && Array.isArray(userProfile.states) && userProfile.states.length > 0) {
+        q = query(q, where('state', 'in', userProfile.states));
+    }
+
+    return onSnapshot(q, (snapshot) => { 
+        callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as JobPosting))) 
+    });
 };
 export const getReminders = (userId: string, callback: (data: Reminder[]) => void) => {
     const q = query(collection(db, `users/${userId}/reminders`), orderBy('createdAt', 'desc'));

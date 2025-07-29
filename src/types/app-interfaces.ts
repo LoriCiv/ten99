@@ -20,7 +20,7 @@ export interface Client {
     id?: string;
     userId?: string;
     createdAt?: Timestamp;
-    clientType: 'business_1099' | 'individual' | 'employer_w2'; // ✅ This line has been corrected
+    clientType: 'business_1099' | 'individual' | 'employer_w2';
     companyName?: string;
     name: string;
     status: 'Active' | 'Inactive' | 'Lead';
@@ -235,7 +235,7 @@ export interface UserProfile {
     address?: string;
     phone?: string;
     email?: string;
-    companyName?: string; // Added companyName to UserProfile
+    companyName?: string;
     expenseCategories?: string[];
     invoiceLineItems?: InvoiceLineItemTemplate[];
     sendOverdueReminders?: boolean;
@@ -245,6 +245,8 @@ export interface UserProfile {
     notifyOnJobMatch?: boolean;
     defaultForwardingEmail?: string;
     inboundEmailAddress?: string;
+    emailSignature?: string; // ✅ Added for email signatures
+    states?: string[]; // ✅ Added for job board filtering
 }
 
 export interface JobPosting {

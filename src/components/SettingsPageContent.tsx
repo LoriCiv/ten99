@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import type { Template, UserProfile, InvoiceLineItemTemplate, Reminder } from '@/types/app-interfaces';
 import {
     addTemplate,
@@ -24,7 +24,7 @@ import {
     Settings as SettingsIcon, BellRing, X
 } from 'lucide-react';
 import { Switch } from "@/components/ui/switch";
-import { useFirebase } from './FirebaseProvider'; // ✅ 1. Import our hook
+import { useFirebase } from './FirebaseProvider';
 
 const defaultTermsText = `This contract incorporates pre-negotiated terms...`;
 const defaultPaymentText = `Payment can be made via:\n- Venmo: @YourUsername...`;
@@ -45,9 +45,15 @@ const defaultTemplates = [
     }
 ];
 
-const HowToTab = () => {
+// ✅ NEW: Updated HowToTab with email instructions
+const HowToTab = ({ userProfile }: { userProfile: Partial<UserProfile> }) => {
     const featureSections = [
-        { title: "Schedule", features: [ { icon: ThumbsUp, name: "Dashboard", description: "Your at-a-glance command center for upcoming events, inbox items, and job alerts." }, { icon: Calendar, name: "Appointments", description: "A full calendar and list view of your entire schedule, color-coded by event type." }, { icon: Mail, name: "Mailbox", description: "The magic inbox. Forward client emails here to automatically create appointments and organize your work." } ] },
+        { title: "Schedule", features: [ { icon: ThumbsUp, name: "Dashboard", description: "Your at-a-glance command center for upcoming events, inbox items, and job alerts." }, { icon: Calendar, name: "Appointments", description: "A full calendar and list view of your entire schedule, color-coded by event type." } ] },
+        { title: "The Magic Mailbox", features: [ 
+            { icon: Mail, name: "How It Works", description: "Forward emails from clients to your unique Ten99 address to automatically create appointments, job files, and organize your work. This is the core of the app's automation." },
+            { icon: Mail, name: "Your Email Address", description: `Your unique address is: ${userProfile.inboundEmailAddress || 'Go to the Inbox tab to set up your forwarding address.'}` },
+            { icon: SettingsIcon, name: "Your Sending Name & Signature", description: "The name and email address used when sending messages are taken from your main profile (under the 'My Profile' tab). You can also set a custom email signature under the 'Inbox' tab." }
+        ]},
         { title: "Work", features: [ { icon: Briefcase, name: "Job Board", description: "Find new opportunities posted by the community or post your own jobs." }, { icon: FileText, name: "Job Files", description: "A dedicated folder for every job. Keep notes, files, and client info all in one place." }, { icon: Users, name: "Clients", description: "Your complete client database. Manage contact info, billing details, and communication history." } ] },
         { title: "Finances", features: [ { icon: Receipt, name: "Invoices", description: "Create, send, and track professional invoices. Drafts are created automatically from completed jobs." }, { icon: DollarSign, name: "My Money", description: "Your financial dashboard. Track income, log expenses with AI receipt-scanning, and estimate your tax liability." } ] },
         { title: "Account", features: [ { icon: Award, name: "Credentials", description: "Track your licenses, certifications, and continuing education units (CEUs) with progress bars." }, { icon: SettingsIcon, name: "Settings", description: "Customize the app to your workflow, from invoice defaults to automated email templates." } ] }
@@ -90,7 +96,6 @@ const HowToTab = () => {
     );
 };
 
-// ✅ New component for confirmation dialogs
 const ConfirmationModal = ({ title, message, onConfirm, onCancel }: { title: string, message: string, onConfirm: () => void, onCancel: () => void }) => (
     <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4">
         <div className="bg-card rounded-lg shadow-xl w-full max-w-md border p-6 text-center">
@@ -104,34 +109,24 @@ const ConfirmationModal = ({ title, message, onConfirm, onCancel }: { title: str
     </div>
 );
 
-interface SettingsPageContentProps {
-    userId: string;
-}
-
-export default function SettingsPageContent({ userId }: SettingsPageContentProps) {
-    const { isFirebaseAuthenticated } = useFirebase(); // ✅ 2. Get the "Green Light"
-
+export default function SettingsPageContent({ userId }: { userId: string }) {
+    const { isFirebaseAuthenticated } = useFirebase();
     const [templates, setTemplates] = useState<Template[]>([]);
     const [profile, setProfile] = useState<Partial<UserProfile>>({});
     const [reminders, setReminders] = useState<Reminder[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-
     const [activeTab, setActiveTab] = useState<'profile' | 'notifications' | 'expenses' | 'invoicing' | 'inbox' | 'howto' | 'reminders'>('profile');
     const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
     const [editingTemplate, setEditingTemplate] = useState<Partial<Template> | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [newReminder, setNewReminder] = useState<Partial<Reminder>>({ type: 'one-time', text: '' });
-    
-    // ✅ State for our new status messages and confirmation dialogs
     const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
     const [confirmation, setConfirmation] = useState<{ title: string, message: string, onConfirm: () => void } | null>(null);
 
-    // ✅ 3. This useEffect now waits for the Green Light before fetching any data
     useEffect(() => {
         if (isFirebaseAuthenticated) {
             console.log("✅ Settings page is authenticated, fetching data...");
             setIsLoading(true);
-
             const unsubProfile = getUserProfile(userId, (profileData) => {
                 if (profileData) {
                     setProfile({
@@ -144,7 +139,6 @@ export default function SettingsPageContent({ userId }: SettingsPageContentProps
                 }
                 setIsLoading(false);
             });
-
             const unsubTemplates = getTemplates(userId, (templateData) => {
                 setTemplates(templateData);
                 if (templateData.length === 0) {
@@ -160,9 +154,7 @@ export default function SettingsPageContent({ userId }: SettingsPageContentProps
                     setupNewUser();
                 }
             });
-
             const unsubReminders = getReminders(userId, setReminders);
-
             return () => {
                 unsubProfile();
                 unsubTemplates();
@@ -171,7 +163,6 @@ export default function SettingsPageContent({ userId }: SettingsPageContentProps
         }
     }, [isFirebaseAuthenticated, userId]);
     
-    // Function to show a status message and clear it after a few seconds
     const showStatusMessage = (type: 'success' | 'error', text: string) => {
         setStatusMessage({ type, text });
         setTimeout(() => setStatusMessage(null), 4000);
@@ -306,7 +297,6 @@ export default function SettingsPageContent({ userId }: SettingsPageContentProps
         });
     };
 
-    // ✅ 4. This loading check now waits for the Green Light AND the initial data fetch.
     if (!isFirebaseAuthenticated || isLoading) {
         return (
             <div className="flex justify-center items-center h-full p-8">
@@ -321,10 +311,8 @@ export default function SettingsPageContent({ userId }: SettingsPageContentProps
 
     return (
         <>
-            {/* ✅ Render confirmation modal when needed */}
             {confirmation && <ConfirmationModal {...confirmation} onCancel={() => setConfirmation(null)} />}
             
-            {/* ✅ Render status message when needed */}
             {statusMessage && (
                 <div className={`fixed bottom-5 right-5 z-50 p-4 rounded-lg shadow-lg flex items-center gap-3 ${statusMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                     {statusMessage.type === 'success' ? <ThumbsUp size={20} /> : <Info size={20} />}
@@ -383,7 +371,7 @@ export default function SettingsPageContent({ userId }: SettingsPageContentProps
                                 <h3 className="font-medium text-foreground">Add New Reminder</h3>
                                 <div>
                                     <label htmlFor="reminderText" className="block text-sm font-medium text-muted-foreground">Reminder Text</label>
-                                    <input id="reminderText" type="text" value={newReminder.text} onChange={(e) => setNewReminder(p => ({ ...p, text: e.target.value }))} className="w-full mt-1 p-2 bg-background border rounded-md" placeholder="e.g., Don't forget to bring shoes" />
+                                    <input id="reminderText" type="text" value={newReminder.text || ''} onChange={(e) => setNewReminder(p => ({ ...p, text: e.target.value }))} className="w-full mt-1 p-2 bg-background border rounded-md" placeholder="e.g., Don't forget to bring shoes" />
                                 </div>
                                 <div>
                                     <label htmlFor="reminderType" className="block text-sm font-medium text-muted-foreground">Type</label>
@@ -578,25 +566,39 @@ export default function SettingsPageContent({ userId }: SettingsPageContentProps
                                 <h2 className="text-xl font-semibold">Inbox Automation</h2>
                                 <p className="text-muted-foreground text-sm mt-1">Configure settings to automate your inbound requests.</p>
                             </div>
-                            <div className="bg-card p-6 rounded-lg border">
+                            <div className="bg-card p-6 rounded-lg border space-y-6">
                                 <div>
-                                    <label htmlFor="defaultForwardingEmail" className="block text-sm font-medium">Default Forwarding Email</label>
+                                    <label htmlFor="inboundEmailAddress" className="block text-sm font-medium">Your Unique Inbound Email</label>
                                     <input 
-                                        id="defaultForwardingEmail"
+                                        id="inboundEmailAddress"
                                         type="email" 
-                                        value={profile.defaultForwardingEmail || ''} 
-                                        onChange={(e) => setProfile(p => ({ ...p, defaultForwardingEmail: e.target.value }))}
-                                        className="w-full mt-1 p-2 bg-background border rounded-md"
-                                        placeholder="e.g., yourname.forward@example.com"
+                                        value={profile.inboundEmailAddress || 'Generating...'} 
+                                        readOnly
+                                        className="w-full mt-1 p-2 bg-background border rounded-md text-muted-foreground"
                                     />
                                     <p className="text-xs text-muted-foreground mt-2">
-                                        Emails received from this address will be automatically confirmed on your calendar. If a double booking is detected, you&apos;ll receive a warning message in your inbox instead.
+                                        Forward emails from clients to this address. The system will parse them and create appointments or inbox messages for you.
+                                    </p>
+                                </div>
+                                {/* ✅ NEW: Email Signature Section */}
+                                <div>
+                                    <label htmlFor="emailSignature" className="block text-sm font-medium">Email Signature</label>
+                                    <textarea 
+                                        id="emailSignature"
+                                        value={profile.emailSignature || ''} 
+                                        onChange={(e) => setProfile(p => ({ ...p, emailSignature: e.target.value }))}
+                                        rows={4}
+                                        className="w-full mt-1 p-2 bg-background border rounded-md"
+                                        placeholder="e.g.,&#10;Best regards,&#10;Your Name&#10;Your Title"
+                                    />
+                                    <p className="text-xs text-muted-foreground mt-2">
+                                        This signature will be automatically appended to all emails sent from the Mailbox.
                                     </p>
                                 </div>
                                 <div className="flex justify-end mt-4">
                                     <button onClick={() => handleSaveSettings(profile)} disabled={isSubmitting} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90 disabled:opacity-50">
                                         {isSubmitting ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>}
-                                        Save Automation Settings
+                                        Save Inbox Settings
                                     </button>
                                 </div>
                             </div>
@@ -621,7 +623,7 @@ export default function SettingsPageContent({ userId }: SettingsPageContentProps
                         </div>
                     )}
                     
-                    {activeTab === 'howto' && <HowToTab />}
+                    {activeTab === 'howto' && <HowToTab userProfile={profile} />}
                 </div>
             </div>
             {isTemplateModalOpen && ( <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4"><div className="bg-card rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border p-6"><TemplateFormModal onSave={handleSaveTemplate} onCancel={handleCloseTemplateModal} initialData={editingTemplate || {}} isSubmitting={isSubmitting} /></div></div> )}

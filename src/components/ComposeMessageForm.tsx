@@ -1,96 +1,104 @@
 // src/components/ComposeMessageForm.tsx
+
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Send, X as XIcon, Loader2 } from 'lucide-react';
+import { Send, X, Loader2 } from 'lucide-react';
 
 interface ComposeMessageFormProps {
-    onSend: (to: string, subject: string, body: string) => Promise<boolean>;
+    onSend: (to: string[], subject: string, body: string) => Promise<boolean>;
     onClose: () => void;
+    initialData?: { recipients: string[]; subject: string; body: string; }; // ✅ Expect an array
     isSending: boolean;
-    // ✅ FIX: Added the initialData prop to be accepted by the component
-    initialData?: {
-        recipient: string;
-        subject: string;
-        body: string;
-    };
 }
 
-export default function ComposeMessageForm({ onSend, onClose, isSending, initialData }: ComposeMessageFormProps) {
-    // ✅ FIX: Use initialData to set the default state for the form fields
-    const [recipient, setRecipient] = useState(initialData?.recipient || '');
-    const [subject, setSubject] = useState(initialData?.subject || '');
-    const [body, setBody] = useState(initialData?.body || '');
+export default function ComposeMessageForm({ onSend, onClose, initialData, isSending }: ComposeMessageFormProps) {
+    const [recipients, setRecipients] = useState<string[]>([]);
+    const [recipientInput, setRecipientInput] = useState('');
+    const [subject, setSubject] = useState('');
+    const [body, setBody] = useState('');
     const [error, setError] = useState('');
 
-    // This ensures that if the user clicks "Reply" on another message while this is open, the form updates.
     useEffect(() => {
         if (initialData) {
-            setRecipient(initialData.recipient);
-            setSubject(initialData.subject);
-            setBody(initialData.body);
+            setRecipients(initialData.recipients || []); // ✅ Handle the array
+            setSubject(initialData.subject || '');
+            setBody(initialData.body || '');
         }
     }, [initialData]);
 
+    const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+    const handleRecipientKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (['Enter', ',', ' '].includes(e.key) && recipientInput) {
+            e.preventDefault();
+            const newRecipient = recipientInput.trim();
+            if (isValidEmail(newRecipient) && !recipients.includes(newRecipient)) {
+                setRecipients([...recipients, newRecipient]);
+                setRecipientInput('');
+                setError('');
+            } else if (!isValidEmail(newRecipient)) {
+                setError('Please enter a valid email address.');
+            }
+        }
+    };
+
+    const removeRecipient = (index: number) => {
+        setRecipients(recipients.filter((_, i) => i !== index));
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!recipient || !subject) {
-            setError('Recipient and Subject are required.');
+        if (recipients.length === 0) {
+            setError('Please add at least one recipient.');
             return;
         }
-        setError('');
-        const success = await onSend(recipient, subject, body);
+        const success = await onSend(recipients, subject, body);
         if (success) {
-            // The parent component will handle closing the form
+            setRecipients([]);
+            setSubject('');
+            setBody('');
         }
     };
 
     return (
-        <form onSubmit={handleSubmit} className="flex flex-col h-full p-4 bg-background">
-            <div className="flex justify-between items-center pb-4 border-b">
-                <h2 className="text-xl font-bold">Compose Message</h2>
-                <button type="button" onClick={onClose} className="p-2 text-muted-foreground hover:text-primary hover:bg-muted rounded-full">
-                    <XIcon size={20} />
-                </button>
+        <form onSubmit={handleSubmit} className="flex flex-col h-full">
+            <div className="p-4 border-b flex justify-between items-center">
+                <h3 className="text-xl font-bold">Compose Message</h3>
+                <button type="button" onClick={onClose} className="p-1 hover:bg-muted rounded-full"><X size={20}/></button>
             </div>
-            <div className="py-4 space-y-4">
+            <div className="p-4 space-y-4">
                 <div>
-                    <label htmlFor="recipient" className="sr-only">To:</label>
-                    <input
-                        id="recipient"
-                        type="email"
-                        value={recipient}
-                        onChange={(e) => setRecipient(e.target.value)}
-                        placeholder="To:"
-                        required
-                        className="w-full p-2 bg-transparent border-b focus:outline-none"
-                    />
+                    <label className="text-sm font-medium text-muted-foreground">To:</label>
+                    <div className="flex flex-wrap items-center gap-2 p-2 border rounded-md bg-background min-h-[42px] mt-1">
+                        {recipients.map((email, index) => (
+                            <div key={index} className="flex items-center gap-1 bg-secondary text-secondary-foreground text-sm font-medium px-2 py-1 rounded-full">
+                                <span>{email}</span>
+                                <button type="button" onClick={() => removeRecipient(index)} className="text-muted-foreground hover:text-foreground"><X size={14}/></button>
+                            </div>
+                        ))}
+                        <input
+                            type="email"
+                            value={recipientInput}
+                            onChange={(e) => setRecipientInput(e.target.value)}
+                            onKeyDown={handleRecipientKeyDown}
+                            placeholder="Add email(s)..."
+                            className="flex-grow bg-transparent outline-none p-1"
+                        />
+                    </div>
+                    {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
                 </div>
                 <div>
-                    <label htmlFor="subject" className="sr-only">Subject:</label>
-                    <input
-                        id="subject"
-                        type="text"
-                        value={subject}
-                        onChange={(e) => setSubject(e.target.value)}
-                        placeholder="Subject"
-                        required
-                        className="w-full p-2 bg-transparent border-b focus:outline-none font-semibold"
-                    />
+                    <label className="text-sm font-medium text-muted-foreground">Subject:</label>
+                    <input value={subject} onChange={(e) => setSubject(e.target.value)} type="text" className="w-full mt-1 p-2 bg-background border rounded-md" required />
                 </div>
             </div>
-            <div className="flex-grow">
-                <textarea
-                    value={body}
-                    onChange={(e) => setBody(e.target.value)}
-                    className="w-full h-full p-2 bg-transparent resize-none focus:outline-none"
-                    placeholder="Your message here..."
-                />
+            <div className="p-4 flex-grow">
+                <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Your message here..." className="w-full h-full p-2 bg-background border rounded-md resize-none" required />
             </div>
-            {error && <p className="text-destructive text-sm text-center">{error}</p>}
-            <div className="pt-4 border-t">
-                <button type="submit" disabled={isSending} className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90 disabled:opacity-50">
-                    {isSending ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
+            <div className="p-4 border-t flex justify-end">
+                <button type="submit" disabled={isSending} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90 disabled:opacity-50">
+                    {isSending ? <Loader2 size={16} className="animate-spin"/> : <Send size={16}/>}
                     {isSending ? 'Sending...' : 'Send'}
                 </button>
             </div>
