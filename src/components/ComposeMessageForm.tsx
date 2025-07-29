@@ -6,9 +6,9 @@ import { useState, useEffect } from 'react';
 import { Send, X, Loader2 } from 'lucide-react';
 
 interface ComposeMessageFormProps {
-    onSend: (to: string[], subject: string, body: string) => Promise<boolean>;
+    onSend: (recipients: string[], subject: string, body: string) => Promise<boolean>;
     onClose: () => void;
-    initialData?: { recipients: string[]; subject: string; body: string; }; // ✅ Expect an array
+    initialData?: { recipients: string[]; subject: string; body: string; };
     isSending: boolean;
 }
 
@@ -21,51 +21,78 @@ export default function ComposeMessageForm({ onSend, onClose, initialData, isSen
 
     useEffect(() => {
         if (initialData) {
-            setRecipients(initialData.recipients || []); // ✅ Handle the array
+            setRecipients(initialData.recipients || []);
             setSubject(initialData.subject || '');
             setBody(initialData.body || '');
         }
     }, [initialData]);
 
-    const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    const isValidEmail = (email: string) => {
+        // A simple regex for email validation
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    };
 
-    const handleRecipientKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (['Enter', ',', ' '].includes(e.key) && recipientInput) {
-            e.preventDefault();
-            const newRecipient = recipientInput.trim();
-            if (isValidEmail(newRecipient) && !recipients.includes(newRecipient)) {
-                setRecipients([...recipients, newRecipient]);
-                setRecipientInput('');
-                setError('');
-            } else if (!isValidEmail(newRecipient)) {
-                setError('Please enter a valid email address.');
-            }
+    const handleAddRecipient = () => {
+        const newRecipient = recipientInput.trim();
+        if (newRecipient && isValidEmail(newRecipient) && !recipients.includes(newRecipient)) {
+            setRecipients([...recipients, newRecipient]);
+            setRecipientInput('');
+            setError('');
+        } else if (newRecipient && !isValidEmail(newRecipient)) {
+            setError('Please enter a valid email address.');
         }
     };
 
-    const removeRecipient = (index: number) => {
-        setRecipients(recipients.filter((_, i) => i !== index));
+    const handleRecipientKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (['Enter', ',', ' '].includes(e.key)) {
+            e.preventDefault();
+            handleAddRecipient();
+        }
+    };
+    
+    const removeRecipient = (indexToRemove: number) => {
+        setRecipients(recipients.filter((_, index) => index !== indexToRemove));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (recipients.length === 0) {
+        // Add any remaining input as a recipient before submitting
+        if (recipientInput.trim()) {
+            handleAddRecipient();
+        }
+
+        if (recipients.length === 0 && !recipientInput.trim()) {
             setError('Please add at least one recipient.');
             return;
         }
-        const success = await onSend(recipients, subject, body);
+
+        // Use a final list of recipients for sending
+        const finalRecipients = recipientInput.trim() && isValidEmail(recipientInput.trim()) && !recipients.includes(recipientInput.trim())
+            ? [...recipients, recipientInput.trim()]
+            : recipients;
+
+        if(finalRecipients.length === 0) {
+            setError('Please add a valid recipient.');
+            return;
+        }
+
+        const success = await onSend(finalRecipients, subject, body);
         if (success) {
             setRecipients([]);
+            setRecipientInput('');
             setSubject('');
             setBody('');
+            onClose(); // Close the form on successful send
         }
     };
 
     return (
-        <form onSubmit={handleSubmit} className="flex flex-col h-full">
+        <form onSubmit={handleSubmit} className="flex flex-col h-full bg-card text-card-foreground">
             <div className="p-4 border-b flex justify-between items-center">
                 <h3 className="text-xl font-bold">Compose Message</h3>
-                <button type="button" onClick={onClose} className="p-1 hover:bg-muted rounded-full"><X size={20}/></button>
+                <button type="button" onClick={onClose} className="p-1 hover:bg-muted rounded-full">
+                    <X size={20}/>
+                </button>
             </div>
             <div className="p-4 space-y-4">
                 <div>
@@ -74,7 +101,9 @@ export default function ComposeMessageForm({ onSend, onClose, initialData, isSen
                         {recipients.map((email, index) => (
                             <div key={index} className="flex items-center gap-1 bg-secondary text-secondary-foreground text-sm font-medium px-2 py-1 rounded-full">
                                 <span>{email}</span>
-                                <button type="button" onClick={() => removeRecipient(index)} className="text-muted-foreground hover:text-foreground"><X size={14}/></button>
+                                <button type="button" onClick={() => removeRecipient(index)} className="text-muted-foreground hover:text-foreground">
+                                    <X size={14}/>
+                                </button>
                             </div>
                         ))}
                         <input
@@ -89,15 +118,15 @@ export default function ComposeMessageForm({ onSend, onClose, initialData, isSen
                     {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
                 </div>
                 <div>
-                    <label className="text-sm font-medium text-muted-foreground">Subject:</label>
-                    <input value={subject} onChange={(e) => setSubject(e.target.value)} type="text" className="w-full mt-1 p-2 bg-background border rounded-md" required />
+                    <label htmlFor="subject" className="text-sm font-medium text-muted-foreground">Subject:</label>
+                    <input id="subject" value={subject} onChange={(e) => setSubject(e.target.value)} type="text" className="w-full mt-1 p-2 bg-background border rounded-md" required />
                 </div>
             </div>
             <div className="p-4 flex-grow">
                 <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Your message here..." className="w-full h-full p-2 bg-background border rounded-md resize-none" required />
             </div>
             <div className="p-4 border-t flex justify-end">
-                <button type="submit" disabled={isSending} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90 disabled:opacity-50">
+                <button type="submit" disabled={isSending} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed">
                     {isSending ? <Loader2 size={16} className="animate-spin"/> : <Send size={16}/>}
                     {isSending ? 'Sending...' : 'Send'}
                 </button>
