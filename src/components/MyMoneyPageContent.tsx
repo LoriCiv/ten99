@@ -88,10 +88,8 @@ function MailboxPageInternal({ userId }: { userId: string }) {
             
             const unsubProfile = getUserProfile(userId, (profile) => {
                 setUserProfile(profile);
-                // Fetch job postings only after we have the profile
                 const unsubJobs = getJobPostings(setJobPostings, profile);
                 setIsLoading(false);
-                // Return cleanup for jobs as a "sub-cleanup"
                 return () => unsubJobs();
             });
             
@@ -142,7 +140,7 @@ function MailboxPageInternal({ userId }: { userId: string }) {
         const dateString = selectedMessage.createdAt.toDate().toLocaleString();
         const quotedBody = `\n\n--- On ${dateString}, ${selectedMessage.senderName} wrote: ---\n> ${selectedMessage.body.replace(/\n/g, '\n> ')}`;
         setComposeInitialData({
-            recipients: [selectedMessage.senderId], // Correctly pass recipient as an array
+            recipients: [selectedMessage.senderId],
             subject: `Re: ${selectedMessage.subject}`,
             body: quotedBody
         });
@@ -150,14 +148,19 @@ function MailboxPageInternal({ userId }: { userId: string }) {
         setIsComposing(true);
     };
 
-    // ✅ THIS IS THE FIX
-    // The 'to' parameter is now correctly typed as string[]
-    // and is passed directly to sendAppMessage.
     const handleSend = async (to: string[], subject: string, body: string): Promise<boolean> => {
         if (!userId || !userProfile) {
             showStatusMessage("error", "Cannot send message. User not found.");
             return false;
         }
+
+        // --- START OF DEBUGGING CODE ---
+        console.log("--- [DEBUG] INITIATING SEND ---");
+        console.log("Current User ID (senderId):", userId);
+        console.log("Sending To (recipients):", to);
+        console.log("---------------------------------");
+        // --- END OF DEBUGGING CODE ---
+        
         setIsActionLoading(true);
         try {
             await sendAppMessage(userId, userProfile.name || "A Ten99 User", to, subject, body);
@@ -166,7 +169,7 @@ function MailboxPageInternal({ userId }: { userId: string }) {
             setActiveFolder('sent');
             return true;
         } catch (error) {
-            console.error("Error sending message:", error);
+            console.error("--- [DEBUG] SEND FAILED IN UI ---", error); // Added a debug label
             const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
             showStatusMessage("error", `Failed to send message: ${errorMessage}`);
             return false;
