@@ -2,34 +2,27 @@
 
 import admin from 'firebase-admin';
 
-/**
- * Initializes the Firebase Admin SDK if it hasn't been already.
- * This function is safe to call multiple times.
- */
-export function initializeFirebaseAdmin() {
-  // Check if the app is already initialized to prevent errors
-  if (admin.apps.length > 0) {
-    return;
-  }
-
-  // Ensure the environment variable is set
+// Check if the app is already initialized to prevent errors in the Next.js
+// development environment (which can cause the file to be re-run).
+if (!admin.apps.length) {
   const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+
   if (!serviceAccountKey) {
-    throw new Error('FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set.');
+    throw new Error('The FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set. Please check your .env.local file.');
   }
 
   try {
-    // Parse the JSON key from the environment variable
     const serviceAccount = JSON.parse(serviceAccountKey);
-
-    // Initialize the app with the service account credentials
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
     });
     console.log("Firebase Admin SDK initialized successfully.");
   } catch (error) {
     console.error("Error parsing FIREBASE_SERVICE_ACCOUNT_KEY or initializing Firebase Admin:", error);
-    // Re-throw the error to be caught by the calling function
-    throw new Error("Failed to initialize Firebase Admin SDK.");
+    throw new Error("Failed to initialize Firebase Admin SDK. Please ensure the service account key in your .env.local file is a valid, non-empty JSON string.");
   }
 }
+
+// Export the initialized admin services for use in your server-side code
+export const adminAuth = admin.auth();
+export const adminDb = admin.firestore();

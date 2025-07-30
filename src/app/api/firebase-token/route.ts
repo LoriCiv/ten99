@@ -1,45 +1,31 @@
 // src/app/api/firebase-token/route.ts
 
-import { NextRequest, NextResponse } from 'next/server';
-import { getAuth as getClerkAuth } from '@clerk/nextjs/server';
-import { getAuth as getFirebaseAuth } from 'firebase-admin/auth';
-import { initializeFirebaseAdmin } from '@/lib/firebase-admin';
+import { NextResponse } from 'next/server';
+import { auth } from '@clerk/nextjs/server';
+import { adminAuth } from '@/lib/firebase-admin';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    // 1. Initialize the Firebase Admin SDK.
-    // This now has better internal error handling.
-    console.log("API Route: Attempting to initialize Firebase Admin...");
-    initializeFirebaseAdmin();
-    console.log("API Route: Firebase Admin initialized.");
+    // 1. Get the authenticated user from Clerk.
+    // We MUST use 'await' here because auth() is an async function.
+    const { userId } = await auth(); // <-- This is the fix
 
-    // 2. Get the Clerk user.
-    const { userId } = getClerkAuth(request);
     if (!userId) {
-      console.error("API Route Error: Unauthorized - No user ID in Clerk session.");
+      console.error("API Route Error: Unauthorized - No user ID found in Clerk session.");
       return new NextResponse(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
     }
-    console.log(`API Route: Found user ID: ${userId}`);
 
-    // 3. Create a custom Firebase token.
-    console.log("API Route: Attempting to create custom token...");
-    const firebaseToken = await getFirebaseAuth().createCustomToken(userId);
-    console.log("API Route: Successfully created custom token.");
+    // 2. Create a custom Firebase token for the user.
+    const firebaseToken = await adminAuth.createCustomToken(userId);
 
-    // 4. Send the token back to the client.
-    return NextResponse.json({ firebaseToken });
+    // 3. Send the token back to the client.
+    return NextResponse.json({ token: firebaseToken });
 
   } catch (error) {
-    // This is our new, detailed error logging.
-    console.error('🔥 FATAL ERROR in /api/firebase-token route:');
-    if (error instanceof Error) {
-        console.error('Error Name:', error.name);
-        console.error('Error Message:', error.message);
-        console.error('Error Stack:', error.stack);
-    } else {
-        console.error('An unexpected error object was thrown:', error);
-    }
-    
-    return new NextResponse(JSON.stringify({ error: "Internal Server Error" }), { status: 500 });
+    console.error('🔥 FATAL ERROR in /api/firebase-token route:', error);
+    return new NextResponse(
+      JSON.stringify({ error: "Internal Server Error creating Firebase token." }),
+      { status: 500 }
+    );
   }
 }
