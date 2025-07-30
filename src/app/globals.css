@@ -44,25 +44,12 @@
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
     --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%; /* This is now overridden below, but kept for consistency */
+    --input: 240 3.7% 15.9%;
     --ring: 240 4.9% 83.9%;
-  }
-
-  body {
-    background-color: hsl(var(--background));
-    color: hsl(var(--foreground));
-  }
-  
-  /* ✅ This new rule is the definitive fix */
-  input,
-  textarea,
-  select {
-    background-color: hsl(var(--card)) !important;
-    color: hsl(var(--card-foreground)) !important;
   }
 }
 
-/* Custom Styles for the Interactive Calendar */
+/* Your custom calendar styles are perfectly fine and will remain */
 .rdp-day_job:not(.rdp-day_outside) {
   border-bottom: 3px solid #3b82f6; /* blue */
 }
