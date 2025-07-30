@@ -16,7 +16,7 @@ interface FirebaseContextType {
 const FirebaseContext = createContext<FirebaseContextType | undefined>(undefined);
 
 export function FirebaseProvider({ children }: { children: ReactNode }) {
-    const { getToken, isSignedIn } = useAuth();
+    const { isSignedIn } = useAuth(); // We don't need getToken here
     const [user, setUser] = useState<User | null>(null);
     const [isFirebaseAuthenticated, setIsFirebaseAuthenticated] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
@@ -25,32 +25,54 @@ export function FirebaseProvider({ children }: { children: ReactNode }) {
         if (isSignedIn && !isFirebaseAuthenticated) {
             const signInToFirebase = async () => {
                 try {
-                    const clerkToken = await getToken({ template: 'integration_firebase' });
-                    if (!clerkToken) throw new Error("Clerk token not available.");
-
                     const res = await fetch('/api/firebase/custom-token');
-                    if (!res.ok) throw new Error("Failed to fetch Firebase custom token.");
+                    if (!res.ok) {
+                        throw new Error(`Failed to fetch custom token: ${res.statusText}`);
+                    }
 
                     const data = await res.json();
-                    const { firebaseToken } = data;
                     
-                    await signInWithCustomToken(firebaseAuth, firebaseToken);
+                    // ✅ THE FIX: Use "token", which is what our API sends.
+                    const { token } = data; 
+                    if (!token) {
+                        throw new Error("Token not found in API response.");
+                    }
+                    
+                    // ✅ THE FIX: Pass the correct variable to the sign-in function.
+                    await signInWithCustomToken(firebaseAuth, token);
+
                 } catch (error) {
                     console.error("Firebase custom sign-in failed:", error);
+                    // If sign-in fails, we must stop the loading state
+                    // to prevent getting stuck on a blank screen.
+                    setIsLoading(false); 
                 }
             };
             signInToFirebase();
+        } else if (!isSignedIn) {
+            // If the user is not signed in, we're not loading anymore.
+            setIsLoading(false);
         }
-    }, [isSignedIn, getToken, isFirebaseAuthenticated]);
+    }, [isSignedIn, isFirebaseAuthenticated]);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(firebaseAuth, (currentUser) => {
             setUser(currentUser);
             setIsFirebaseAuthenticated(!!currentUser);
-            setIsLoading(false);
+            setIsLoading(false); // This will now run correctly after sign-in
         });
         return () => unsubscribe();
     }, []);
+
+    // This is a temporary check. If the page is blank after this fix,
+    // it means another component is using "isLoading" to hide the app.
+    if (isLoading) {
+       return (
+         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+            <p>Loading...</p>
+         </div>
+       );
+    }
 
     return (
         <FirebaseContext.Provider value={{ user, isFirebaseAuthenticated, isLoading }}>
