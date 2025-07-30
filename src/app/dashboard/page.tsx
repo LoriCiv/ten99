@@ -1,20 +1,30 @@
-import { auth } from '@clerk/nextjs/server';
-import DashboardPageContent from '@/components/DashboardPageContent';
-import { Suspense } from 'react';
-import { redirect } from 'next/navigation';
+import { auth } from "@clerk/nextjs/server";
+import { UserButton } from "@clerk/nextjs";
 
 export default async function DashboardPage() {
-    const { userId } = await auth();
+  // ✅ REPAIR: Add the 'await' keyword here
+  const { userId } = await auth();
 
-    if (!userId) {
-      // If there's no user, send them to the sign-in page
-      redirect('/sign-in');
-    }
+  if (!userId) {
+    // This should not happen if middleware is correct, but it's a good safeguard
+    return <div>Not logged in</div>;
+  }
 
-    return (
-        <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading dashboard...</div>}>
-            {/* This passes the real, unique userId to the component that shows the dashboard */}
-            <DashboardPageContent userId={userId} />
-        </Suspense>
-    );
+  return (
+    <div className="p-4 sm:p-6 lg:p-8">
+      <header className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-foreground">
+          Dashboard
+        </h1>
+        <UserButton afterSignOutUrl="/" />
+      </header>
+
+      <div className="bg-card p-6 rounded-lg border">
+        <h2 className="text-xl font-semibold">Welcome to your Ten99 Dashboard!</h2>
+        <p className="text-muted-foreground mt-2">
+          This is your command center. From here, you can manage your clients, appointments, invoices, and more.
+        </p>
+      </div>
+    </div>
+  );
 }
