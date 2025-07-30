@@ -8,6 +8,7 @@ const isPublicRoute = createRouteMatcher([
   '/sign-in(.*)',
   '/sign-up(.*)',
   '/api/inbound',
+  '/api/firebase/custom-token', // THIS LINE WAS ADDED
   '/share/(.*)',
   '/profile/(.*)'
 ]);
