@@ -1,14 +1,11 @@
-// src/components/JobBoardPageContent.tsx
-
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import type { JobPosting, UserProfile } from '@/types/app-interfaces';
-import { getJobPostings, getUserProfile, reportJobPost } from '@/utils/firestoreService';
+import { reportJobPost } from '@/utils/firestoreService';
 import Link from 'next/link';
 import { PlusCircle, Search, Briefcase, MapPin, Flag, Info, Building, Loader2 } from 'lucide-react';
 import { Switch } from "@/components/ui/switch";
-import { useFirebase } from './FirebaseProvider'; // ✅ 1. Import our hook
 
 const usStates = [
     "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", "Delaware",
@@ -32,10 +29,9 @@ const JobPostCard = ({ post, onReportSuccess }: { post: JobPosting, onReportSucc
         try {
             await reportJobPost(post.id);
             setIsReported(true);
-            onReportSuccess(); // Notify the parent component
+            onReportSuccess();
         } catch (error) {
             console.error("Failed to report post:", error);
-            // Optionally notify parent of failure
         }
     };
 
@@ -76,11 +72,18 @@ const JobPostCard = ({ post, onReportSuccess }: { post: JobPosting, onReportSucc
     );
 };
 
-export default function JobBoardPageContent({ userId }: { userId: string }) {
-    const { isFirebaseAuthenticated } = useFirebase(); // ✅ 2. Get the "Green Light"
-    const [jobPostings, setJobPostings] = useState<JobPosting[]>([]);
-    const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+// ✅ Define the props the component will accept
+interface JobBoardPageContentProps {
+    initialJobPostings: JobPosting[];
+    currentUserProfile: UserProfile | null;
+    userId: string;
+}
+
+// ✅ Update the function to accept the new props
+export default function JobBoardPageContent({ initialJobPostings, currentUserProfile, userId }: JobBoardPageContentProps) {
+    // ✅ Use the props to set the initial state
+    const [jobPostings, setJobPostings] = useState(initialJobPostings);
+    const [userProfile, setUserProfile] = useState(currentUserProfile);
     
     const [searchTerm, setSearchTerm] = useState('');
     const [zipFilter, setZipFilter] = useState('');
@@ -88,21 +91,7 @@ export default function JobBoardPageContent({ userId }: { userId: string }) {
     const [showMatchingOnly, setShowMatchingOnly] = useState(false);
     const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
-    // ✅ 3. This useEffect now waits for the Green Light before fetching data
-    useEffect(() => {
-        if (isFirebaseAuthenticated) {
-            console.log("✅ Job Board is authenticated, fetching data...");
-            const unsubJobs = getJobPostings(setJobPostings);
-            const unsubProfile = getUserProfile(userId, (profile) => {
-                setUserProfile(profile);
-                setIsLoading(false);
-            });
-            return () => {
-                unsubJobs();
-                unsubProfile();
-            };
-        }
-    }, [isFirebaseAuthenticated, userId]);
+    // This component no longer needs to fetch its own data, so the useEffect for data fetching is removed.
 
     const filteredJobs = useMemo(() => {
         const userSkills = userProfile?.skills || [];
@@ -127,18 +116,6 @@ export default function JobBoardPageContent({ userId }: { userId: string }) {
         setStatusMessage("Job post has been reported for review. Thank you.");
         setTimeout(() => setStatusMessage(null), 5000);
     };
-
-    if (!isFirebaseAuthenticated || isLoading) {
-        return (
-            <div className="flex justify-center items-center h-full p-8">
-               <div className="text-center">
-                   <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-                   <p className="text-lg font-semibold mt-4">Loading Job Board...</p>
-                   <p className="text-muted-foreground text-sm mt-1">Authenticating and fetching posts...</p>
-               </div>
-           </div>
-        );
-    }
 
     return (
         <>

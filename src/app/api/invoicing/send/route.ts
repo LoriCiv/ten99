@@ -1,8 +1,5 @@
-// src/app/api/invoicing/send/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
-import { initializeFirebaseAdmin } from '@/lib/firebase-admin'; // ✅ 1. Import our new helper
-import { getFirestore } from 'firebase-admin/firestore'; // ✅ 2. Import firestore components
+import { adminDb } from '@/lib/firebase-admin'; // ✅ Correct import
 import type { Invoice, Client, UserProfile } from '@/types/app-interfaces';
 import sgMail from '@sendgrid/mail';
 
@@ -22,8 +19,7 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-        initializeFirebaseAdmin(); // ✅ 3. Initialize Firebase Admin at the start
-        const db = getFirestore(); // ✅ 4. Get the db instance to use
+        const db = adminDb; // ✅ Use the imported adminDb directly
 
         const { invoiceId, userId } = await request.json();
         if (!invoiceId || !userId) {
@@ -38,7 +34,7 @@ export async function POST(request: NextRequest) {
         const invoice = { id: invoiceSnap.id, ...invoiceSnap.data() } as Invoice;
 
         const clientRef = db.doc(`users/${userId}/clients/${invoice.clientId}`);
-        const userProfileRef = db.doc(`users/${userId}`); // ✅ 5. Corrected user profile path
+        const userProfileRef = db.doc(`users/${userId}`);
 
         const [clientSnap, userProfileSnap] = await Promise.all([clientRef.get(), userProfileRef.get()]);
 
@@ -64,9 +60,8 @@ export async function POST(request: NextRequest) {
 
         await sgMail.send(msg);
 
-        if (invoice.status === 'draft') {
-            await invoiceRef.update({ status: 'sent', invoiceDate: new Date().toISOString().split('T')[0] });
-        } else if (invoice.status === 'overdue') {
+        // Update invoice status after sending
+        if (invoice.status === 'draft' || invoice.status === 'overdue') {
             await invoiceRef.update({ status: 'sent' });
         }
         
@@ -74,6 +69,7 @@ export async function POST(request: NextRequest) {
 
     } catch (error) {
         console.error("Error sending invoice:", error);
-        return NextResponse.json({ error: (error as Error).message }, { status: 500 });
+        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+        return NextResponse.json({ error: errorMessage }, { status: 500 });
     }
 }

@@ -1,28 +1,24 @@
-// src/app/api/firebase/custom-token/route.ts
+import { NextResponse } from 'next/server';
+import { auth } from '@clerk/nextjs/server';
+import { adminAuth } from '@/lib/firebase-admin';
 
-import { NextRequest, NextResponse } from 'next/server';
-import { initializeFirebaseAdmin } from '@/lib/firebase-admin';
-import { getAuth as getAdminAuth } from 'firebase-admin/auth';
-import { auth as clerkAuth } from '@clerk/nextjs/server';
+export async function GET() {
+  try {
+    const { userId } = await auth();
 
-export async function GET(request: NextRequest) {
-    try {
-        // @ts-ignore
-        const { userId } = clerkAuth();
-
-        if (!userId) {
-            return new NextResponse("User not authenticated with Clerk.", { status: 401 });
-        }
-
-        initializeFirebaseAdmin();
-        const adminAuth = getAdminAuth();
-
-        const firebaseToken = await adminAuth.createCustomToken(userId);
-
-        return NextResponse.json({ firebaseToken });
-
-    } catch (error) {
-        console.error("Error creating Firebase custom token:", error);
-        return new NextResponse("Internal Server Error while creating Firebase token.", { status: 500 });
+    if (!userId) {
+      return new NextResponse(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
     }
+
+    const firebaseToken = await adminAuth.createCustomToken(userId);
+
+    return NextResponse.json({ token: firebaseToken });
+
+  } catch (error) {
+    console.error('🔥 FATAL ERROR in /api/firebase/custom-token route:', error);
+    return new NextResponse(
+      JSON.stringify({ error: "Internal Server Error creating Firebase token." }),
+      { status: 500 }
+    );
+  }
 }

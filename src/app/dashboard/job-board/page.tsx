@@ -24,20 +24,21 @@ export default async function JobBoardPage() {
         redirect('/sign-in');
     }
 
-    // Fetch public job postings and the current user's profile on the server
+    // Fetch data on the server
     const [jobPostingsData, userProfileData] = await Promise.all([
         getJobPostingsData(),
         getProfileData(userId)
     ]);
 
-    const jobPostings = jobPostingsData.map(post => serializeData(post));
+    // Serialize the data and filter out any null values
+    const jobPostings = jobPostingsData.map(post => serializeData(post)).filter(Boolean) as JobPosting[];
     const userProfile = serializeData(userProfileData);
 
     return (
         <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading Job Board...</div>}>
             <JobBoardPageContent 
-                initialJobPostings={jobPostings as JobPosting[]}
-                currentUserProfile={userProfile as UserProfile | null}
+                initialJobPostings={jobPostings}
+                currentUserProfile={userProfile}
                 userId={userId}
             />
         </Suspense>

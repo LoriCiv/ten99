@@ -1,8 +1,5 @@
-// src/app/api/send-email/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
-import { initializeFirebaseAdmin } from '@/lib/firebase-admin';
-import { getFirestore } from 'firebase-admin/firestore';
+import { adminDb } from '@/lib/firebase-admin'; // ✅ Correct import
 import sgMail from '@sendgrid/mail';
 import type { UserProfile } from '@/types/app-interfaces';
 
@@ -24,13 +21,11 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Missing required fields for sending email.' }, { status: 400 });
         }
 
-        initializeFirebaseAdmin();
-        const db = getFirestore();
+        const db = adminDb; // ✅ Use the imported adminDb directly
         
         const userProfileRef = db.doc(`users/${userId}`);
         const userProfileSnap = await userProfileRef.get();
         
-        // ✅ THE FIX: .exists is a property, not a function, on the server.
         if (!userProfileSnap.exists) {
             return NextResponse.json({ error: 'Sender profile not found.' }, { status: 404 });
         }
@@ -43,7 +38,7 @@ export async function POST(request: NextRequest) {
         const msg = {
             to: to,
             from: {
-                email: 'messages@ten99.app',
+                email: 'messages@ten99.app', // This must be a verified sender in SendGrid
                 name: fromName,
             },
             replyTo: replyToEmail || user.email,

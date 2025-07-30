@@ -1,8 +1,6 @@
-// src/app/api/appointments/cron/route.ts
-
 import { NextResponse } from 'next/server';
-import { initializeFirebaseAdmin } from '@/lib/firebase-admin'; // ✅ 1. Import our new helper
-import { getFirestore, FieldValue, Transaction } from 'firebase-admin/firestore'; // ✅ 2. Import firestore components
+import { adminDb } from '@/lib/firebase-admin'; // ✅ Correct import
+import { FieldValue, Transaction } from 'firebase-admin/firestore';
 import type { Appointment, Client, Invoice } from '@/types/app-interfaces';
 
 // Helper function to calculate duration (server-side version)
@@ -17,11 +15,10 @@ const calculateDurationInHours = (startTime?: string, endTime?: string): number 
 
 // Helper function to get next invoice number (server-side version)
 const generateNextInvoiceNumber = async (userId: string): Promise<string> => {
-    const db = getFirestore(); // Get db instance
+    const db = adminDb; // ✅ Use the imported adminDb directly
     const metaRef = db.doc(`users/${userId}/_metadata/invoiceCounter`);
     const year = new Date().getFullYear();
     
-    // ✅ 3. Add the correct type for 'transaction'
     return db.runTransaction(async (transaction: Transaction) => {
         const metaDoc = await transaction.get(metaRef);
         const data = metaDoc.data();
@@ -40,8 +37,7 @@ const generateNextInvoiceNumber = async (userId: string): Promise<string> => {
 
 export async function GET() {
     try {
-        initializeFirebaseAdmin(); // ✅ 4. Initialize Firebase Admin at the start
-        const db = getFirestore(); // ✅ 5. Get the db instance to use
+        const db = adminDb; // ✅ Use the imported adminDb directly
 
         const today = new Date().toISOString().split('T')[0];
         const appointmentsRef = db.collectionGroup('appointments');
@@ -102,8 +98,13 @@ export async function GET() {
 
                     invoicesCreated++;
                 } else {
+                    // If client doesn't exist, just complete the appointment
                     await appointmentRef.update({ status: 'completed' });
                 }
+                completedCount++;
+            } else {
+                 // For non-job appointments, just complete them
+                await appointmentRef.update({ status: 'completed' });
                 completedCount++;
             }
         }

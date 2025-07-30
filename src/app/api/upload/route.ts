@@ -1,15 +1,12 @@
-// src/app/api/upload/route.ts
-
 import { NextResponse } from 'next/server';
-import { initializeFirebaseAdmin } from '@/lib/firebase-admin'; // ✅ 1. Import our new helper
-import { getStorage } from 'firebase-admin/storage'; // ✅ 2. Import getStorage
+import { getStorage } from 'firebase-admin/storage';
 import { v4 as uuidv4 } from 'uuid';
 import { auth } from '@clerk/nextjs/server';
+import '@/lib/firebase-admin'; // ✅ Import to ensure admin app is initialized
 
 export async function POST(request: Request) {
     try {
-        initializeFirebaseAdmin(); // ✅ 3. Initialize Firebase Admin at the start
-        const storage = getStorage(); // ✅ 4. Get the storage instance
+        const storage = getStorage(); // ✅ This works because admin is already initialized
 
         const { userId } = await auth();
 
@@ -28,8 +25,6 @@ export async function POST(request: Request) {
         const fileExtension = file.name.split('.').pop();
         const fileName = `${uuidv4()}.${fileExtension}`;
         
-        // The path now correctly reflects where files for different features might go
-        // For now, we can keep a general 'userUploads' folder
         const filePath = `userUploads/${userId}/${fileName}`;
         
         const fileBuffer = Buffer.from(await file.arrayBuffer());
@@ -42,12 +37,9 @@ export async function POST(request: Request) {
             },
         });
 
-        // Note: getSignedUrl is often preferred for temporary access.
-        // For permanent access, you'd typically make the file public and construct the URL.
-        // This long-expiry signed URL works well for private files.
         const [url] = await fileUpload.getSignedUrl({
             action: 'read',
-            expires: '03-09-2491', // A very long expiration date
+            expires: '03-09-2491', // A very long expiration date for permanent-like access
         });
 
         return NextResponse.json({ fileUrl: url });
