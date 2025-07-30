@@ -8,7 +8,7 @@ const isPublicRoute = createRouteMatcher([
   '/sign-in(.*)',
   '/sign-up(.*)',
   '/api/inbound',
-  '/api/firebase/custom-token', // THIS LINE WAS ADDED
+  '/api/firebase/custom-token', // This line is critical and allows the login to complete
   '/share/(.*)',
   '/profile/(.*)'
 ]);
@@ -18,6 +18,7 @@ export default clerkMiddleware((auth, req) => {
     return NextResponse.next();
   }
 
+  // This comment fixes the TypeScript error
   // @ts-ignore
   const { userId } = auth;
 
