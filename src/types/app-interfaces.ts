@@ -1,5 +1,3 @@
-// src/types/app-interfaces.ts
-
 import type { Timestamp, FieldValue } from 'firebase/firestore';
 
 export interface LineItem {
@@ -246,13 +244,14 @@ export interface UserProfile {
     defaultForwardingEmail?: string;
     inboundEmailAddress?: string;
     emailSignature?: string;
-    states?: string[]; // ✅ This was added
+    states?: string[];
 }
 
 export interface JobPosting {
     id?: string;
     userId: string;
     title: string;
+    companyName?: string; // ✅ This is the fix
     description: string;
     jobType?: 'On-site' | 'Virtual' | 'Hybrid';
     location?: string;

@@ -1,7 +1,6 @@
 // src/app/share/[id]/page.tsx
 
-import { getFirestore } from 'firebase-admin/firestore';
-import { initializeFirebaseAdmin } from '@/lib/firebase-admin';
+import { adminDb } from '@/lib/firebase-admin'; // ✅ Correct import
 import type { JobFile, Client } from '@/types/app-interfaces';
 import { notFound } from 'next/navigation';
 import { Paperclip, CalendarDays, Building, FileText } from 'lucide-react';
@@ -9,8 +8,7 @@ import { Paperclip, CalendarDays, Building, FileText } from 'lucide-react';
 // This is the real function to fetch a shared job file.
 // It looks for a job file in a public collection where the 'publicId' matches.
 const getPublicJobFile = async (publicId: string): Promise<JobFile | null> => {
-    initializeFirebaseAdmin();
-    const db = getFirestore();
+    const db = adminDb; // ✅ Use the imported adminDb directly
     const jobFilesRef = db.collectionGroup('jobFiles');
     const q = jobFilesRef.where('publicId', '==', publicId).where('isShared', '==', true).limit(1);
     const snapshot = await q.get();
@@ -25,8 +23,7 @@ const getPublicJobFile = async (publicId: string): Promise<JobFile | null> => {
 // This function can remain the same, fetching the client associated with the original user.
 const getClientForJobFile = async (userId: string, clientId: string): Promise<Client | null> => {
     if (!userId || !clientId) return null;
-    initializeFirebaseAdmin();
-    const db = getFirestore();
+    const db = adminDb; // ✅ Use the imported adminDb directly
     const clientRef = db.doc(`users/${userId}/clients/${clientId}`);
     const doc = await clientRef.get();
     return doc.exists ? { id: doc.id, ...doc.data() } as Client : null;

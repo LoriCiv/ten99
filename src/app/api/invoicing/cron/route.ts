@@ -1,11 +1,12 @@
 // src/app/api/invoicing/cron/route.ts
 
 import { NextResponse } from 'next/server';
-import { initializeFirebaseAdmin } from '@/lib/firebase-admin'; // ✅ 1. Import our new helper
-import { getFirestore, DocumentSnapshot } from 'firebase-admin/firestore'; // ✅ 2. Import firestore components
+import { adminDb } from '@/lib/firebase-admin'; // ✅ Correct import
+import { DocumentSnapshot } from 'firebase-admin/firestore';
 import type { Invoice, Client, UserProfile } from '@/types/app-interfaces';
 import sgMail from '@sendgrid/mail';
 
+// Initialize SendGrid
 if (process.env.SENDGRID_API_KEY) {
     sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 } else {
@@ -43,8 +44,7 @@ export async function GET() {
     }
 
     try {
-        initializeFirebaseAdmin(); // ✅ 3. Initialize Firebase Admin at the start
-        const db = getFirestore(); // ✅ 4. Get the db instance to use
+        const db = adminDb; // ✅ Use the imported adminDb directly
 
         const today = new Date().toISOString().split('T')[0];
         const invoicesRef = db.collectionGroup('invoices');
@@ -59,7 +59,6 @@ export async function GET() {
         let overdueCount = 0;
         let emailsSent = 0;
 
-        // ✅ 5. Add the correct type for 'doc'
         await Promise.all(snapshot.docs.map(async (doc: DocumentSnapshot) => {
             const invoice = { id: doc.id, ...doc.data() } as Invoice;
             const invoiceRef = doc.ref;
@@ -70,7 +69,6 @@ export async function GET() {
             const userRef = invoiceRef.parent.parent;
             if (!userRef) return;
 
-            // Corrected path for user profile
             const userProfileRef = db.doc(`users/${userRef.id}`);
             const clientRef = userRef.collection('clients').doc(invoice.clientId);
 
