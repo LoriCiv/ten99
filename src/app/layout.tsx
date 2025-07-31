@@ -1,18 +1,28 @@
-import { ClerkProvider } from '@clerk/nextjs';
-import './globals.css';
-import { ReactNode } from 'react';
+// src/app/layout.tsx
 
-export const metadata = {
+import { ClerkProvider } from '@clerk/nextjs';
+import { FirebaseProvider } from '@/components/FirebaseProvider';
+import './globals.css';
+import { Metadata } from 'next';
+
+export const metadata: Metadata = {
   title: 'Ten99',
   description: 'Freelancing Simplified',
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <ClerkProvider>
       <html lang="en" suppressHydrationWarning>
+        <head />
         <body className="bg-background text-foreground">
-          {children}
+          <FirebaseProvider>
+            {children}
+          </FirebaseProvider>
         </body>
       </html>
     </ClerkProvider>
