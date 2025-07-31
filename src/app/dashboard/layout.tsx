@@ -2,18 +2,15 @@
 
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { SignedIn, UserButton } from "@clerk/nextjs";
 import { ThumbsUp, Users, Calendar, FileText, Mail, Settings, Receipt, Award, DollarSign, Menu, X, Briefcase } from 'lucide-react';
 import Image from 'next/image';
-import { FirebaseProvider } from '@/components/FirebaseProvider'; // ✅ 1. Import the FirebaseProvider
+import { FirebaseProvider } from '@/components/FirebaseProvider'; // Import the provider
 
-// NOTE: The unread message count logic will be moved to the Mailbox page
-// where it can safely use the useFirebase hook. For now, we'll pass a placeholder.
-
-const NavLink = ({ href, icon: Icon, children, count }: { href: string, icon: React.ElementType, children: React.ReactNode, count?: number }) => {
+const NavLink = ({ href, icon: Icon, children }: { href: string, icon: React.ElementType, children: React.ReactNode }) => {
     const pathname = usePathname();
     const isActive = href === '/dashboard' ? pathname === href : pathname.startsWith(href);
 
@@ -28,31 +25,15 @@ const NavLink = ({ href, icon: Icon, children, count }: { href: string, icon: Re
         >
             <Icon className="h-5 w-5" />
             <span>{children}</span>
-            {count !== undefined && count > 0 && (
-                <span className="ml-auto bg-rose-500 text-white text-xs font-semibold w-5 h-5 flex items-center justify-center rounded-full">
-                    {count}
-                </span>
-            )}
         </Link>
     );
 };
 
-export default function DashboardLayout({
-    children,
-}: {
-    children: React.ReactNode
-}) {
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    
-    // This logic for fetching messages is removed from the layout.
-    // Each page (like Mailbox) will now be responsible for its own data fetching
-    // after confirming Firebase is authenticated via the useFirebase() hook.
-    const unreadCount = 0; // Placeholder
-    
     const pathname = usePathname();
     
     useEffect(() => {
-        // Close mobile menu on navigation
         setIsMobileMenuOpen(false);
     }, [pathname]);
 
@@ -72,12 +53,7 @@ export default function DashboardLayout({
     const navigationMenu = (
         <nav className="flex flex-col gap-1">
             {navItems.map((item) => (
-                <NavLink
-                    key={item.name}
-                    href={item.href}
-                    icon={item.icon}
-                    count={item.name === 'Mailbox' ? unreadCount : undefined}
-                >
+                <NavLink key={item.name} href={item.href} icon={item.icon}>
                     {item.name}
                 </NavLink>
             ))}
@@ -86,10 +62,9 @@ export default function DashboardLayout({
 
     return (
         <SignedIn>
-            {/* ✅ 2. Wrap the entire dashboard structure with the FirebaseProvider */}
+            {/* ✅ FirebaseProvider is restored here, where it belongs */}
             <FirebaseProvider>
                 <div className="flex min-h-screen bg-background">
-                    {/* Desktop Sidebar */}
                     <aside className="hidden lg:flex w-64 flex-shrink-0 border-r bg-card p-4 flex-col">
                         <div className="flex items-center justify-between mb-8 pl-3">
                             <Link href="/dashboard" className="flex items-center gap-2">
@@ -101,7 +76,6 @@ export default function DashboardLayout({
                         {navigationMenu}
                     </aside>
 
-                    {/* Mobile Flyout Menu */}
                     {isMobileMenuOpen && (
                         <div className="lg:hidden fixed inset-0 z-50 bg-black/60" onClick={() => setIsMobileMenuOpen(false)}>
                             <div
@@ -124,24 +98,18 @@ export default function DashboardLayout({
 
                     <div className="flex flex-col flex-1">
                         <header className="lg:hidden sticky top-0 z-40 flex h-16 items-center justify-between gap-4 border-b bg-background px-4">
-                            <button
-                                onClick={() => setIsMobileMenuOpen(true)}
-                                className="p-2 -ml-2"
-                            >
+                            <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 -ml-2">
                                 <Menu className="h-6 w-6"/>
                                 <span className="sr-only">Open Menu</span>
                             </button>
-                            
                             <Link href="/dashboard" className="flex items-center gap-2">
                                 <Image src="/logo.png" alt="Ten99 Logo" width={28} height={28} />
                                 <h1 className="text-xl font-bold">Ten99</h1>
                             </Link>
-
                             <UserButton afterSignOutUrl="/" />
                         </header>
                         
-                        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-                            {/* All your page content will be rendered here, now with Firebase access */}
+                        <main className="flex-1 overflow-y-auto">
                             {children}
                         </main>
                     </div>
