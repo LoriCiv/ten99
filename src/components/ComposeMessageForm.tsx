@@ -1,5 +1,3 @@
-// src/components/ComposeMessageForm.tsx
-
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -8,7 +6,7 @@ import { Send, X, Loader2 } from 'lucide-react';
 interface ComposeMessageFormProps {
     onSend: (recipients: string[], subject: string, body: string) => Promise<boolean>;
     onClose: () => void;
-    initialData?: { recipients: string[]; subject: string; body: string; };
+    initialData?: { recipient?: string; recipients?: string[]; subject: string; body: string; };
     isSending: boolean;
 }
 
@@ -21,16 +19,15 @@ export default function ComposeMessageForm({ onSend, onClose, initialData, isSen
 
     useEffect(() => {
         if (initialData) {
-            setRecipients(initialData.recipients || []);
+            // Handle both single recipient and multiple recipients for replies vs. new messages
+            const initialRecipients = initialData.recipients || (initialData.recipient ? [initialData.recipient] : []);
+            setRecipients(initialRecipients);
             setSubject(initialData.subject || '');
             setBody(initialData.body || '');
         }
     }, [initialData]);
 
-    const isValidEmail = (email: string) => {
-        // A simple regex for email validation
-        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-    };
+    const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
     const handleAddRecipient = () => {
         const newRecipient = recipientInput.trim();
@@ -56,33 +53,21 @@ export default function ComposeMessageForm({ onSend, onClose, initialData, isSen
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        // Add any remaining input as a recipient before submitting
+        let finalRecipients = [...recipients];
         if (recipientInput.trim()) {
-            handleAddRecipient();
+            if (isValidEmail(recipientInput.trim()) && !finalRecipients.includes(recipientInput.trim())) {
+                finalRecipients.push(recipientInput.trim());
+            }
         }
-
-        if (recipients.length === 0 && !recipientInput.trim()) {
-            setError('Please add at least one recipient.');
-            return;
-        }
-
-        // Use a final list of recipients for sending
-        const finalRecipients = recipientInput.trim() && isValidEmail(recipientInput.trim()) && !recipients.includes(recipientInput.trim())
-            ? [...recipients, recipientInput.trim()]
-            : recipients;
-
-        if(finalRecipients.length === 0) {
-            setError('Please add a valid recipient.');
+        
+        if (finalRecipients.length === 0) {
+            setError('Please add at least one valid recipient.');
             return;
         }
 
         const success = await onSend(finalRecipients, subject, body);
         if (success) {
-            setRecipients([]);
-            setRecipientInput('');
-            setSubject('');
-            setBody('');
-            onClose(); // Close the form on successful send
+            onClose(); // Parent component handles success state
         }
     };
 
@@ -115,7 +100,7 @@ export default function ComposeMessageForm({ onSend, onClose, initialData, isSen
                             className="flex-grow bg-transparent outline-none p-1"
                         />
                     </div>
-                    {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
+                    {error && <p className="text-destructive text-xs mt-1">{error}</p>}
                 </div>
                 <div>
                     <label htmlFor="subject" className="text-sm font-medium text-muted-foreground">Subject:</label>
@@ -126,7 +111,7 @@ export default function ComposeMessageForm({ onSend, onClose, initialData, isSen
                 <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Your message here..." className="w-full h-full p-2 bg-background border rounded-md resize-none" required />
             </div>
             <div className="p-4 border-t flex justify-end">
-                <button type="submit" disabled={isSending} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed">
+                <button type="submit" disabled={isSending} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90 disabled:opacity-50">
                     {isSending ? <Loader2 size={16} className="animate-spin"/> : <Send size={16}/>}
                     {isSending ? 'Sending...' : 'Send'}
                 </button>
