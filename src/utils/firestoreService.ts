@@ -1,5 +1,3 @@
-// src/utils/firestoreService.ts
-
 import { db, storage } from '@/lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import {
@@ -238,61 +236,87 @@ export const updateAppointment = (userId: string, appointmentId: string, appoint
 export const deleteAppointment = (userId: string, appointmentId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/appointments`, appointmentId)); };
 export const updateMessage = (userId: string, messageId: string, messageData: Partial<Message>): Promise<void> => { const messageRef = doc(db, 'users', userId, 'messages', messageId); return updateDoc(messageRef, cleanupObject(messageData)); };
 export const deleteMessage = (userId: string, messageId: string): Promise<void> => { const messageRef = doc(db, `users/${userId}/messages`, messageId); return deleteDoc(messageRef); };
+
 export const sendAppMessage = async (senderId: string, senderName: string, recipients: string[], subject: string, body: string, type: Message['type'] = 'standard', jobPostId?: string): Promise<void> => {
-    const senderProfile = await getDoc(doc(db, `users/${senderId}`));
-    const senderEmail = senderProfile.exists() ? senderProfile.data().email : 'noreply@ten99.app';
+    console.log(`[sendAppMessage] Initiated by sender ${senderName} (${senderId})`);
+    try {
+        const senderProfileSnap = await getDoc(doc(db, `users/${senderId}`));
+        const senderEmail = senderProfileSnap.exists() ? senderProfileSnap.data().email : 'noreply@ten99.app';
+        console.log(`[sendAppMessage] Sender email resolved to: ${senderEmail}`);
 
-    const internalRecipients: string[] = [];
-    const externalRecipients: string[] = [];
+        const internalRecipients: string[] = [];
+        const externalRecipients: string[] = [];
 
-    for (const recipient of recipients) {
-        if (recipient.includes('@')) {
-            const usersRef = collection(db, 'users');
-            const q = query(usersRef, where("email", "==", recipient), limit(1));
-            const querySnapshot = await getDocs(q);
-            if (!querySnapshot.empty) {
-                internalRecipients.push(querySnapshot.docs[0].id);
+        for (const recipient of recipients) {
+            console.log(`[sendAppMessage] Processing recipient: ${recipient}`);
+            if (recipient.includes('@')) {
+                const usersRef = collection(db, 'users');
+                const q = query(usersRef, where("email", "==", recipient), limit(1));
+                const querySnapshot = await getDocs(q);
+                if (!querySnapshot.empty) {
+                    const recipientId = querySnapshot.docs[0].id;
+                    internalRecipients.push(recipientId);
+                    console.log(`[sendAppMessage] -> Found internal user ID: ${recipientId}`);
+                } else {
+                    externalRecipients.push(recipient);
+                    console.log(`[sendAppMessage] -> Identified external email: ${recipient}`);
+                }
             } else {
-                externalRecipients.push(recipient);
+                internalRecipients.push(recipient);
+                console.log(`[sendAppMessage] -> Identified as internal user ID: ${recipient}`);
             }
-        } else {
-            internalRecipients.push(recipient);
         }
-    }
 
-    for (const recipientId of internalRecipients) {
-        const messageData: Partial<Message> = { senderId, senderName, recipientId, subject, body, isRead: false, status: 'new', createdAt: serverTimestamp(), type, jobPostId };
-        await addDoc(collection(db, `users/${recipientId}/messages`), cleanupObject(messageData));
-    }
+        const batch = writeBatch(db);
+        const timestamp = serverTimestamp();
 
-    const sentMessageData: Partial<Message> = { 
-        senderId, 
-        senderName, 
-        recipientId: recipients.join(', '), 
-        subject, 
-        body, 
-        isRead: true, 
-        status: 'new', 
-        createdAt: serverTimestamp(), 
-        type, 
-        jobPostId 
-    };
-    await addDoc(collection(db, `users/${senderId}/messages`), cleanupObject(sentMessageData));
+        for (const recipientId of internalRecipients) {
+            console.log(`[sendAppMessage] Staging message for internal recipient: ${recipientId}`);
+            const messageData: Partial<Message> = { senderId, senderName, recipientId, subject, body, isRead: false, status: 'new', createdAt: timestamp, type, jobPostId };
+            const recipientMessageRef = doc(collection(db, `users/${recipientId}/messages`));
+            batch.set(recipientMessageRef, cleanupObject(messageData));
+        }
 
-    if (externalRecipients.length > 0) {
-        await fetch('/api/send-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                userId: senderId,
-                to: externalRecipients,
-                subject,
-                html: `<p>${body.replace(/\n/g, '<br>')}</p>`,
-                replyToEmail: senderEmail
-            }),
-        });
+        console.log(`[sendAppMessage] Staging 'sent' message for sender: ${senderId}`);
+        const sentMessageData: Partial<Message> = {
+            senderId, senderName, recipientId: recipients.join(', '), subject, body,
+            isRead: true, status: 'new', createdAt: timestamp, type, jobPostId
+        };
+        const senderMessageRef = doc(collection(db, `users/${senderId}/messages`));
+        batch.set(senderMessageRef, cleanupObject(sentMessageData));
+
+        await batch.commit();
+        console.log('[sendAppMessage] ✅ Firestore batch commit successful.');
+
+        if (externalRecipients.length > 0) {
+            console.log(`[sendAppMessage] Preparing to send email to ${externalRecipients.length} external recipients.`);
+            const response = await fetch('/api/send-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: senderId,
+                    to: externalRecipients,
+                    subject,
+                    html: `<p>${body.replace(/\n/g, '<br>')}</p>`,
+                    replyToEmail: senderEmail
+                }),
+            });
+            
+            if (!response.ok) {
+                const errorBody = await response.text();
+                throw new Error(`Failed to send external email. Status: ${response.status}. Body: ${errorBody}`);
+            }
+            console.log('[sendAppMessage] ✅ External email API call successful.');
+        }
+        
+        console.log('[sendAppMessage] ✅ Function completed successfully.');
+
+    } catch (error) {
+        console.error('[sendAppMessage] 🔴 An error occurred:', error);
+        throw new Error('Failed to send the message due to a server error.');
     }
 };
+
 export const addTemplate = (userId: string, templateData: Partial<Template>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/templates`), { ...cleanupObject(templateData), createdAt: serverTimestamp() }); };
 export const updateTemplate = (userId: string, templateId: string, templateData: Partial<Template>): Promise<void> => { const docRef = doc(db, `users/${userId}/templates`, templateId); return setDoc(docRef, cleanupObject(templateData), { merge: true }); };
 export const deleteTemplate = (userId: string, templateId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/templates`, templateId)); };
