@@ -1,18 +1,29 @@
-export default function DashboardPage() {
-  return (
-    <div className="p-4 sm:p-6 lg:p-8">
-      <header className="mb-6">
-        <h1 className="text-3xl font-bold text-foreground">
-          Dashboard
-        </h1>
-      </header>
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
+import DashboardPageContent from "@/components/DashboardPageContent";
+import { Suspense } from "react";
+import { Loader2 } from "lucide-react";
 
-      <div className="bg-card p-6 rounded-lg border">
-        <h2 className="text-xl font-semibold">Welcome to your Ten99 Dashboard!</h2>
-        <p className="text-muted-foreground mt-2">
-          This is your command center. You can navigate using the menu on the left.
-        </p>
-      </div>
+// A simple loading skeleton to show while the main content loads
+const DashboardLoading = () => (
+    <div className="flex justify-center items-center h-[calc(100vh-200px)]">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
     </div>
-  );
+);
+
+export default async function DashboardPage() {
+    const { userId } = await auth();
+    if (!userId) {
+        // This should be handled by middleware, but it's a good safeguard
+        redirect('/sign-in');
+    }
+
+    // This Server Component is now very simple.
+    // It just renders the Client Component and passes the userId.
+    // The Client Component will handle all of its own data fetching and loading states.
+    return (
+        <Suspense fallback={<DashboardLoading />}>
+            <DashboardPageContent userId={userId} />
+        </Suspense>
+    );
 }
