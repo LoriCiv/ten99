@@ -86,15 +86,15 @@ export const getAllCEUs = (userId: string, callback: (data: CEU[]) => void) => {
         callback(ceus);
     });
 };
-export const getUserProfile = (userId: string, callback: (data: UserProfile | null) => void) => { 
-    const docRef = doc(db, `users/${userId}`); 
-    return onSnapshot(docRef, (docSnap) => { 
-        if (docSnap.exists()) { 
-            callback({ id: docSnap.id, ...docSnap.data() } as UserProfile); 
-        } else { 
-            callback(null); 
-        } 
-    }); 
+export const getUserProfile = (userId: string, callback: (data: UserProfile | null) => void) => {
+    const docRef = doc(db, `users/${userId}`);
+    return onSnapshot(docRef, (docSnap) => {
+        if (docSnap.exists()) {
+            callback({ id: docSnap.id, ...docSnap.data() } as UserProfile);
+        } else {
+            callback(null);
+        }
+    });
 };
 export const getInvoices = (userId: string, callback: (data: Invoice[]) => void) => { const q = query(collection(db, `users/${userId}/invoices`), orderBy('invoiceDate', 'desc')); return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Invoice))); }); };
 export const getExpenses = (userId: string, callback: (data: Expense[]) => void) => { const q = query(collection(db, `users/${userId}/expenses`), orderBy('date', 'desc')); return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Expense))); }); };
@@ -106,8 +106,8 @@ export const getJobPostings = (callback: (data: JobPosting[]) => void, userProfi
         q = query(q, where('state', 'in', userProfile.states));
     }
 
-    return onSnapshot(q, (snapshot) => { 
-        callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as JobPosting))) 
+    return onSnapshot(q, (snapshot) => {
+        callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as JobPosting)))
     });
 };
 export const getReminders = (userId: string, callback: (data: Reminder[]) => void) => {
@@ -169,10 +169,10 @@ export const getJobPostingsData = async (): Promise<JobPosting[]> => {
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => serializeData({ id: doc.id, ...doc.data() } as JobPosting)).filter((item): item is JobPosting => item !== null);
 };
-export const getClientForJobFile = async (userId: string, clientId: string): Promise<Client | null> => { 
-    const docRef = doc(db, 'users', userId, 'clients', clientId); 
-    const docSnap = await getDoc(docRef); 
-    return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as Client : null; 
+export const getClientForJobFile = async (userId: string, clientId: string): Promise<Client | null> => {
+    const docRef = doc(db, 'users', userId, 'clients', clientId);
+    const docSnap = await getDoc(docRef);
+    return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as Client : null;
 };
 
 // --- WRITE/UPDATE/DELETE FUNCTIONS ---
@@ -237,6 +237,16 @@ export const deleteAppointment = (userId: string, appointmentId: string): Promis
 export const updateMessage = (userId: string, messageId: string, messageData: Partial<Message>): Promise<void> => { const messageRef = doc(db, 'users', userId, 'messages', messageId); return updateDoc(messageRef, cleanupObject(messageData)); };
 export const deleteMessage = (userId: string, messageId: string): Promise<void> => { const messageRef = doc(db, `users/${userId}/messages`, messageId); return deleteDoc(messageRef); };
 
+// Helper function to determine the base URL for the API call
+const getBaseUrl = () => {
+    // If the code is running on Vercel, use the Vercel URL
+    if (process.env.NEXT_PUBLIC_VERCEL_URL) {
+        return `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`;
+    }
+    // Otherwise, default to the local development URL
+    return 'http://localhost:3000';
+};
+
 export const sendAppMessage = async (senderId: string, senderName: string, recipients: string[], subject: string, body: string, type: Message['type'] = 'standard', jobPostId?: string): Promise<void> => {
     console.log(`[sendAppMessage] Initiated by sender ${senderName} (${senderId})`);
     try {
@@ -290,7 +300,11 @@ export const sendAppMessage = async (senderId: string, senderName: string, recip
 
         if (externalRecipients.length > 0) {
             console.log(`[sendAppMessage] Preparing to send email to ${externalRecipients.length} external recipients.`);
-            const response = await fetch('/api/send-email', {
+            
+            const apiUrl = `${getBaseUrl()}/api/send-email`;
+            console.log(`[sendAppMessage] Using API URL: ${apiUrl}`);
+            
+            const response = await fetch(apiUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -313,7 +327,8 @@ export const sendAppMessage = async (senderId: string, senderName: string, recip
 
     } catch (error) {
         console.error('[sendAppMessage] 🔴 An error occurred:', error);
-        throw new Error('Failed to send the message due to a server error.');
+        // Re-throw the error so the calling component can catch it and display a message
+        throw error;
     }
 };
 
@@ -349,7 +364,7 @@ export const createInvoiceFromAppointment = async (userId: string, appointment: 
         });
     }
     const subtotal = lineItems.reduce((sum, lineItem) => sum + lineItem.total, 0);
-    const total = subtotal; 
+    const total = subtotal;
     const invoiceData: Partial<Invoice> = {
         clientId: appointment.clientId, appointmentId: appointment.id, invoiceDate: new Date().toISOString().split('T')[0],
         dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], status: 'draft',
