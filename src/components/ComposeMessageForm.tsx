@@ -19,7 +19,7 @@ export default function ComposeMessageForm({ onSend, onClose, initialData, isSen
 
     useEffect(() => {
         if (initialData) {
-            // Handle both single recipient and multiple recipients for replies vs. new messages
+            // This correctly handles both single and multiple recipients for replies vs. new messages
             const initialRecipients = initialData.recipients || (initialData.recipient ? [initialData.recipient] : []);
             setRecipients(initialRecipients);
             setSubject(initialData.subject || '');
@@ -27,20 +27,19 @@ export default function ComposeMessageForm({ onSend, onClose, initialData, isSen
         }
     }, [initialData]);
 
-    const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
+    // This function adds the text from the input into a "pill"
     const handleAddRecipient = () => {
         const newRecipient = recipientInput.trim();
-        if (newRecipient && isValidEmail(newRecipient) && !recipients.includes(newRecipient)) {
+        // The backend can distinguish between emails and UIDs, so we don't need strict validation here.
+        if (newRecipient && !recipients.includes(newRecipient)) {
             setRecipients([...recipients, newRecipient]);
             setRecipientInput('');
             setError('');
-        } else if (newRecipient && !isValidEmail(newRecipient)) {
-            setError('Please enter a valid email address.');
         }
     };
 
     const handleRecipientKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        // Adds a recipient when the user presses Enter, Comma, or Space
         if (['Enter', ',', ' '].includes(e.key)) {
             e.preventDefault();
             handleAddRecipient();
@@ -51,24 +50,28 @@ export default function ComposeMessageForm({ onSend, onClose, initialData, isSen
         setRecipients(recipients.filter((_, index) => index !== indexToRemove));
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        
+        // Make sure to add any text still in the input field to the list before sending
         let finalRecipients = [...recipients];
-        if (recipientInput.trim()) {
-            if (isValidEmail(recipientInput.trim()) && !finalRecipients.includes(recipientInput.trim())) {
-                finalRecipients.push(recipientInput.trim());
-            }
+        const newRecipient = recipientInput.trim();
+        if (newRecipient && !finalRecipients.includes(newRecipient)) {
+            finalRecipients.push(newRecipient);
         }
         
         if (finalRecipients.length === 0) {
-            setError('Please add at least one valid recipient.');
+            setError('Please add at least one recipient.');
             return;
         }
 
-        const success = await onSend(finalRecipients, subject, body);
-        if (success) {
-            onClose(); // Parent component handles success state
+        if (!subject || !body) {
+            setError('Please fill out the subject and body.');
+            return;
         }
+
+        setError('');
+        onSend(finalRecipients, subject, body);
     };
 
     return (
@@ -92,11 +95,11 @@ export default function ComposeMessageForm({ onSend, onClose, initialData, isSen
                             </div>
                         ))}
                         <input
-                            type="email"
+                            type="text" // Changed to text to allow for UIDs
                             value={recipientInput}
                             onChange={(e) => setRecipientInput(e.target.value)}
                             onKeyDown={handleRecipientKeyDown}
-                            placeholder="Add email(s)..."
+                            placeholder="Add email or user..."
                             className="flex-grow bg-transparent outline-none p-1"
                         />
                     </div>
@@ -104,11 +107,11 @@ export default function ComposeMessageForm({ onSend, onClose, initialData, isSen
                 </div>
                 <div>
                     <label htmlFor="subject" className="text-sm font-medium text-muted-foreground">Subject:</label>
-                    <input id="subject" value={subject} onChange={(e) => setSubject(e.target.value)} type="text" className="w-full mt-1 p-2 bg-background border rounded-md" required />
+                    <input id="subject" value={subject} onChange={(e) => setSubject(e.target.value)} type="text" className="w-full mt-1 p-2 bg-background border rounded-md" />
                 </div>
             </div>
             <div className="p-4 flex-grow">
-                <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Your message here..." className="w-full h-full p-2 bg-background border rounded-md resize-none" required />
+                <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Your message here..." className="w-full h-full p-2 bg-background border rounded-md resize-none" />
             </div>
             <div className="p-4 border-t flex justify-end">
                 <button type="submit" disabled={isSending} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90 disabled:opacity-50">
