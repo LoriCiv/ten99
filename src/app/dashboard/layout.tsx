@@ -5,14 +5,15 @@ import { redirect } from "next/navigation";
 import { adminDb } from "@/lib/firebase-admin";
 import { FirebaseProvider } from "@/components/FirebaseProvider";
 import { SignedIn } from "@clerk/nextjs";
-import DashboardUI from "@/components/DashboardUI"; // The new UI component we just made
+import DashboardUI from "@/components/DashboardUI";
 
-// This is now a Server Component that can fetch data and redirect.
+// ✅ THIS IS THE FIX: This line tells Next.js to always fetch fresh data for this layout.
+export const revalidate = 0;
+
+// This is a Server Component that can fetch data and redirect.
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-    // ✅ CORRECTED: Added the 'await' keyword here.
     const { userId } = await auth();
 
-    // This should be handled by your main middleware, but it's a good safeguard.
     if (!userId) {
         redirect('/sign-in');
     }
