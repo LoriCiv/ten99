@@ -237,13 +237,18 @@ export const deleteAppointment = (userId: string, appointmentId: string): Promis
 export const updateMessage = (userId: string, messageId: string, messageData: Partial<Message>): Promise<void> => { const messageRef = doc(db, 'users', userId, 'messages', messageId); return updateDoc(messageRef, cleanupObject(messageData)); };
 export const deleteMessage = (userId: string, messageId: string): Promise<void> => { const messageRef = doc(db, `users/${userId}/messages`, messageId); return deleteDoc(messageRef); };
 
-// Helper function to determine the base URL for the API call
+// ** THIS IS THE CORRECTED PART **
+// This function is more robust and works in any environment (local or production).
 const getBaseUrl = () => {
-    // If the code is running on Vercel, use the Vercel URL
-    if (process.env.NEXT_PUBLIC_VERCEL_URL) {
-        return `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`;
+    // If the code is running in a browser, use the window's current origin.
+    if (typeof window !== 'undefined') {
+        return window.location.origin;
     }
-    // Otherwise, default to the local development URL
+    // Fallback for server-side environments
+    if (process.env.VERCEL_URL) {
+        return `https://${process.env.VERCEL_URL}`;
+    }
+    // Default for local development server
     return 'http://localhost:3000';
 };
 
