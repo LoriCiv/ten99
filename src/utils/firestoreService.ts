@@ -237,18 +237,13 @@ export const deleteAppointment = (userId: string, appointmentId: string): Promis
 export const updateMessage = (userId: string, messageId: string, messageData: Partial<Message>): Promise<void> => { const messageRef = doc(db, 'users', userId, 'messages', messageId); return updateDoc(messageRef, cleanupObject(messageData)); };
 export const deleteMessage = (userId: string, messageId: string): Promise<void> => { const messageRef = doc(db, `users/${userId}/messages`, messageId); return deleteDoc(messageRef); };
 
-// ** THIS IS THE CORRECTED PART **
-// This function is more robust and works in any environment (local or production).
 const getBaseUrl = () => {
-    // If the code is running in a browser, use the window's current origin.
     if (typeof window !== 'undefined') {
         return window.location.origin;
     }
-    // Fallback for server-side environments
     if (process.env.VERCEL_URL) {
         return `https://${process.env.VERCEL_URL}`;
     }
-    // Default for local development server
     return 'http://localhost:3000';
 };
 
@@ -257,28 +252,22 @@ export const sendAppMessage = async (senderId: string, senderName: string, recip
     try {
         const senderProfileSnap = await getDoc(doc(db, `users/${senderId}`));
         const senderEmail = senderProfileSnap.exists() ? senderProfileSnap.data().email : 'noreply@ten99.app';
-        console.log(`[sendAppMessage] Sender email resolved to: ${senderEmail}`);
-
+        
         const internalRecipients: string[] = [];
         const externalRecipients: string[] = [];
 
         for (const recipient of recipients) {
-            console.log(`[sendAppMessage] Processing recipient: ${recipient}`);
             if (recipient.includes('@')) {
                 const usersRef = collection(db, 'users');
                 const q = query(usersRef, where("email", "==", recipient), limit(1));
                 const querySnapshot = await getDocs(q);
                 if (!querySnapshot.empty) {
-                    const recipientId = querySnapshot.docs[0].id;
-                    internalRecipients.push(recipientId);
-                    console.log(`[sendAppMessage] -> Found internal user ID: ${recipientId}`);
+                    internalRecipients.push(querySnapshot.docs[0].id);
                 } else {
                     externalRecipients.push(recipient);
-                    console.log(`[sendAppMessage] -> Identified external email: ${recipient}`);
                 }
             } else {
                 internalRecipients.push(recipient);
-                console.log(`[sendAppMessage] -> Identified as internal user ID: ${recipient}`);
             }
         }
 
@@ -286,13 +275,11 @@ export const sendAppMessage = async (senderId: string, senderName: string, recip
         const timestamp = serverTimestamp();
 
         for (const recipientId of internalRecipients) {
-            console.log(`[sendAppMessage] Staging message for internal recipient: ${recipientId}`);
             const messageData: Partial<Message> = { senderId, senderName, recipientId, subject, body, isRead: false, status: 'new', createdAt: timestamp, type, jobPostId };
             const recipientMessageRef = doc(collection(db, `users/${recipientId}/messages`));
             batch.set(recipientMessageRef, cleanupObject(messageData));
         }
 
-        console.log(`[sendAppMessage] Staging 'sent' message for sender: ${senderId}`);
         const sentMessageData: Partial<Message> = {
             senderId, senderName, recipientId: recipients.join(', '), subject, body,
             isRead: true, status: 'new', createdAt: timestamp, type, jobPostId
@@ -301,17 +288,14 @@ export const sendAppMessage = async (senderId: string, senderName: string, recip
         batch.set(senderMessageRef, cleanupObject(sentMessageData));
 
         await batch.commit();
-        console.log('[sendAppMessage] ✅ Firestore batch commit successful.');
 
         if (externalRecipients.length > 0) {
-            console.log(`[sendAppMessage] Preparing to send email to ${externalRecipients.length} external recipients.`);
-            
             const apiUrl = `${getBaseUrl()}/api/send-email`;
-            console.log(`[sendAppMessage] Using API URL: ${apiUrl}`);
             
             const response = await fetch(apiUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                cache: 'no-store',
                 body: JSON.stringify({
                     userId: senderId,
                     to: externalRecipients,
@@ -325,14 +309,9 @@ export const sendAppMessage = async (senderId: string, senderName: string, recip
                 const errorBody = await response.text();
                 throw new Error(`Failed to send external email. Status: ${response.status}. Body: ${errorBody}`);
             }
-            console.log('[sendAppMessage] ✅ External email API call successful.');
         }
-        
-        console.log('[sendAppMessage] ✅ Function completed successfully.');
-
     } catch (error) {
         console.error('[sendAppMessage] 🔴 An error occurred:', error);
-        // Re-throw the error so the calling component can catch it and display a message
         throw error;
     }
 };
