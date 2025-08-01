@@ -38,6 +38,7 @@
     "react-email": "2.1.5",
     "react-resizable-panels": "^2.0.19",
     "recharts": "^2.12.7",
+    "svix": "^1.70.0",
     "tailwind-merge": "^2.3.0"
   },
   "devDependencies": {
