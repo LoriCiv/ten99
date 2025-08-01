@@ -1,4 +1,4 @@
-// This goes in src/components/ComposeMessageForm.tsx
+// src/components/ComposeMessageForm.tsx
 
 "use client";
 
@@ -8,7 +8,7 @@ import { Send, X, Loader2 } from 'lucide-react';
 interface ComposeMessageFormProps {
     onSend: (recipients: string[], subject: string, body: string) => Promise<boolean>;
     onClose: () => void;
-    initialData?: { recipient?: string; recipients?: string[]; subject: string; body: string; };
+    initialData?: { recipients?: string[]; subject: string; body: string; };
     isSending: boolean;
 }
 
@@ -21,13 +21,12 @@ export default function ComposeMessageForm({ onSend, onClose, initialData, isSen
 
     useEffect(() => {
         if (initialData) {
-            const initialRecipients = initialData.recipients || (initialData.recipient ? [initialData.recipient] : []);
-            setRecipients(initialRecipients);
+            setRecipients(initialData.recipients || []);
             setSubject(initialData.subject || '');
             setBody(initialData.body || '');
         }
     }, [initialData]);
-    
+
     const handleAddRecipient = () => {
         const newRecipient = recipientInput.trim();
         if (newRecipient && !recipients.includes(newRecipient)) {
@@ -62,12 +61,6 @@ export default function ComposeMessageForm({ onSend, onClose, initialData, isSen
             return;
         }
 
-        if (!subject || !body) {
-            setError('Please fill out the subject and body.');
-            return;
-        }
-
-        setError('');
         onSend(finalRecipients, subject, body);
     };
 
@@ -104,11 +97,11 @@ export default function ComposeMessageForm({ onSend, onClose, initialData, isSen
                 </div>
                 <div>
                     <label htmlFor="subject" className="text-sm font-medium text-muted-foreground">Subject:</label>
-                    <input id="subject" value={subject} onChange={(e) => setSubject(e.target.value)} type="text" className="w-full mt-1 p-2 bg-background border rounded-md" />
+                    <input id="subject" value={subject} onChange={(e) => setSubject(e.target.value)} type="text" className="w-full mt-1 p-2 bg-background border rounded-md" required />
                 </div>
             </div>
             <div className="p-4 flex-grow">
-                <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Your message here..." className="w-full h-full p-2 bg-background border rounded-md resize-none" />
+                <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Your message here..." className="w-full h-full p-2 bg-background border rounded-md resize-none" required />
             </div>
             <div className="p-4 border-t flex justify-end">
                 <button type="submit" disabled={isSending} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90 disabled:opacity-50">
