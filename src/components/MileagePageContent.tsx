@@ -7,9 +7,8 @@ import type { Mileage } from '@/types/app-interfaces';
 import { getMileage, addMileage, deleteMileage } from '@/utils/firestoreService';
 import { PlusCircle, Trash2, Loader2, ThumbsUp, Info, X } from 'lucide-react';
 import { format } from 'date-fns';
-import { useFirebase } from './FirebaseProvider'; // ✅ 1. Import our hook
+import { useFirebase } from './FirebaseProvider';
 
-// ✅ New component for confirmation dialogs
 const ConfirmationModal = ({ title, message, onConfirm, onCancel }: { title: string, message: string, onConfirm: () => void, onCancel: () => void }) => (
     <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50 p-4">
         <div className="bg-card rounded-lg shadow-xl w-full max-w-md border p-6 text-center">
@@ -24,7 +23,7 @@ const ConfirmationModal = ({ title, message, onConfirm, onCancel }: { title: str
 );
 
 export default function MileagePageContent({ userId }: { userId: string }) {
-    const { isFirebaseAuthenticated } = useFirebase(); // ✅ 2. Get the "Green Light"
+    const { isFirebaseAuthenticated } = useFirebase();
     const [mileageEntries, setMileageEntries] = useState<Mileage[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -32,15 +31,16 @@ export default function MileagePageContent({ userId }: { userId: string }) {
         date: new Date().toISOString().split('T')[0],
         miles: 0,
         purpose: '',
+        startLocation: '',
+        endLocation: '',
+        notes: '',
     });
 
     const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
     const [confirmation, setConfirmation] = useState<{ title: string, message: string, onConfirm: () => void } | null>(null);
 
-    // ✅ 3. This useEffect now waits for the Green Light before fetching data
     useEffect(() => {
         if (isFirebaseAuthenticated) {
-            console.log("✅ Mileage page is authenticated, fetching data...");
             const unsubscribe = getMileage(userId, (data) => {
                 setMileageEntries(data);
                 setIsLoading(false);
@@ -76,6 +76,8 @@ export default function MileagePageContent({ userId }: { userId: string }) {
         try {
             await addMileage(userId, newEntry);
             showStatusMessage("success", "Trip logged successfully!");
+            
+            // ✅ This now correctly clears all fields after saving.
             setNewEntry({
                 date: new Date().toISOString().split('T')[0],
                 miles: 0,
@@ -84,6 +86,7 @@ export default function MileagePageContent({ userId }: { userId: string }) {
                 endLocation: '',
                 notes: ''
             });
+
         } catch (error) {
             console.error("Failed to save mileage:", error);
             showStatusMessage("error", "Failed to save mileage.");
@@ -117,11 +120,11 @@ export default function MileagePageContent({ userId }: { userId: string }) {
         return (
             <div className="flex justify-center items-center h-full p-8">
                <div className="text-center">
-                   <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-                   <p className="text-lg font-semibold mt-4">Loading Mileage Tracker...</p>
-                   <p className="text-muted-foreground text-sm mt-1">Authenticating and fetching your data...</p>
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+                    <p className="text-lg font-semibold mt-4">Loading Mileage Tracker...</p>
+                    <p className="text-muted-foreground text-sm mt-1">Authenticating and fetching your data...</p>
                </div>
-           </div>
+            </div>
         );
     }
 
@@ -132,7 +135,7 @@ export default function MileagePageContent({ userId }: { userId: string }) {
                 <div className={`fixed bottom-5 right-5 z-50 p-4 rounded-lg shadow-lg flex items-center gap-3 ${statusMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                     {statusMessage.type === 'success' ? <ThumbsUp size={20} /> : <Info size={20} />}
                     <span>{statusMessage.text}</span>
-                    <button onClick={() => setStatusMessage(null)} className="p-1 rounded-full hover:bg-black/10"><X size={16}/></button>
+                    <button onClick={() => setStatusMessage(null)} className="absolute top-1 right-1 p-1 rounded-full hover:bg-black/10"><X size={16}/></button>
                 </div>
             )}
             <div className="p-4 sm:p-6 lg:p-8">
@@ -151,7 +154,7 @@ export default function MileagePageContent({ userId }: { userId: string }) {
                             </div>
                             <div>
                                 <label className="text-sm font-medium">Total Miles*</label>
-                                <input type="number" name="miles" value={newEntry.miles || ''} onChange={handleInputChange} required className="w-full mt-1 p-2 bg-background border rounded-md" />
+                                <input type="number" name="miles" value={newEntry.miles || ''} onChange={handleInputChange} required className="w-full mt-1 p-2 bg-background border rounded-md" step="0.1" />
                             </div>
                             <div>
                                 <label className="text-sm font-medium">Purpose*</label>
@@ -164,6 +167,10 @@ export default function MileagePageContent({ userId }: { userId: string }) {
                             <div>
                                 <label className="text-sm font-medium">End Location</label>
                                 <input type="text" name="endLocation" value={newEntry.endLocation || ''} onChange={handleInputChange} placeholder="e.g., 123 Main St, Anytown" className="w-full mt-1 p-2 bg-background border rounded-md" />
+                            </div>
+                            <div>
+                                <label className="text-sm font-medium">Notes</label>
+                                <textarea name="notes" value={newEntry.notes || ''} onChange={handleInputChange} placeholder="Additional details..." rows={3} className="w-full mt-1 p-2 bg-background border rounded-md resize-none" />
                             </div>
                             <button type="submit" disabled={isSubmitting} className="w-full bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50">
                                 {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <PlusCircle size={16} />}
