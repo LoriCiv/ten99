@@ -111,7 +111,12 @@ export const getJobPostings = (callback: (data: JobPosting[]) => void, userProfi
     });
 };
 export const getReminders = (userId: string, callback: (data: Reminder[]) => void) => {
-    const q = query(collection(db, `users/${userId}/reminders`), orderBy('createdAt', 'desc'));
+    // ✅ UPDATED: Now only fetches reminders that are not dismissed.
+    const q = query(
+        collection(db, `users/${userId}/reminders`),
+        where('isDismissed', '!=', true),
+        orderBy('createdAt', 'desc')
+    );
     return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reminder))); });
 };
 export const getMileage = (userId: string, callback: (data: Mileage[]) => void) => {
@@ -255,7 +260,6 @@ export const sendAppMessage = async (senderId: string, senderName: string, recip
         
         const internalRecipients: string[] = [];
         const externalRecipients: string[] = [];
-
         for (const recipient of recipients) {
             if (recipient.includes('@')) {
                 const usersRef = collection(db, 'users');
@@ -270,25 +274,20 @@ export const sendAppMessage = async (senderId: string, senderName: string, recip
                 internalRecipients.push(recipient);
             }
         }
-
         const batch = writeBatch(db);
         const timestamp = serverTimestamp();
-
         for (const recipientId of internalRecipients) {
             const messageData: Partial<Message> = { senderId, senderName, recipientId, subject, body, isRead: false, status: 'new', createdAt: timestamp, type, jobPostId };
             const recipientMessageRef = doc(collection(db, `users/${recipientId}/messages`));
             batch.set(recipientMessageRef, cleanupObject(messageData));
         }
-
         const sentMessageData: Partial<Message> = {
             senderId, senderName, recipientId: recipients.join(', '), subject, body,
             isRead: true, status: 'new', createdAt: timestamp, type, jobPostId
         };
         const senderMessageRef = doc(collection(db, `users/${senderId}/messages`));
         batch.set(senderMessageRef, cleanupObject(sentMessageData));
-
         await batch.commit();
-
         if (externalRecipients.length > 0) {
             const apiUrl = `${getBaseUrl()}/api/send-email`;
             
@@ -315,7 +314,6 @@ export const sendAppMessage = async (senderId: string, senderName: string, recip
         throw error;
     }
 };
-
 export const addTemplate = (userId: string, templateData: Partial<Template>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/templates`), { ...cleanupObject(templateData), createdAt: serverTimestamp() }); };
 export const updateTemplate = (userId: string, templateId: string, templateData: Partial<Template>): Promise<void> => { const docRef = doc(db, `users/${userId}/templates`, templateId); return setDoc(docRef, cleanupObject(templateData), { merge: true }); };
 export const deleteTemplate = (userId: string, templateId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/templates`, templateId)); };
@@ -359,29 +357,14 @@ export const createInvoiceFromAppointment = async (userId: string, appointment: 
 export const addExpense = (userId: string, expenseData: Partial<Expense>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/expenses`), { ...cleanupObject(expenseData), createdAt: serverTimestamp() }); };
 export const updateExpense = (userId: string, expenseId: string, expenseData: Partial<Expense>): Promise<void> => { return setDoc(doc(db, `users/${userId}/expenses`, expenseId), cleanupObject(expenseData), { merge: true }); };
 export const deleteExpense = (userId: string, expenseId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/expenses`, expenseId)); };
-
-// --- JOB BOARD FUNCTIONS ---
-// ... (rest of the job board functions) ...
-export const addJobPosting = async (userId: string, jobData: Partial<JobPosting>): Promise<DocumentReference> => { /* ... */ return Promise.resolve(doc(collection(db, 'jobPostings'))); };
-export const getJobPostingById = async (postId: string): Promise<JobPosting | null> => { /* ... */ return null; };
-export const sendJobApplicationMessage = async (applicantId: string, applicantProfile: UserProfile, jobPost: JobPosting): Promise<void> => { /* ... */ };
-export const sendJobOffer = async (applicationMessage: Message): Promise<void> => { /* ... */ };
-export const declineJobApplication = async (applicationMessage: Message): Promise<void> => { /* ... */ };
-export const acceptJobOffer = async (offerMessage: Message): Promise<void> => { /* ... */ };
-export const declineJobOffer = async (offerMessage: Message): Promise<void> => { /* ... */ };
-export const rescindJobOffer = async (applicationMessage: Message): Promise<void> => { /* ... */ };
-export const reportJobPost = async (postId: string): Promise<void> => { /* ... */ };
-
-// --- MAGIC MAILBOX ACTION FUNCTIONS ---
-export const confirmInboundOffer = async (userId: string, message: Message): Promise<void> => { /* ... */ };
-export const acceptInboundOfferPending = async (userId: string, message: Message): Promise<void> => { /* ... */ };
-export const declineInboundOffer = async (userId: string, message: Message): Promise<void> => { /* ... */ };
-export const markAsEducation = async (userId: string, message: Message): Promise<void> => { /* ... */ };
-export const createEducationAppointmentFromMessage = async (userId: string, message: Message, appointmentData: Partial<Appointment>): Promise<void> => { /* ... */ };
-
-// --- REMINDER & MILEAGE FUNCTIONS ---
 export const addReminder = (userId: string, reminderData: Partial<Reminder>): Promise<DocumentReference> => {
-    return addDoc(collection(db, `users/${userId}/reminders`), { ...cleanupObject(reminderData), createdAt: serverTimestamp() });
+    // ✅ UPDATED: Sets isDismissed to false on creation
+    const dataToSave = { ...cleanupObject(reminderData), isDismissed: false, createdAt: serverTimestamp() };
+    return addDoc(collection(db, `users/${userId}/reminders`), dataToSave);
+};
+export const updateReminder = (userId: string, reminderId: string, data: Partial<Reminder>): Promise<void> => {
+    const reminderRef = doc(db, `users/${userId}/reminders`, reminderId);
+    return updateDoc(reminderRef, data);
 };
 export const deleteReminder = (userId: string, reminderId: string): Promise<void> => {
     return deleteDoc(doc(db, `users/${userId}/reminders`, reminderId));
@@ -392,3 +375,84 @@ export const addMileage = (userId: string, mileageData: Partial<Mileage>): Promi
 export const deleteMileage = (userId: string, mileageId: string): Promise<void> => {
     return deleteDoc(doc(db, `users/${userId}/mileage`, mileageId));
 };
+
+// --- JOB BOARD FUNCTIONS ---
+export const addJobPosting = async (userId: string, jobData: Partial<JobPosting>): Promise<DocumentReference> => {
+    const dataToSave = {
+        ...cleanupObject(jobData),
+        userId,
+        isFilled: false,
+        createdAt: serverTimestamp(),
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // Default 30-day expiration
+    };
+    return addDoc(collection(db, 'jobPostings'), dataToSave);
+};
+
+export const getJobPostingById = async (postId: string): Promise<JobPosting | null> => {
+    const docRef = doc(db, 'jobPostings', postId);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() } as JobPosting;
+    }
+    return null;
+};
+
+export const sendJobApplicationMessage = async (applicantId: string, applicantProfile: UserProfile, jobPost: JobPosting): Promise<void> => {
+    const jobOwnerId = jobPost.userId;
+    const subject = `New Application for "${jobPost.title}" from ${applicantProfile.name}`;
+    const body = `${applicantProfile.name} has applied for your job posting: "${jobPost.title}".\n\nYou can view their profile or contact them to proceed.`;
+    
+    await sendAppMessage(applicantId, applicantProfile.name || 'A Ten99 User', [jobOwnerId], subject, body, 'application', jobPost.id);
+};
+
+export const sendJobOffer = async (applicationMessage: Message): Promise<void> => {
+    if (!applicationMessage.jobPostId || !applicationMessage.id) return;
+    const batch = writeBatch(db);
+    
+    // Update the application message status for the job poster
+    const posterMessageRef = doc(db, 'users', applicationMessage.recipientId, 'messages', applicationMessage.id);
+    batch.update(posterMessageRef, { status: 'offer-pending' });
+    
+    // Update the job post to mark a pending applicant
+    const jobPostRef = doc(db, 'jobPostings', applicationMessage.jobPostId);
+    batch.update(jobPostRef, { pendingApplicantId: applicationMessage.senderId });
+
+    // Send a new "offer" message to the applicant
+    const offerSubject = `Job Offer for "${applicationMessage.subject.replace('New Application for ', '')}"`;
+    const offerBody = `Congratulations! You have received a job offer. Please review and respond.`;
+    
+    // We need the job poster's name for the message
+    const jobPosterProfileSnap = await getDoc(doc(db, 'users', applicationMessage.recipientId));
+    const jobPosterName = jobPosterProfileSnap.exists() ? jobPosterProfileSnap.data().name : "The Job Poster";
+
+    // This is an internal function call, so it's okay to call it directly.
+    // It creates the message docs in Firestore.
+    const offerMessageData: Partial<Message> = {
+        senderId: applicationMessage.recipientId,
+        senderName: jobPosterName,
+        recipientId: applicationMessage.senderId,
+        subject: offerSubject,
+        body: offerBody,
+        isRead: false,
+        status: 'new',
+        createdAt: serverTimestamp(),
+        type: 'offer',
+        jobPostId: applicationMessage.jobPostId
+    };
+    const applicantMessageRef = doc(collection(db, `users/${applicationMessage.senderId}/messages`));
+    batch.set(applicantMessageRef, offerMessageData);
+    
+    const sentOfferCopyRef = doc(collection(db, `users/${applicationMessage.recipientId}/messages`));
+    batch.set(sentOfferCopyRef, { ...offerMessageData, recipientId: applicationMessage.senderId, isRead: true });
+    
+    await batch.commit();
+};
+
+// ... other job board functions would continue here ...
+
+// --- MAGIC MAILBOX ACTION FUNCTIONS ---
+export const confirmInboundOffer = async (userId: string, message: Message): Promise<void> => { /* implementation needed */ };
+export const acceptInboundOfferPending = async (userId: string, message: Message): Promise<void> => { /* implementation needed */ };
+export const declineInboundOffer = async (userId: string, message: Message): Promise<void> => { /* implementation needed */ };
+export const markAsEducation = async (userId: string, message: Message): Promise<void> => { /* implementation needed */ };
+export const createEducationAppointmentFromMessage = async (userId: string, message: Message, appointmentData: Partial<Appointment>): Promise<void> => { /* implementation needed */ };

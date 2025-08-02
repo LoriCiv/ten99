@@ -245,13 +245,14 @@ export interface UserProfile {
     inboundEmailAddress?: string;
     emailSignature?: string;
     states?: string[];
+    isProfileComplete?: boolean; // ✅ Added this for the onboarding flow
 }
 
 export interface JobPosting {
     id?: string;
     userId: string;
     title: string;
-    companyName?: string; // ✅ This is the fix
+    companyName?: string;
     description: string;
     jobType?: 'On-site' | 'Virtual' | 'Hybrid';
     location?: string;
@@ -261,8 +262,8 @@ export interface JobPosting {
     contactEmail?: string;
     requiredSkills?: string[];
     isFilled: boolean;
-    createdAt?: any;
-    expiresAt?: any;
+    createdAt?: Timestamp | FieldValue; // ✅ Changed from 'any'
+    expiresAt?: Timestamp | FieldValue; // ✅ Changed from 'any'
     pendingApplicantId?: string;
     startDate?: string;
     endDate?: string;
@@ -281,6 +282,7 @@ export interface Reminder {
     dayOfWeek?: 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday';
     dateOfMonth?: number;
     reminderDate?: string;
+    isDismissed?: boolean; // ✅ Added this for the dismiss feature
 }
 
 export interface Mileage {

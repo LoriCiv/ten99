@@ -1,16 +1,15 @@
-// src/components/DashboardPageContent.tsx
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import { getAppointments, getMessagesForUser, getJobPostings, getPriorityJobFiles, getUserProfile, getClients, addExpense, getReminders, deleteReminder } from '@/utils/firestoreService';
+import { getAppointments, getMessagesForUser, getJobPostings, getPriorityJobFiles, getUserProfile, getClients, addExpense, getReminders, updateReminder } from '@/utils/firestoreService';
 import type { Appointment, JobFile, UserProfile, Message, JobPosting, Client, Expense, Reminder } from '@/types/app-interfaces';
 import Link from 'next/link';
-import { Calendar, FileText, ArrowRight, Inbox, AlertCircle, X, Bell, PlusCircle, BellRing, Trash2, Loader2 } from 'lucide-react';
+import { Calendar, FileText, ArrowRight, Inbox, AlertCircle, X, Bell, PlusCircle, BellRing } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, isToday } from 'date-fns';
 import Modal from '@/components/Modal';
 import ExpenseForm from '@/components/ExpenseForm';
 import clsx from 'clsx';
-import { useFirebase } from './FirebaseProvider'; // ✅ 1. Import our hook
+import { useFirebase } from './FirebaseProvider';
 
 const formatTime = (timeString?: string) => {
     if (!timeString) return '';
@@ -68,7 +67,7 @@ const AgendaItem = ({ appointment, jobFile }: { appointment: Appointment, jobFil
 };
 
 export default function DashboardPageContent({ userId }: { userId: string }) {
-    const { isFirebaseAuthenticated } = useFirebase(); // ✅ 2. Get the "Green Light"
+    const { isFirebaseAuthenticated } = useFirebase();
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [priorityJobFiles, setPriorityJobFiles] = useState<JobFile[]>([]);
@@ -80,9 +79,7 @@ export default function DashboardPageContent({ userId }: { userId: string }) {
     const [showJobAlert, setShowJobAlert] = useState(true);
     const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
     const [isSubmittingExpense, setIsSubmittingExpense] = useState(false);
-    const [dismissedReminders, setDismissedReminders] = useState<string[]>([]);
-
-    // ✅ 3. This useEffect now waits for the Green Light before fetching data
+    
     useEffect(() => {
         if (isFirebaseAuthenticated) {
             console.log("✅ Dashboard is authenticated, fetching all data...");
@@ -94,7 +91,7 @@ export default function DashboardPageContent({ userId }: { userId: string }) {
             const unsubClients = getClients(userId, setClients);
             const unsubReminders = getReminders(userId, (remindersData) => {
                 setReminders(remindersData);
-                setIsLoading(false); // Stop loading once all data listeners are set up
+                setIsLoading(false);
             });
             
             return () => {
@@ -116,7 +113,7 @@ export default function DashboardPageContent({ userId }: { userId: string }) {
         const days = eachDayOfInterval({ start: weekStart, end: weekEnd });
 
         return days.map(day => {
-            const dailyAppointments = appointments
+            const dailyAppointments = [...appointments] // Create a copy before sorting
                 .filter(appt => isSameDay(new Date(appt.date + 'T00:00:00'), day))
                 .sort((a, b) => a.time.localeCompare(b.time));
             return {
@@ -137,10 +134,8 @@ export default function DashboardPageContent({ userId }: { userId: string }) {
         const dayOfWeek = format(today, 'eeee');
         const dateOfMonth = today.getDate();
 
+        // The main filtering logic now just happens here. No need for a separate dismissed state.
         return reminders.filter(reminder => {
-            if (dismissedReminders.includes(reminder.id!)) {
-                return false;
-            }
             if (reminder.type === 'one-time') {
                 return reminder.reminderDate === todayFormatted;
             }
@@ -154,7 +149,7 @@ export default function DashboardPageContent({ userId }: { userId: string }) {
             }
             return false;
         });
-    }, [reminders, dismissedReminders]);
+    }, [reminders]);
 
     const inboxStats = useMemo(() => {
         const unreadCount = messages.filter(m => !m.isRead).length;
@@ -174,7 +169,7 @@ export default function DashboardPageContent({ userId }: { userId: string }) {
     const nextAppointment = useMemo(() => {
         const today = new Date();
         today.setHours(0, 0, 0, 0); 
-        return appointments
+        return [...appointments] // Create a copy before sorting
             .filter(appt => appt.status === 'scheduled' && new Date(appt.date + 'T00:00:00') >= today)
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
     }, [appointments]);
@@ -191,12 +186,14 @@ export default function DashboardPageContent({ userId }: { userId: string }) {
         }
     };
 
-    const handleDismissReminder = (reminder: Reminder) => {
+    // ✅ REPAIRED: This function now permanently dismisses the reminder.
+    const handleDismissReminder = async (reminder: Reminder) => {
         if (!reminder.id) return;
-        if (reminder.type === 'one-time') {
-            deleteReminder(userId, reminder.id);
-        } else {
-            setDismissedReminders(prev => [...prev, reminder.id!]);
+        try {
+            // We just update the isDismissed flag. The listener will do the rest.
+            await updateReminder(userId, reminder.id, { isDismissed: true });
+        } catch (error) {
+            console.error("Failed to dismiss reminder:", error);
         }
     };
 
@@ -251,7 +248,7 @@ export default function DashboardPageContent({ userId }: { userId: string }) {
                                 <button 
                                     onClick={() => handleDismissReminder(reminder)}
                                     className="p-1 rounded-full hover:bg-amber-500/20"
-                                    title={reminder.type === 'one-time' ? 'Delete Reminder' : 'Dismiss for today'}
+                                    title="Dismiss Reminder"
                                 >
                                     <X className="h-4 w-4" />
                                 </button>
@@ -351,7 +348,6 @@ export default function DashboardPageContent({ userId }: { userId: string }) {
                         userId={userId} 
                         onSave={handleAddExpense} 
                         onCancel={() => setIsExpenseModalOpen(false)} 
-                        // ✅ 4. Add the missing onDelete prop with a placeholder function
                         onDelete={() => {}}
                         clients={clients}
                         isSubmitting={isSubmittingExpense}
