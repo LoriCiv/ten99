@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebase-admin'; // ✅ Correct import
+import { adminDb } from '@/lib/firebase-admin';
 import sgMail from '@sendgrid/mail';
 import type { UserProfile } from '@/types/app-interfaces';
 
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Missing required fields for sending email.' }, { status: 400 });
         }
 
-        const db = adminDb; // ✅ Use the imported adminDb directly
+        const db = adminDb;
         
         const userProfileRef = db.doc(`users/${userId}`);
         const userProfileSnap = await userProfileRef.get();
@@ -38,7 +38,8 @@ export async function POST(request: NextRequest) {
         const msg = {
             to: to,
             from: {
-                email: 'messages@ten99.app', // This must be a verified sender in SendGrid
+                // ✅ FINAL FIX: Using your authenticated domain email address.
+                email: 'contact@ten99.app', 
                 name: fromName,
             },
             replyTo: replyToEmail || user.email,
