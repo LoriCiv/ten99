@@ -2,6 +2,7 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { adminDb } from "@/lib/firebase-admin";
+import { revalidatePath } from "next/cache"; // 👈 1. ADD THIS IMPORT
 
 // This is a Server Action. It's a secure function that runs only on the server.
 async function updateUserProfile(formData: FormData) {
@@ -9,8 +10,6 @@ async function updateUserProfile(formData: FormData) {
     
     const { userId } = await auth();
     if (!userId) {
-        // This is a failsafe; the page should protect itself.
-        // In a real error case, we would redirect with an error message.
         redirect('/sign-in');
         return;
     }
@@ -18,8 +17,6 @@ async function updateUserProfile(formData: FormData) {
     const name = formData.get("name") as string;
     
     if (!name || name.trim().length < 2) {
-        // In a real app, you'd want to return this error to the user.
-        // For now, we'll just stop execution.
         return;
     }
 
@@ -30,23 +27,23 @@ async function updateUserProfile(formData: FormData) {
         });
     } catch (error) {
         console.error("Error updating profile in onboarding:", error);
-        // In a real app, you would redirect to an error page.
         return;
     }
 
-    // This will run after a successful update and send the user to their dashboard.
+    // ✅ 2. THIS IS THE FIX: Manually clear the cache for the dashboard path.
+    revalidatePath('/dashboard');
+
+    // Now, redirect.
     redirect("/dashboard"); 
 }
 
 export default async function OnboardingPage() {
     const { userId } = await auth();
 
-    // If there is no logged in user, redirect them to sign in
     if (!userId) {
         redirect('/sign-in');
     }
     
-    // Check if the user's profile is already complete. If so, send to dashboard.
     const userProfileSnap = await adminDb.doc(`users/${userId}`).get();
     if (userProfileSnap.exists && userProfileSnap.data()?.isProfileComplete) {
       redirect("/dashboard");
