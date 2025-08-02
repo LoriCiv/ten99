@@ -1,16 +1,14 @@
 // src/app/dashboard/layout.tsx
 
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { adminDb } from "@/lib/firebase-admin";
 import { FirebaseProvider } from "@/components/FirebaseProvider";
 import { SignedIn } from "@clerk/nextjs";
 import DashboardUI from "@/components/DashboardUI";
 
-// ✅ THIS IS THE FIX: This line tells Next.js to always fetch fresh data for this layout.
 export const revalidate = 0;
 
-// This is a Server Component that can fetch data and redirect.
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
     const { userId } = await auth();
 
@@ -18,11 +16,31 @@ export default async function DashboardLayout({ children }: { children: React.Re
         redirect('/sign-in');
     }
 
-    // --- THIS IS THE "BOUNCER" LOGIC ---
-    const userProfileSnap = await adminDb.doc(`users/${userId}`).get();
-    
-    // If the user's profile doesn't exist, OR if it's not complete, redirect to onboarding.
-    if (!userProfileSnap.exists || !userProfileSnap.data()?.isProfileComplete) {
+    // --- NEW "GET OR CREATE" BOUNCER LOGIC ---
+    const userProfileRef = adminDb.doc(`users/${userId}`);
+    const userProfileSnap = await userProfileRef.get();
+
+    if (!userProfileSnap.exists) {
+        // The profile doesn't exist, so we create it here on the fly.
+        console.log(`User profile not found for ${userId}, creating one...`);
+        const user = await currentUser(); // Get the full user object from Clerk
+        const email = user?.emailAddresses[0]?.emailAddress || ''; // Get the primary email
+
+        await userProfileRef.set({
+            userId: userId,
+            email: email,
+            name: user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : '',
+            createdAt: new Date(),
+            isProfileComplete: false,
+        });
+        
+        // Now that we've created the basic profile, send them to onboarding.
+        redirect('/onboarding');
+    }
+
+    // If the profile exists, but is not complete, send them to onboarding.
+    // We add a check for data() to be safe.
+    if (userProfileSnap.data() && !userProfileSnap.data()?.isProfileComplete) {
         redirect('/onboarding');
     }
     // --- END BOUNCER LOGIC ---
