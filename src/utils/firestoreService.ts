@@ -133,6 +133,21 @@ export const getJobPostingsData = async (): Promise<JobPosting[]> => {
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => serializeData({ id: doc.id, ...doc.data() } as JobPosting)).filter((item): item is JobPosting => item !== null);
 };
+export const getClientsData = async (userId: string): Promise<Client[]> => {
+    const q = query(collection(db, `users/${userId}/clients`), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => serializeData({ id: doc.id, ...doc.data() } as Client)).filter((item): item is Client => item !== null);
+};
+export const getPersonalNetworkData = async (userId: string): Promise<PersonalNetworkContact[]> => {
+    const q = query(collection(db, `users/${userId}/personalNetwork`), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => serializeData({ id: doc.id, ...doc.data() } as PersonalNetworkContact)).filter((item): item is PersonalNetworkContact => item !== null);
+};
+export const getAppointmentsData = async (userId: string): Promise<Appointment[]> => {
+    const q = query(collection(db, `users/${userId}/appointments`), orderBy('date', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => serializeData({ id: doc.id, ...doc.data() } as Appointment)).filter((item): item is Appointment => item !== null);
+};
 
 
 // --- WRITE/UPDATE/DELETE FUNCTIONS ---
