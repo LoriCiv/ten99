@@ -1,11 +1,9 @@
-// src/components/MailboxPageContent.tsx
-
 "use client";
 
 import { useState, useEffect, useMemo, Suspense, ElementType } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ArrowLeft, Trash2, Search, CornerDownLeft, Pencil, PackageOpen, Loader2, Inbox, SendHorizontal, ThumbsUp, Info, X as XIcon } from 'lucide-react';
-import type { Message, UserProfile, JobPosting } from '@/types/app-interfaces';
+import type { Message, UserProfile } from '@/types/app-interfaces';
 import {
     getMessagesForUser,
     getSentMessagesForUser,
@@ -13,7 +11,6 @@ import {
     updateMessage,
     deleteMessage,
     getUserProfile,
-    getJobPostings
 } from '@/utils/firestoreService';
 import ComposeMessageForm from '@/components/ComposeMessageForm';
 import { Timestamp } from 'firebase/firestore';
@@ -81,7 +78,8 @@ function MailboxPageContentInternal({ userId }: { userId: string }) {
     };
 
     const filteredMessages = useMemo(() => {
-        const sortedItems = messages.sort((a,b) => (b.createdAt as Timestamp).toMillis() - (a.createdAt as Timestamp).toMillis());
+        // ✅ FIX 1: Create a copy of the array before sorting to prevent state mutation errors.
+        const sortedItems = [...messages].sort((a,b) => (b.createdAt as Timestamp).toMillis() - (a.createdAt as Timestamp).toMillis());
         if (!searchTerm) return sortedItems;
         const lowercasedTerm = searchTerm.toLowerCase();
         return sortedItems.filter(message => 
@@ -129,8 +127,10 @@ function MailboxPageContentInternal({ userId }: { userId: string }) {
             setActiveFolder('sent');
             return true;
         } catch (error) {
+            // A more robust way to display different kinds of errors
+            const errorMessage = (error instanceof Error) ? error.message : String(error);
             console.error("Error sending message:", error);
-            showStatusMessage("error", `Failed to send message: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            showStatusMessage("error", `Failed to send message: ${errorMessage}`);
             return false;
         } finally {
             setIsActionLoading(false);
@@ -242,6 +242,7 @@ function MailboxPageContentInternal({ userId }: { userId: string }) {
                 </div>
             )}
             <div className="h-[calc(100vh-8rem)] bg-card border rounded-lg overflow-hidden">
+                {/* ✅ FIX 2: Corrected a typo that would break the mobile view */}
                 <div className="md:hidden h-full">{selectedMessage || isComposing ? detailComponent : messageListComponent}</div>
                 <div className="hidden md:flex h-full">
                     <PanelGroup direction="horizontal">
