@@ -1,5 +1,3 @@
-// src/components/JobFilesPageContent.tsx
-
 "use client";
 
 import { useState, useEffect, useMemo, Suspense } from 'react';
@@ -9,12 +7,9 @@ import { getJobFiles, getClients, updateJobFile } from '@/utils/firestoreService
 import Link from 'next/link';
 import { FilePlus, Search, X, CalendarDays, Tag, Clock, CheckCircle, Star, Loader2 } from 'lucide-react';
 import { Timestamp } from 'firebase/firestore';
-import { useFirebase } from './FirebaseProvider'; // ✅ 1. Import our hook
+import { useFirebase } from './FirebaseProvider';
 
-interface JobFilesPageContentProps {
-    userId: string;
-}
-
+// Helper component for the priority stars on each card
 const PriorityStars = ({ priority, onClick }: { priority: number, onClick: (newPriority: number) => void }) => {
     return (
         <div className="flex" onClick={(e) => e.stopPropagation()}>
@@ -36,28 +31,35 @@ const PriorityStars = ({ priority, onClick }: { priority: number, onClick: (newP
     );
 };
 
-function JobFilesPageContentInternal({ userId }: JobFilesPageContentProps) {
-    const { isFirebaseAuthenticated } = useFirebase(); // ✅ 2. Get the "Green Light"
+// Props interface for the main component
+interface JobFilesPageContentInternalProps {
+    userId: string;
+    initialClientFilter?: string; // ✅ FIX: Added prop to receive the initial filter
+}
+
+// Main content component that requires Suspense wrapper
+function JobFilesPageContentInternal({ userId, initialClientFilter = '' }: JobFilesPageContentInternalProps) {
+    const { isFirebaseAuthenticated } = useFirebase();
     const searchParams = useSearchParams();
+
     const [jobFiles, setJobFiles] = useState<JobFile[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     const [searchTerm, setSearchTerm] = useState('');
-    const [clientFilter, setClientFilter] = useState('');
+    const [clientFilter, setClientFilter] = useState(initialClientFilter); // ✅ FIX: Use the prop for initial state
     const [tagFilter, setTagFilter] = useState('');
 
     useEffect(() => {
-        const initialFilter = searchParams.get('clientId');
-        if (initialFilter) {
-            setClientFilter(initialFilter);
+        // This effect can be used if you want the filter to be dynamic even after initial load
+        const filterFromUrl = searchParams.get('clientId');
+        if (filterFromUrl) {
+            setClientFilter(filterFromUrl);
         }
     }, [searchParams]);
 
-    // ✅ 3. This useEffect now waits for the Green Light before fetching data
     useEffect(() => {
         if (isFirebaseAuthenticated) {
-            console.log("✅ Job Files page is authenticated, fetching data...");
             const unsubJobFiles = getJobFiles(userId, (data) => {
                 setJobFiles(data);
                 setIsLoading(false);
@@ -73,37 +75,31 @@ function JobFilesPageContentInternal({ userId }: JobFilesPageContentProps) {
 
     const allTags = useMemo(() => {
         const tagsSet = new Set<string>();
-        if (Array.isArray(jobFiles)) {
-            jobFiles.forEach(file => {
-                file.tags?.forEach(tag => tagsSet.add(tag));
-            });
-        }
+        jobFiles.forEach(file => file.tags?.forEach(tag => tagsSet.add(tag)));
         return Array.from(tagsSet).sort();
     }, [jobFiles]);
 
     const filteredJobFiles = useMemo(() => {
         const getSortableDate = (item: JobFile): number => {
-            const createdAt = item.createdAt as Timestamp;
-            if (!createdAt || typeof createdAt.toMillis !== 'function') { return 0; }
-            return createdAt.toMillis();
+            const createdAt = item.createdAt as unknown as Timestamp;
+            return createdAt?.toMillis() || 0;
         };
-
-        if (!Array.isArray(jobFiles)) { return []; }
 
         return jobFiles
             .filter(file => {
+                const client = clients.find(c => c.id === file.clientId);
+                const clientName = client?.companyName || client?.name || '';
                 const clientMatch = !clientFilter || file.clientId === clientFilter;
-                const tagMatch = !tagFilter || (file.tags && file.tags.includes(tagFilter));
+                const tagMatch = !tagFilter || file.tags?.includes(tagFilter);
                 const searchMatch = !searchTerm ||
                     file.jobTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    (clients.find(c => c.id === file.clientId)?.companyName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    (clients.find(c => c.id === file.clientId)?.name || '').toLowerCase().includes(searchTerm.toLowerCase());
-                return clientMatch && searchMatch && tagMatch;
+                    clientName.toLowerCase().includes(searchTerm.toLowerCase());
+                return clientMatch && tagMatch && searchMatch;
             })
             .sort((a, b) => {
                 const aPriority = a.priority || 0;
                 const bPriority = b.priority || 0;
-                if (aPriority !== bPriority) { return bPriority - aPriority; }
+                if (aPriority !== bPriority) return bPriority - aPriority;
                 return getSortableDate(b) - getSortableDate(a);
             });
     }, [jobFiles, searchTerm, clientFilter, tagFilter, clients]);
@@ -111,11 +107,10 @@ function JobFilesPageContentInternal({ userId }: JobFilesPageContentProps) {
     const handleSetPriority = async (file: JobFile, newPriority: number) => {
         if (!file.id) return;
         try {
-            // ✅ 4. Explicitly cast the number to the correct type to satisfy TypeScript
             await updateJobFile(userId, file.id, { priority: newPriority as 0 | 1 | 2 });
         } catch (error) {
             console.error("Error setting priority:", error);
-            // We can add a non-blocking error message here later if needed
+            alert("Failed to update priority.");
         }
     };
     
@@ -147,7 +142,7 @@ function JobFilesPageContentInternal({ userId }: JobFilesPageContentProps) {
         return { text: 'In Progress', icon: Clock, color: 'text-yellow-500' };
     };
 
-    if (!isFirebaseAuthenticated || isLoading) {
+    if (isLoading && !isFirebaseAuthenticated) {
         return (
             <div className="flex justify-center items-center h-full p-8">
                <div className="text-center">
@@ -162,11 +157,11 @@ function JobFilesPageContentInternal({ userId }: JobFilesPageContentProps) {
     return (
         <div className="p-4 sm:p-6 lg:p-8">
             <header className="mb-6">
-                <div>
-                    <h1 className="text-3xl font-bold text-foreground">Job Files</h1>
-                    <p className="text-muted-foreground mt-1">Organize all your project-related documents and notes.</p>
-                </div>
-                <div className="mt-4 flex justify-end">
+                <div className="flex justify-between items-center">
+                    <div>
+                        <h1 className="text-3xl font-bold text-foreground">Job Files</h1>
+                        <p className="text-muted-foreground mt-1">Organize all your project-related documents and notes.</p>
+                    </div>
                     <Link href={`/dashboard/job-files/new?clientId=${clientFilter}`} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90 transition-colors">
                         <FilePlus size={20}/> New Job File
                     </Link>
@@ -191,24 +186,17 @@ function JobFilesPageContentInternal({ userId }: JobFilesPageContentProps) {
                     return (
                         <Link href={`/dashboard/job-files/${file.id}`} key={file.id} className="relative bg-card p-6 rounded-lg border hover:border-primary hover:shadow-lg transition-all flex flex-col justify-between min-h-[160px]">
                             <div className="absolute top-2 right-2">
-                                <PriorityStars 
-                                    priority={file.priority || 0} 
-                                    onClick={(newPriority) => handleSetPriority(file, newPriority)} 
-                                />
+                                <PriorityStars priority={file.priority || 0} onClick={(newPriority) => handleSetPriority(file, newPriority)} />
                             </div>
-                            
                             <div>
                                 <h3 className="text-xl font-bold text-foreground truncate pr-8">{file.jobTitle}</h3>
                                 <p className="text-primary truncate">{getClientName(file.clientId)}</p>
                                 {file.tags && file.tags.length > 0 && (
                                     <div className="flex flex-wrap gap-2 mt-3">
-                                        {file.tags.map(tag => (
-                                            <span key={tag} className="text-xs bg-secondary text-secondary-foreground px-2 py-1 rounded-full">{tag}</span>
-                                        ))}
+                                        {file.tags.map(tag => <span key={tag} className="text-xs bg-secondary text-secondary-foreground px-2 py-1 rounded-full">{tag}</span>)}
                                     </div>
                                 )}
                             </div>
-                            
                             <div className="text-sm text-muted-foreground mt-4 pt-4 border-t border-border/20 flex flex-col items-start gap-1">
                                 <div className="flex items-center gap-2">
                                     <StatusIcon className={`h-4 w-4 ${status.color}`} />
@@ -220,7 +208,7 @@ function JobFilesPageContentInternal({ userId }: JobFilesPageContentProps) {
                     );
                 })}
             </div>
-            {filteredJobFiles.length === 0 && (
+            {!isLoading && filteredJobFiles.length === 0 && (
                 <div className="text-center py-12 text-muted-foreground">
                     <p>No job files found.</p>
                 </div>
@@ -229,11 +217,11 @@ function JobFilesPageContentInternal({ userId }: JobFilesPageContentProps) {
     );
 }
 
-// Wrapper component to handle Suspense for search params
-export default function JobFilesPageContent({ userId }: { userId: string }) {
+// Export a wrapper that includes React Suspense
+export default function JobFilesPageContent({ userId, initialClientFilter }: { userId: string, initialClientFilter?: string }) {
     return (
         <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading...</div>}>
-            <JobFilesPageContentInternal userId={userId} />
+            <JobFilesPageContentInternal userId={userId} initialClientFilter={initialClientFilter} />
         </Suspense>
     );
 }

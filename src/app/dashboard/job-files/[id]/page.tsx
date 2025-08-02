@@ -1,26 +1,43 @@
-// src/app/dashboard/job-files/[id]/page.tsx
-
 import { auth } from '@clerk/nextjs/server';
-import JobFileDetailContent from '@/components/JobFileDetailContent'; 
-import { notFound, redirect } from 'next/navigation';
+import { redirect } from 'next/navigation';
+import Link from 'next/link';
+import { getJobFile, getClients, getPersonalNetwork, getAppointments } from '@/utils/firestoreService';
+import { getAuthenticatedUser } from '@/utils/userProfileService';
+import JobFileDetailPageContent from '@/components/JobFileDetailPageContent';
 import { Suspense } from 'react';
+import type { JobFile, Client, PersonalNetworkContact, Appointment } from '@/types/app-interfaces';
 
-// This is the simple, safe server component shell
 export default async function JobFileDetailPage({ params }: { params: { id: string } }) {
-    const { userId } = await auth();
-
+    const { userId } = await auth(); // ✅ FIX: Added await
     if (!userId) {
         redirect('/sign-in');
     }
 
     const jobFileId = params.id;
-    
-    // We no longer fetch data here. We just pass the IDs to the client component.
+
+    const [userProfile, jobFile, clients, contacts, appointments] = await Promise.all([
+        getAuthenticatedUser(userId),
+        getJobFile(userId, jobFileId),
+        new Promise<Client[]>((resolve) => getClients(userId, resolve)),
+        new Promise<PersonalNetworkContact[]>((resolve) => getPersonalNetwork(userId, resolve)),
+        new Promise<Appointment[]>((resolve) => getAppointments(userId, resolve)),
+    ]);
+
+    if (!jobFile) {
+        return <div className="p-8 text-center text-red-500">Job File not found.</div>;
+    }
+
+    const currentUserName = userProfile?.name || "Your Name";
+
     return (
-        <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading Job File...</div>}>
-            <JobFileDetailContent
+        <Suspense fallback={<div className="p-8 text-center">Loading...</div>}>
+            <JobFileDetailPageContent
+                initialJobFile={jobFile}
+                initialClients={clients}
+                initialContacts={contacts}
+                initialAppointments={appointments}
                 userId={userId}
-                jobFileId={jobFileId}
+                currentUserName={currentUserName}
             />
         </Suspense>
     );

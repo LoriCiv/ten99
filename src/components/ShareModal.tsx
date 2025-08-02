@@ -1,4 +1,3 @@
-// src/components/ShareModal.tsx
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
@@ -61,8 +60,16 @@ export default function ShareModal({
 
     useEffect(() => {
         const generateLink = async () => {
+            if (jobFile.publicId) {
+                const link = `${window.location.origin}/share/${jobFile.publicId}`;
+                setPublicLink(link);
+                setIsLoadingLink(false);
+                return;
+            }
+            
             setIsLoadingLink(true);
             try {
+                // ✅ FIX: Pass the entire jobFile object, not just the ID.
                 const publicId = await createPublicJobFile(currentUserId, jobFile);
                 if (publicId) {
                     const link = `${window.location.origin}/share/${publicId}`;
@@ -100,7 +107,6 @@ export default function ShareModal({
         try {
             const subject = `Job File Shared: ${jobFile.jobTitle}`;
             const body = `${currentUserName} has shared a job file with you.\n\nTitle: ${jobFile.jobTitle}\nClient: ${clientName}\n\nYou can view the details here: ${publicLink}`;
-            // ✅ THE FIX: Pass the recipient as an array
             await sendAppMessage(currentUserId, currentUserName, [recipientEmail], subject, body);
             showStatusMessage("success", `Job file sent to ${recipientEmail}!`);
             setRecipientEmail('');
@@ -172,8 +178,8 @@ export default function ShareModal({
                                             </Command>
                                         </PopoverContent>
                                     </Popover>
-                                    <button onClick={handleSendToUser} disabled={isSending || !recipientEmail} className="flex items-center gap-2 bg-teal-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-teal-700 disabled:opacity-50">
-                                        <Send size={16} />
+                                    <button onClick={handleSendToUser} disabled={isSending || !recipientEmail} className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold py-2 px-4 rounded-lg hover:bg-primary/90 disabled:opacity-50">
+                                        {isSending ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
                                         {isSending ? '...' : 'Send'}
                                     </button>
                                 </div>

@@ -1,5 +1,17 @@
+/**
+ * =============================================================================
+ * TEN99 Firestore Service (Complete & Unified Version)
+ * =============================================================================
+ * This is the central file for all interactions with the Firebase Firestore
+ * database and Storage. It contains all functions for reading, writing,
+ * updating, and deleting data for all features of the application.
+ *
+ * This version merges all original features with necessary refactors for
+ * Clerk integration, performance, and modern best practices.
+ * =============================================================================
+ */
+
 import { db, storage } from '@/lib/firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import {
     collection,
     onSnapshot,
@@ -18,22 +30,24 @@ import {
     limit,
     Timestamp,
     runTransaction,
-    DocumentReference,
-    QueryDocumentSnapshot,
     collectionGroup,
-    increment
+    increment,
+    DocumentReference
 } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import type { Client, PersonalNetworkContact, JobFile, Appointment, Message, Template, Certification, CEU, UserProfile, Invoice, Expense, JobPosting, Reminder, Mileage, LineItem } from '@/types/app-interfaces';
 import { v4 as uuidv4 } from 'uuid';
+
+// --- HELPER UTILITIES ---
 
 const cleanupObject = <T extends Record<string, unknown>>(data: T): Partial<T> => {
     const cleaned: Partial<T> = {};
     for (const key in data) {
-        const value = data[key];
-        if (Array.isArray(value)) {
-            cleaned[key] = value;
-        } else if (value !== undefined && value !== null && value !== '') {
-            cleaned[key] = value;
+        if (Object.prototype.hasOwnProperty.call(data, key)) {
+            const value = data[key];
+            if (value !== undefined && value !== null) {
+                cleaned[key] = value;
+            }
         }
     }
     return cleaned;
@@ -50,123 +64,68 @@ const serializeData = <T extends object>(doc: T | null): T | null => {
     return data as T;
 };
 
+const calculateDurationInHours = (startTime?: string, endTime?: string): number => {
+    if (!startTime || !endTime) return 1;
+    const start = new Date(`1970-01-01T${startTime}`);
+    const end = new Date(`1970-01-01T${endTime}`);
+    const diffMs = end.getTime() - start.getTime();
+    if (diffMs <= 0) return 1;
+    return parseFloat((diffMs / (1000 * 60 * 60)).toFixed(2));
+};
+
+const getBaseUrl = () => {
+    if (typeof window !== 'undefined') return window.location.origin;
+    if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+    return 'http://localhost:3000';
+};
+
+
 // --- REAL-TIME LISTENERS ---
-export const getClients = (userId: string, callback: (data: Client[]) => void) => {
-    const q = query(collection(db, `users/${userId}/clients`), orderBy('createdAt', 'desc'));
-    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as Client))); });
-};
-export const getPersonalNetwork = (userId: string, callback: (data: PersonalNetworkContact[]) => void) => {
-    const q = query(collection(db, `users/${userId}/personalNetwork`), orderBy('createdAt', 'desc'));
-    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as PersonalNetworkContact))); });
-};
-export const getJobFiles = (userId: string, callback: (data: JobFile[]) => void) => {
-    const q = query(collection(db, `users/${userId}/jobFiles`));
-    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as JobFile))); });
-};
-export const getAppointments = (userId: string, callback: (data: Appointment[]) => void) => {
-    const q = query(collection(db, `users/${userId}/appointments`), orderBy('date', 'desc'));
-    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as Appointment))); });
-};
-export const getMessagesForUser = (userId: string, callback: (data: Message[]) => void) => {
-    const messagesRef = collection(db, 'users', userId, 'messages');
-    const q = query(messagesRef, where('recipientId', '==', userId), orderBy('createdAt', 'desc'));
-    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as Message))); });
-};
-export const getSentMessagesForUser = (userId: string, callback: (data: Message[]) => void) => {
-    const messagesRef = collection(db, 'users', userId, 'messages');
-    const q = query(messagesRef, where('senderId', '==', userId), orderBy('createdAt', 'desc'));
-    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as Message))); });
-};
-export const getTemplates = (userId: string, callback: (data: Template[]) => void) => { const q = query(collection(db, `users/${userId}/templates`), orderBy('createdAt', 'desc')); return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Template))); }); };
-export const getCertifications = (userId: string, callback: (data: Certification[]) => void) => { const q = query(collection(db, `users/${userId}/certifications`), orderBy('createdAt', 'desc')); return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Certification))); }); };
-export const getAllCEUs = (userId: string, callback: (data: CEU[]) => void) => {
-    const ceusQuery = query(collectionGroup(db, 'ceus'), where('userId', '==', userId));
-    return onSnapshot(ceusQuery, (snapshot) => {
-        const ceus = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CEU));
-        callback(ceus);
-    });
-};
-export const getUserProfile = (userId: string, callback: (data: UserProfile | null) => void) => {
-    const docRef = doc(db, `users/${userId}`);
-    return onSnapshot(docRef, (docSnap) => {
-        if (docSnap.exists()) {
-            callback({ id: docSnap.id, ...docSnap.data() } as UserProfile);
-        } else {
-            callback(null);
-        }
-    });
-};
-export const getInvoices = (userId: string, callback: (data: Invoice[]) => void) => { const q = query(collection(db, `users/${userId}/invoices`), orderBy('invoiceDate', 'desc')); return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Invoice))); }); };
-export const getExpenses = (userId: string, callback: (data: Expense[]) => void) => { const q = query(collection(db, `users/${userId}/expenses`), orderBy('date', 'desc')); return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Expense))); }); };
-export const getJobPostings = (callback: (data: JobPosting[]) => void, userProfile?: UserProfile | null) => {
-    const now = new Date();
-    let q = query(collection(db, 'jobPostings'), where('expiresAt', '>', now), orderBy('expiresAt', 'asc'));
 
-    if (userProfile && Array.isArray(userProfile.states) && userProfile.states.length > 0) {
-        q = query(q, where('state', 'in', userProfile.states));
-    }
+export const getClients = (userId: string, callback: (data: Client[]) => void) => onSnapshot(query(collection(db, `users/${userId}/clients`), orderBy('createdAt', 'desc')), s => callback(s.docs.map(d => ({ id: d.id, ...d.data() } as Client))));
+export const getPersonalNetwork = (userId: string, callback: (data: PersonalNetworkContact[]) => void) => onSnapshot(query(collection(db, `users/${userId}/personalNetwork`), orderBy('createdAt', 'desc')), s => callback(s.docs.map(d => ({ id: d.id, ...d.data() } as PersonalNetworkContact))));
+export const getJobFiles = (userId: string, callback: (data: JobFile[]) => void) => onSnapshot(query(collection(db, `users/${userId}/jobFiles`), orderBy('createdAt', 'desc')), s => callback(s.docs.map(d => ({ id: d.id, ...d.data() } as JobFile))));
+export const getAppointments = (userId: string, callback: (data: Appointment[]) => void) => onSnapshot(query(collection(db, `users/${userId}/appointments`), orderBy('date', 'desc')), s => callback(s.docs.map(d => ({ id: d.id, ...d.data() } as Appointment))));
+export const getTemplates = (userId: string, callback: (data: Template[]) => void) => onSnapshot(query(collection(db, `users/${userId}/templates`), orderBy('createdAt', 'desc')), s => callback(s.docs.map(d => ({ id: d.id, ...d.data() } as Template))));
+export const getCertifications = (userId: string, callback: (data: Certification[]) => void) => onSnapshot(query(collection(db, `users/${userId}/certifications`), orderBy('createdAt', 'desc')), s => callback(s.docs.map(d => ({ id: d.id, ...d.data() } as Certification))));
+export const getInvoices = (userId: string, callback: (data: Invoice[]) => void) => onSnapshot(query(collection(db, `users/${userId}/invoices`), orderBy('invoiceDate', 'desc')), s => callback(s.docs.map(d => ({ id: d.id, ...d.data() } as Invoice))));
+export const getExpenses = (userId: string, callback: (data: Expense[]) => void) => onSnapshot(query(collection(db, `users/${userId}/expenses`), orderBy('date', 'desc')), s => callback(s.docs.map(d => ({ id: d.id, ...d.data() } as Expense))));
+export const getReminders = (userId: string, callback: (data: Reminder[]) => void) => onSnapshot(query(collection(db, `users/${userId}/reminders`), orderBy('createdAt', 'desc')), s => callback(s.docs.map(d => ({ id: d.id, ...d.data() } as Reminder))));
+export const getMileage = (userId: string, callback: (data: Mileage[]) => void) => onSnapshot(query(collection(db, `users/${userId}/mileage`), orderBy('date', 'desc')), s => callback(s.docs.map(d => ({ id: d.id, ...d.data() } as Mileage))));
+export const getUserProfile = (userId: string, callback: (data: UserProfile | null) => void) => onSnapshot(doc(db, `users/${userId}/profile`, 'mainProfile'), (docSnap) => callback(docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as UserProfile : null));
+export const getJobPostings = (callback: (data: JobPosting[]) => void) => onSnapshot(query(collection(db, 'jobPostings'), where('expiresAt', '>', new Date()), orderBy('expiresAt', 'asc')), s => callback(s.docs.map(d => ({ id: d.id, ...d.data() } as JobPosting))));
+export const getMessagesForUser = (userId: string, callback: (data: Message[]) => void) => onSnapshot(query(collection(db, `users/${userId}/messages`), where('recipientId', '==', userId), orderBy('createdAt', 'desc')), s => callback(s.docs.map(d => ({ id: d.id, ...d.data() } as Message))));
+export const getSentMessagesForUser = (userId: string, callback: (data: Message[]) => void) => onSnapshot(query(collection(db, `users/${userId}/messages`), where('senderId', '==', userId), orderBy('createdAt', 'desc')), s => callback(s.docs.map(d => ({ id: d.id, ...d.data() } as Message))));
+export const getRecentInvoices = (userId: string, callback: (data: Invoice[]) => void) => onSnapshot(query(collection(db, `users/${userId}/invoices`), orderBy('createdAt', 'desc'), limit(5)), s => callback(s.docs.map(d => ({ id: d.id, ...d.data() } as Invoice))));
+export const getPriorityJobFiles = (userId: string, callback: (data: JobFile[]) => void) => onSnapshot(query(collection(db, `users/${userId}/jobFiles`), where('priority', '==', 2), orderBy('createdAt', 'desc')), s => callback(s.docs.map(d => ({ id: d.id, ...d.data() } as JobFile))));
 
-    return onSnapshot(q, (snapshot) => {
-        callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as JobPosting)))
-    });
-};
-export const getReminders = (userId: string, callback: (data: Reminder[]) => void) => {
-    // ✅ UPDATED: Now only fetches reminders that are not dismissed.
-    const q = query(
-        collection(db, `users/${userId}/reminders`),
-        where('isDismissed', '!=', true),
-        orderBy('createdAt', 'desc')
-    );
-    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reminder))); });
-};
-export const getMileage = (userId: string, callback: (data: Mileage[]) => void) => {
-    const q = query(collection(db, `users/${userId}/mileage`), orderBy('date', 'desc'));
-    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Mileage))); });
-};
-export const getPriorityJobFiles = (userId: string, callback: (data: JobFile[]) => void) => {
-    const q = query(collection(db, `users/${userId}/jobFiles`), where('priority', '==', 2), orderBy('createdAt', 'desc'));
-    return onSnapshot(q, (snapshot) => { callback(snapshot.docs.map((doc: QueryDocumentSnapshot) => ({ id: doc.id, ...doc.data() } as JobFile))); });
-};
-export const getCeusForCertification = (userId: string, certId: string, callback: (data: CEU[]) => void) => {
-    const q = query(collection(db, `users/${userId}/ceus`), where('certificationId', '==', certId));
-    return onSnapshot(q, (snapshot) => {
-        callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CEU)));
-    });
-};
 
 // --- ONE-TIME DATA FETCHERS ---
+
+export const getProfileData = async (userId: string): Promise<UserProfile | null> => {
+    const docRef = doc(db, `users/${userId}/profile`, 'mainProfile');
+    const docSnap = await getDoc(docRef);
+    return docSnap.exists() ? serializeData({ id: docSnap.id, ...docSnap.data() } as UserProfile) : null;
+};
 export const getJobFile = async (userId: string, jobFileId: string): Promise<JobFile | null> => {
     const docRef = doc(db, `users/${userId}/jobFiles`, jobFileId);
     const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) { return { id: docSnap.id, ...docSnap.data() } as JobFile; }
-    return null;
+    return docSnap.exists() ? serializeData({ id: docSnap.id, ...docSnap.data() } as JobFile) : null;
 };
-export const getProfileData = async (userId: string): Promise<UserProfile | null> => {
-    const docRef = doc(db, `users/${userId}`);
+export const getJobPostingById = async (postId: string): Promise<JobPosting | null> => {
+    const docRef = doc(db, 'jobPostings', postId);
     const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) { return serializeData({ id: docSnap.id, ...docSnap.data() } as UserProfile); }
-    return null;
+    return docSnap.exists() ? serializeData({ id: docSnap.id, ...docSnap.data() } as JobPosting) : null;
 };
-export const getTemplatesData = async (userId: string): Promise<Template[]> => {
-    const q = query(collection(db, `users/${userId}/templates`), orderBy('createdAt', 'desc'));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => serializeData({ id: doc.id, ...doc.data() } as Template)).filter((item): item is Template => item !== null);
+export const getPublicUserProfile = async (userId: string): Promise<UserProfile | null> => {
+    const docRef = doc(db, `users/${userId}/profile`, 'mainProfile');
+    const docSnap = await getDoc(docRef);
+    return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as UserProfile : null;
 };
-export const getRemindersData = async (userId: string): Promise<Reminder[]> => {
-    const q = query(collection(db, `users/${userId}/reminders`), orderBy('createdAt', 'desc'));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => serializeData({ id: doc.id, ...doc.data() } as Reminder)).filter((item): item is Reminder => item !== null);
-};
-export const getPublicUserProfile = async (userId: string): Promise<UserProfile | null> => { const docRef = doc(db, `users/${userId}`); const docSnap = await getDoc(docRef); if (docSnap.exists()) { return { id: docSnap.id, ...docSnap.data() } as UserProfile; } return null; };
-export const getCertificationsData = async (userId: string): Promise<Certification[]> => {
+export const getPublicCertifications = async (userId: string): Promise<Certification[]> => {
     const q = query(collection(db, `users/${userId}/certifications`), orderBy('createdAt', 'desc'));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => serializeData({ id: doc.id, ...doc.data() } as Certification)).filter((item): item is Certification => item !== null);
-};
-export const getAllCEUsData = async (userId: string): Promise<CEU[]> => {
-    const ceusQuery = query(collectionGroup(db, 'ceus'), where('userId', '==', userId));
-    const snapshot = await getDocs(ceusQuery);
-    return snapshot.docs.map(doc => serializeData({ id: doc.id, ...doc.data() } as CEU)).filter((item): item is CEU => item !== null);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Certification));
 };
 export const getJobPostingsData = async (): Promise<JobPosting[]> => {
     const now = new Date();
@@ -174,44 +133,78 @@ export const getJobPostingsData = async (): Promise<JobPosting[]> => {
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => serializeData({ id: doc.id, ...doc.data() } as JobPosting)).filter((item): item is JobPosting => item !== null);
 };
-export const getClientForJobFile = async (userId: string, clientId: string): Promise<Client | null> => {
-    const docRef = doc(db, 'users', userId, 'clients', clientId);
-    const docSnap = await getDoc(docRef);
-    return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as Client : null;
-};
+
 
 // --- WRITE/UPDATE/DELETE FUNCTIONS ---
-export const addClient = (userId: string, clientData: Partial<Client>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/clients`), { ...cleanupObject(clientData), createdAt: serverTimestamp() }); };
-export const updateClient = (userId: string, clientId: string, clientData: Partial<Client>): Promise<void> => { return setDoc(doc(db, `users/${userId}/clients`, clientId), cleanupObject(clientData), { merge: true }); };
-export const deleteClient = (userId: string, clientId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/clients`, clientId)); };
-export const addPersonalNetworkContact = (userId: string, contactData: Partial<PersonalNetworkContact>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/personalNetwork`), { ...cleanupObject(contactData), createdAt: serverTimestamp() }); };
-export const updatePersonalNetworkContact = (userId: string, contactId: string, contactData: Partial<PersonalNetworkContact>): Promise<void> => { const docRef = doc(db, `users/${userId}/personalNetwork`, contactId); return setDoc(docRef, cleanupObject(contactData), { merge: true }); };
-export const deletePersonalNetworkContact = (userId: string, contactId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/personalNetwork`, contactId)); };
-export const addJobFile = (userId: string, jobFileData: Partial<JobFile>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/jobFiles`), { ...cleanupObject(jobFileData), createdAt: serverTimestamp(), updatedAt: serverTimestamp() }); };
-export const updateJobFile = (userId: string, jobFileId: string, jobFileData: Partial<JobFile>): Promise<void> => { const dataToSave = { ...cleanupObject(jobFileData), updatedAt: serverTimestamp() }; return updateDoc(doc(db, `users/${userId}/jobFiles`, jobFileId), dataToSave); };
-export const deleteJobFile = (userId: string, jobFileId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/jobFiles`, jobFileId)); };
-export const createPublicJobFile = async (userId: string, jobFile: JobFile): Promise<string | null> => {
-    if (!jobFile.id) return null;
-    const jobFileRef = doc(db, 'users', userId, 'jobFiles', jobFile.id);
-    if (jobFile.publicId) {
-        await updateDoc(jobFileRef, { isShared: true });
-        return jobFile.publicId;
-    }
-    const newPublicId = uuidv4();
-    await updateDoc(jobFileRef, {
-        isShared: true,
-        publicId: newPublicId,
-        originalUserId: userId
-    });
-    return newPublicId;
-};
+
 export const uploadFile = async (userId: string, file: File): Promise<string> => {
-    if (!file) { throw new Error("No file provided for upload."); }
+    if (!userId || !file) throw new Error("User ID and file are required for upload.");
     const filePath = `users/${userId}/uploads/${uuidv4()}-${file.name}`;
     const storageRef = ref(storage, filePath);
     await uploadBytes(storageRef, file);
-    return await getDownloadURL(storageRef);
+    return getDownloadURL(storageRef);
 };
+
+export const updateUserProfile = (userId: string, profileData: Partial<UserProfile>) => {
+    const docRef = doc(db, `users/${userId}/profile`, 'mainProfile');
+    return setDoc(docRef, cleanupObject(profileData), { merge: true });
+};
+
+export const addClient = (userId: string, clientData: Partial<Client>) => addDoc(collection(db, `users/${userId}/clients`), { ...cleanupObject(clientData), createdAt: serverTimestamp() });
+export const updateClient = (userId: string, clientId: string, clientData: Partial<Client>) => updateDoc(doc(db, `users/${userId}/clients`, clientId), cleanupObject(clientData));
+export const deleteClient = (userId: string, clientId: string) => deleteDoc(doc(db, `users/${userId}/clients`, clientId));
+
+export const addPersonalNetworkContact = (userId: string, contactData: Partial<PersonalNetworkContact>) => addDoc(collection(db, `users/${userId}/personalNetwork`), { ...cleanupObject(contactData), createdAt: serverTimestamp() });
+export const updatePersonalNetworkContact = (userId: string, contactId: string, contactData: Partial<PersonalNetworkContact>) => updateDoc(doc(db, `users/${userId}/personalNetwork`, contactId), cleanupObject(contactData));
+export const deletePersonalNetworkContact = (userId: string, contactId: string) => deleteDoc(doc(db, `users/${userId}/personalNetwork`, contactId));
+
+export const convertClientToContact = async (userId: string, client: Client): Promise<void> => {
+    if (!client.id) throw new Error("Client ID is missing for conversion.");
+    const newContactData = { name: client.companyName || client.name || 'Unknown', email: client.email, phone: client.phone, notes: client.notes, tags: ['converted-from-client'], createdAt: client.createdAt || serverTimestamp() };
+    const batch = writeBatch(db);
+    batch.set(doc(db, `users/${userId}/personalNetwork`, client.id), cleanupObject(newContactData));
+    batch.delete(doc(db, `users/${userId}/clients`, client.id));
+    await batch.commit();
+};
+
+export const convertContactToClient = async (userId: string, contact: PersonalNetworkContact): Promise<void> => {
+    if (!contact.id) throw new Error("Contact ID is missing for conversion.");
+    const newClientData = { name: contact.name, companyName: contact.name, email: contact.email, phone: contact.phone, notes: contact.notes, status: 'Active' as const, clientType: 'business_1099' as const, createdAt: contact.createdAt || serverTimestamp() };
+    const batch = writeBatch(db);
+    batch.set(doc(db, `users/${userId}/clients`, contact.id), cleanupObject(newClientData));
+    batch.delete(doc(db, `users/${userId}/personalNetwork`, contact.id));
+    await batch.commit();
+};
+
+export const addJobFile = (userId: string, jobFileData: Partial<JobFile>) => addDoc(collection(db, `users/${userId}/jobFiles`), { ...cleanupObject(jobFileData), createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+export const updateJobFile = (userId: string, jobFileId: string, jobFileData: Partial<JobFile>) => updateDoc(doc(db, `users/${userId}/jobFiles`, jobFileId), { ...cleanupObject(jobFileData), updatedAt: serverTimestamp() });
+export const deleteJobFile = (userId: string, jobFileId: string) => deleteDoc(doc(db, `users/${userId}/jobFiles`, jobFileId));
+
+export const addTemplate = (userId: string, templateData: Partial<Template>) => addDoc(collection(db, `users/${userId}/templates`), { ...cleanupObject(templateData), createdAt: serverTimestamp() });
+export const updateTemplate = (userId: string, templateId: string, templateData: Partial<Template>) => updateDoc(doc(db, `users/${userId}/templates`, templateId), cleanupObject(templateData));
+export const deleteTemplate = (userId: string, templateId: string) => deleteDoc(doc(db, `users/${userId}/templates`, templateId));
+
+export const addReminder = (userId: string, reminderData: Partial<Reminder>) => addDoc(collection(db, `users/${userId}/reminders`), { ...cleanupObject(reminderData), createdAt: serverTimestamp(), isDismissed: false });
+export const updateReminder = (userId: string, reminderId: string, data: Partial<Reminder>) => updateDoc(doc(db, `users/${userId}/reminders`, reminderId), data);
+export const deleteReminder = (userId: string, reminderId: string) => deleteDoc(doc(db, `users/${userId}/reminders`, reminderId));
+
+export const createPublicJobFile = async (userId: string, jobFile: JobFile): Promise<string> => {
+    if (!jobFile.id) throw new Error("JobFile must have an ID to be shared.");
+    const jobFileRef = doc(db, 'users', userId, 'jobFiles', jobFile.id);
+    return runTransaction(db, async (transaction) => {
+        const jobFileDoc = await transaction.get(jobFileRef);
+        if (!jobFileDoc.exists()) throw new Error("Job file does not exist.");
+        const currentData = jobFileDoc.data();
+        if (currentData.publicId) {
+            transaction.update(jobFileRef, { isShared: true });
+            return currentData.publicId;
+        }
+        const newPublicId = uuidv4();
+        transaction.update(jobFileRef, { isShared: true, publicId: newPublicId, originalUserId: userId });
+        return newPublicId;
+    });
+};
+
 export const addAppointment = async (userId: string, appointmentData: Partial<Appointment>, recurrenceEndDate?: string): Promise<string | void> => {
     const dataToSave = { ...cleanupObject(appointmentData), createdAt: serverTimestamp() };
     if (appointmentData.recurrence && recurrenceEndDate && appointmentData.date) {
@@ -221,14 +214,14 @@ export const addAppointment = async (userId: string, appointmentData: Partial<Ap
         const endDate = new Date(recurrenceEndDate + 'T00:00:00');
         while (movingDate <= endDate) {
             const newDocRef = doc(collection(db, `users/${userId}/appointments`));
-            const appointmentForDate = { ...dataToSave, date: movingDate.toISOString().split('T')[0], seriesId: seriesId };
+            const appointmentForDate = { ...dataToSave, date: movingDate.toISOString().split('T')[0], seriesId };
             batch.set(newDocRef, appointmentForDate);
             switch (appointmentData.recurrence) {
                 case 'daily': movingDate.setDate(movingDate.getDate() + 1); break;
                 case 'weekly': movingDate.setDate(movingDate.getDate() + 7); break;
                 case 'biweekly': movingDate.setDate(movingDate.getDate() + 14); break;
                 case 'monthly': movingDate.setMonth(movingDate.getMonth() + 1); break;
-                default: movingDate.setDate(endDate.getDate() + 1); break;
+                default: throw new Error(`Invalid recurrence type: ${appointmentData.recurrence}`);
             }
         }
         await batch.commit();
@@ -237,222 +230,252 @@ export const addAppointment = async (userId: string, appointmentData: Partial<Ap
         return docRef.id;
     }
 };
-export const updateAppointment = (userId: string, appointmentId: string, appointmentData: Partial<Appointment>): Promise<void> => { const appointmentRef = doc(db, `users/${userId}/appointments`, appointmentId); return updateDoc(appointmentRef, cleanupObject(appointmentData)); };
-export const deleteAppointment = (userId: string, appointmentId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/appointments`, appointmentId)); };
-export const updateMessage = (userId: string, messageId: string, messageData: Partial<Message>): Promise<void> => { const messageRef = doc(db, 'users', userId, 'messages', messageId); return updateDoc(messageRef, cleanupObject(messageData)); };
-export const deleteMessage = (userId: string, messageId: string): Promise<void> => { const messageRef = doc(db, `users/${userId}/messages`, messageId); return deleteDoc(messageRef); };
+export const updateAppointment = (userId: string, appointmentId: string, appointmentData: Partial<Appointment>) => updateDoc(doc(db, `users/${userId}/appointments`, appointmentId), cleanupObject(appointmentData));
+export const deleteAppointment = (userId: string, appointmentId: string) => deleteDoc(doc(db, `users/${userId}/appointments`, appointmentId));
 
-const getBaseUrl = () => {
-    if (typeof window !== 'undefined') {
-        return window.location.origin;
-    }
-    if (process.env.VERCEL_URL) {
-        return `https://${process.env.VERCEL_URL}`;
-    }
-    return 'http://localhost:3000';
-};
-
+export const updateMessage = (userId: string, messageId: string, messageData: Partial<Message>) => updateDoc(doc(db, `users/${userId}/messages`, messageId), cleanupObject(messageData));
+export const deleteMessage = (userId: string, messageId: string) => deleteDoc(doc(db, `users/${userId}/messages`, messageId));
 export const sendAppMessage = async (senderId: string, senderName: string, recipients: string[], subject: string, body: string, type: Message['type'] = 'standard', jobPostId?: string): Promise<void> => {
-    console.log(`[sendAppMessage] Initiated by sender ${senderName} (${senderId})`);
     try {
-        const senderProfileSnap = await getDoc(doc(db, `users/${senderId}`));
-        const senderEmail = senderProfileSnap.exists() && senderProfileSnap.data().email ? senderProfileSnap.data().email : 'noreply@ten99.app';
+        const senderProfileSnap = await getDoc(doc(db, `users/${senderId}/profile`, 'mainProfile'));
+        const senderEmail = senderProfileSnap.data()?.email || 'noreply@ten99.app';
         
-        const internalRecipients: string[] = [];
-        const externalRecipients: string[] = [];
-        for (const recipient of recipients) {
-            if (recipient.includes('@')) {
-                const usersRef = collection(db, 'users');
-                const q = query(usersRef, where("email", "==", recipient), limit(1));
-                const querySnapshot = await getDocs(q);
-                if (!querySnapshot.empty) {
-                    internalRecipients.push(querySnapshot.docs[0].id);
-                } else {
-                    externalRecipients.push(recipient);
-                }
-            } else {
-                internalRecipients.push(recipient);
-            }
+        const emailsToQuery = recipients.filter(r => r.includes('@'));
+        const internalIds = recipients.filter(r => !r.includes('@'));
+        const externalRecipients = new Set<string>();
+
+        if (emailsToQuery.length > 0) {
+            const usersRef = collection(db, 'users');
+            const q = query(usersRef, where("email", "in", emailsToQuery));
+            const querySnapshot = await getDocs(q);
+            const foundEmails = new Set<string>();
+            querySnapshot.forEach(doc => {
+                internalIds.push(doc.id);
+                foundEmails.add(doc.data().email);
+            });
+            emailsToQuery.forEach(email => { if (!foundEmails.has(email)) externalRecipients.add(email); });
         }
+
         const batch = writeBatch(db);
         const timestamp = serverTimestamp();
-        for (const recipientId of internalRecipients) {
-            const messageData: Partial<Message> = { senderId, senderName, recipientId, subject, body, isRead: false, status: 'new', createdAt: timestamp, type, jobPostId };
-            const recipientMessageRef = doc(collection(db, `users/${recipientId}/messages`));
-            batch.set(recipientMessageRef, cleanupObject(messageData));
-        }
-        const sentMessageData: Partial<Message> = {
-            senderId, senderName, recipientId: recipients.join(', '), subject, body,
-            isRead: true, status: 'new', createdAt: timestamp, type, jobPostId
-        };
-        const senderMessageRef = doc(collection(db, `users/${senderId}/messages`));
-        batch.set(senderMessageRef, cleanupObject(sentMessageData));
+
+        internalIds.forEach(recipientId => {
+            const messageData: Partial<Message> = { senderId, senderName, recipientId, subject, body, isRead: false, createdAt: timestamp, type, jobPostId };
+            batch.set(doc(collection(db, `users/${recipientId}/messages`)), cleanupObject(messageData));
+        });
+
+        const sentMessageData: Partial<Message> = { senderId, senderName, recipientId: recipients.join(', '), subject, body, isRead: true, createdAt: timestamp, type, jobPostId };
+        batch.set(doc(collection(db, `users/${senderId}/messages`)), cleanupObject(sentMessageData));
+
         await batch.commit();
-        if (externalRecipients.length > 0) {
-            const apiUrl = `${getBaseUrl()}/api/send-email`;
-            
-            const response = await fetch(apiUrl, {
+
+        if (externalRecipients.size > 0) {
+            await fetch(`${getBaseUrl()}/api/send-email`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 cache: 'no-store',
-                body: JSON.stringify({
-                    userId: senderId,
-                    to: externalRecipients,
-                    subject,
-                    html: `<p>${body.replace(/\n/g, '<br>')}</p>`,
-                    replyToEmail: senderEmail
-                }),
+                body: JSON.stringify({ userId: senderId, to: Array.from(externalRecipients), subject, html: `<p>${body.replace(/\n/g, '<br>')}</p>`, replyToEmail: senderEmail }),
             });
-            
-            if (!response.ok) {
-                const errorBody = await response.text();
-                throw new Error(`Failed to send external email. Status: ${response.status}. Body: ${errorBody}`);
-            }
         }
     } catch (error) {
-        console.error('[sendAppMessage] 🔴 An error occurred:', error);
+        console.error('[sendAppMessage] An error occurred:', error);
         throw error;
     }
 };
-export const addTemplate = (userId: string, templateData: Partial<Template>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/templates`), { ...cleanupObject(templateData), createdAt: serverTimestamp() }); };
-export const updateTemplate = (userId: string, templateId: string, templateData: Partial<Template>): Promise<void> => { const docRef = doc(db, `users/${userId}/templates`, templateId); return setDoc(docRef, cleanupObject(templateData), { merge: true }); };
-export const deleteTemplate = (userId: string, templateId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/templates`, templateId)); };
-export const addCertification = (userId: string, certData: Partial<Certification>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/certifications`), { ...cleanupObject(certData), createdAt: serverTimestamp() }); };
-export const updateCertification = (userId: string, certId: string, certData: Partial<Certification>): Promise<void> => { const docRef = doc(db, `users/${userId}/certifications`, certId); return setDoc(docRef, cleanupObject(certData), { merge: true }); };
-export const deleteCertification = async (userId: string, certId: string): Promise<void> => { const batch = writeBatch(db); const certRef = doc(db, `users/${userId}/certifications`, certId); const ceusQuery = query(collectionGroup(db, 'ceus'), where('certificationId', '==', certId), where('userId', '==', userId)); const ceusSnapshot = await getDocs(ceusQuery); ceusSnapshot.forEach(doc => batch.delete(doc.ref)); batch.delete(certRef); await batch.commit(); };
-export const addCEU = (userId: string, certId: string, ceuData: Partial<CEU>): Promise<DocumentReference> => { const dataToSave = { ...cleanupObject(ceuData), userId, certificationId: certId, createdAt: serverTimestamp() }; return addDoc(collection(db, `users/${userId}/ceus`), dataToSave); };
-export const deleteCEU = (userId:string, ceuId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/ceus`, ceuId)); };
-export const updateCEU = (userId: string, ceuData: Partial<CEU>): Promise<void> => { if (!ceuData.id) { return Promise.reject("CEU ID is required for update."); } const docRef = doc(db, `users/${userId}/ceus`, ceuData.id); return setDoc(docRef, cleanupObject(ceuData), { merge: true }); };
-export const updateUserProfile = (userId: string, profileData: Partial<UserProfile>): Promise<void> => { const docRef = doc(db, `users/${userId}`); return setDoc(docRef, profileData, { merge: true }); };
-const generateNextInvoiceNumber = async (userId: string): Promise<string> => { const metaRef = doc(db, `users/${userId}/_metadata`, 'invoiceCounter'); const year = new Date().getFullYear(); try { const newInvoiceNumber = await runTransaction(db, async (transaction) => { const metaDoc = await transaction.get(metaRef); if (!metaDoc.exists()) { transaction.set(metaRef, { lastNumber: 1, year: year }); return `${year}-001`; } const data = metaDoc.data(); if(!data) { transaction.set(metaRef, { lastNumber: 1, year: year }); return `${year}-001`; } const lastNumber = data.year === year ? data.lastNumber : 0; const nextNumber = lastNumber + 1; transaction.update(metaRef, { lastNumber: nextNumber, year: year }); return `${year}-${String(nextNumber).padStart(3, '0')}`; }); return newInvoiceNumber; } catch (error) { console.error("Transaction failed: ", error); return `${year}-${Date.now().toString().slice(-5)}`; } };
-export const getNextInvoiceNumber = async (userId: string): Promise<string> => { return generateNextInvoiceNumber(userId); };
-export const addInvoice = async (userId: string, invoiceData: Partial<Invoice>): Promise<void> => { if (!invoiceData.invoiceNumber) { invoiceData.invoiceNumber = await getNextInvoiceNumber(userId); } const dataToSave = { ...cleanupObject(invoiceData), createdAt: serverTimestamp(), }; await addDoc(collection(db, `users/${userId}/invoices`), dataToSave); };
-export const updateInvoice = (userId: string, invoiceId: string, invoiceData: Partial<Invoice>): Promise<void> => { const docRef = doc(db, `users/${userId}/invoices`, invoiceId); return setDoc(docRef, cleanupObject(invoiceData), { merge: true }); };
-export const deleteInvoice = (userId: string, invoiceId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/invoices`, invoiceId)); };
-const calculateDurationInHours = (startTime?: string, endTime?: string): number => { if (!startTime || !endTime) return 1; const start = new Date(`1970-01-01T${startTime}`); const end = new Date(`1970-01-01T${endTime}`); const diffMs = end.getTime() - start.getTime(); if (diffMs <= 0) return 1; return parseFloat((diffMs / (1000 * 60 * 60)).toFixed(2)); };
+
+export const addCertification = (userId: string, certData: Partial<Certification>) => addDoc(collection(db, `users/${userId}/certifications`), { ...cleanupObject(certData), createdAt: serverTimestamp() });
+export const updateCertification = (userId: string, certId: string, certData: Partial<Certification>) => updateDoc(doc(db, `users/${userId}/certifications`, certId), cleanupObject(certData));
+export const deleteCertification = async (userId: string, certId: string): Promise<void> => {
+    const batch = writeBatch(db);
+    const certRef = doc(db, `users/${userId}/certifications`, certId);
+    const ceusQuery = query(collection(db, `users/${userId}/ceus`), where('certificationId', '==', certId));
+    const ceusSnapshot = await getDocs(ceusQuery);
+    ceusSnapshot.forEach(doc => batch.delete(doc.ref));
+    batch.delete(certRef);
+    await batch.commit();
+};
+export const addCEU = (userId: string, certId: string, ceuData: Partial<CEU>) => addDoc(collection(db, `users/${userId}/ceus`), { ...cleanupObject(ceuData), userId, certificationId: certId, createdAt: serverTimestamp() });
+export const updateCEU = (userId: string, ceuId: string, ceuData: Partial<CEU>) => updateDoc(doc(db, `users/${userId}/ceus`, ceuId), cleanupObject(ceuData));
+export const deleteCEU = (userId:string, ceuId: string) => deleteDoc(doc(db, `users/${userId}/ceus`, ceuId));
+
+const generateNextInvoiceNumber = async (userId: string): Promise<string> => {
+    const metaRef = doc(db, `users/${userId}/_metadata`, 'invoiceCounter');
+    const year = new Date().getFullYear();
+    try {
+        return await runTransaction(db, async (transaction) => {
+            const metaDoc = await transaction.get(metaRef);
+            if (!metaDoc.exists()) {
+                transaction.set(metaRef, { lastNumber: 1, year });
+                return `${year}-001`;
+            }
+            const data = metaDoc.data();
+            const lastNumber = data.year === year ? data.lastNumber : 0;
+            const nextNumber = lastNumber + 1;
+            transaction.update(metaRef, { lastNumber: nextNumber, year });
+            return `${year}-${String(nextNumber).padStart(3, '0')}`;
+        });
+    } catch (error) {
+        console.error("Transaction failed to generate invoice number: ", error);
+        return `${year}-${Date.now().toString().slice(-5)}`;
+    }
+};
+export const addInvoice = async (userId: string, invoiceData: Partial<Invoice>) => {
+    const dataToSave = { ...cleanupObject(invoiceData), createdAt: serverTimestamp() };
+    if (!dataToSave.invoiceNumber) {
+        dataToSave.invoiceNumber = await generateNextInvoiceNumber(userId);
+    }
+    await addDoc(collection(db, `users/${userId}/invoices`), dataToSave);
+};
+export const updateInvoice = (userId: string, invoiceId: string, invoiceData: Partial<Invoice>) => updateDoc(doc(db, `users/${userId}/invoices`, invoiceId), cleanupObject(invoiceData));
+export const deleteInvoice = (userId: string, invoiceId: string) => deleteDoc(doc(db, `users/${userId}/invoices`, invoiceId));
 export const createInvoiceFromAppointment = async (userId: string, appointment: Appointment): Promise<void> => {
-    if (!appointment.clientId || !appointment.id) { throw new Error("Appointment must have an ID and be linked to a client."); }
-    const clientRef = doc(db, `users/${userId}/clients`, appointment.clientId);
-    const clientSnap = await getDoc(clientRef);
-    if (!clientSnap.exists()) { throw new Error("Client not found for this appointment."); }
+    if (!appointment.clientId || !appointment.id) throw new Error("Appointment must have an ID and be linked to a client.");
+    const clientSnap = await getDoc(doc(db, `users/${userId}/clients`, appointment.clientId));
+    if (!clientSnap.exists()) throw new Error("Client not found for this appointment.");
     const client = clientSnap.data() as Client;
     const rate = client.rate || 0;
     const duration = calculateDurationInHours(appointment.time, appointment.endTime);
-    const description = `${appointment.subject || 'Services Rendered'}\nDate: ${appointment.date}`;
-    const lineItems: LineItem[] = [{ description, quantity: duration, unitPrice: rate, total: duration * rate, isTaxable: true }];
-    if (client.differentials && client.differentials.length > 0) {
-        client.differentials.forEach(diff => {
-            lineItems.push({ description: diff.description, quantity: 1, unitPrice: diff.amount, total: diff.amount, isTaxable: true });
-        });
+    const lineItems: LineItem[] = [{ description: `${appointment.subject || 'Services Rendered'} on ${appointment.date}`, quantity: duration, unitPrice: rate, total: duration * rate, isTaxable: true }];
+    if (client.differentials?.length) {
+        client.differentials.forEach(diff => lineItems.push({ description: diff.description, quantity: 1, unitPrice: diff.amount, total: diff.amount, isTaxable: true }));
     }
-    const subtotal = lineItems.reduce((sum, lineItem) => sum + lineItem.total, 0);
-    const total = subtotal;
+    const subtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
     const invoiceData: Partial<Invoice> = {
-        clientId: appointment.clientId, appointmentId: appointment.id, invoiceDate: new Date().toISOString().split('T')[0],
-        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], status: 'draft',
-        lineItems: lineItems, subtotal: subtotal, total: total,
+        clientId: appointment.clientId,
+        appointmentId: appointment.id,
+        invoiceDate: new Date().toISOString().split('T')[0],
+        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        status: 'draft',
+        lineItems,
+        subtotal,
+        total: subtotal,
     };
     await addInvoice(userId, invoiceData);
 };
-export const addExpense = (userId: string, expenseData: Partial<Expense>): Promise<DocumentReference> => { return addDoc(collection(db, `users/${userId}/expenses`), { ...cleanupObject(expenseData), createdAt: serverTimestamp() }); };
-export const updateExpense = (userId: string, expenseId: string, expenseData: Partial<Expense>): Promise<void> => { return setDoc(doc(db, `users/${userId}/expenses`, expenseId), cleanupObject(expenseData), { merge: true }); };
-export const deleteExpense = (userId: string, expenseId: string): Promise<void> => { return deleteDoc(doc(db, `users/${userId}/expenses`, expenseId)); };
-export const addReminder = (userId: string, reminderData: Partial<Reminder>): Promise<DocumentReference> => {
-    // ✅ UPDATED: Sets isDismissed to false on creation
-    const dataToSave = { ...cleanupObject(reminderData), isDismissed: false, createdAt: serverTimestamp() };
-    return addDoc(collection(db, `users/${userId}/reminders`), dataToSave);
-};
-export const updateReminder = (userId: string, reminderId: string, data: Partial<Reminder>): Promise<void> => {
-    const reminderRef = doc(db, `users/${userId}/reminders`, reminderId);
-    return updateDoc(reminderRef, data);
-};
-export const deleteReminder = (userId: string, reminderId: string): Promise<void> => {
-    return deleteDoc(doc(db, `users/${userId}/reminders`, reminderId));
-};
-export const addMileage = (userId: string, mileageData: Partial<Mileage>): Promise<DocumentReference> => {
-    return addDoc(collection(db, `users/${userId}/mileage`), { ...cleanupObject(mileageData), createdAt: serverTimestamp() });
-};
-export const deleteMileage = (userId: string, mileageId: string): Promise<void> => {
-    return deleteDoc(doc(db, `users/${userId}/mileage`, mileageId));
-};
 
-// --- JOB BOARD FUNCTIONS ---
-export const addJobPosting = async (userId: string, jobData: Partial<JobPosting>): Promise<DocumentReference> => {
-    const dataToSave = {
-        ...cleanupObject(jobData),
-        userId,
-        isFilled: false,
-        createdAt: serverTimestamp(),
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // Default 30-day expiration
-    };
-    return addDoc(collection(db, 'jobPostings'), dataToSave);
-};
+export const addExpense = (userId: string, expenseData: Partial<Expense>) => addDoc(collection(db, `users/${userId}/expenses`), { ...cleanupObject(expenseData), createdAt: serverTimestamp() });
+export const updateExpense = (userId: string, expenseId: string, expenseData: Partial<Expense>) => updateDoc(doc(db, `users/${userId}/expenses`, expenseId), cleanupObject(expenseData));
+export const deleteExpense = (userId: string, expenseId: string) => deleteDoc(doc(db, `users/${userId}/expenses`, expenseId));
 
-export const getJobPostingById = async (postId: string): Promise<JobPosting | null> => {
-    const docRef = doc(db, 'jobPostings', postId);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-        return { id: docSnap.id, ...docSnap.data() } as JobPosting;
-    }
-    return null;
-};
+export const addMileage = (userId: string, mileageData: Partial<Mileage>) => addDoc(collection(db, `users/${userId}/mileage`), { ...cleanupObject(mileageData), createdAt: serverTimestamp() });
+export const deleteMileage = (userId: string, mileageId: string) => deleteDoc(doc(db, `users/${userId}/mileage`, mileageId));
 
-export const sendJobApplicationMessage = async (applicantId: string, applicantProfile: UserProfile, jobPost: JobPosting): Promise<void> => {
-    const jobOwnerId = jobPost.userId;
-    const subject = `New Application for "${jobPost.title}" from ${applicantProfile.name}`;
-    const body = `${applicantProfile.name} has applied for your job posting: "${jobPost.title}".\n\nYou can view their profile or contact them to proceed.`;
-    
-    await sendAppMessage(applicantId, applicantProfile.name || 'A Ten99 User', [jobOwnerId], subject, body, 'application', jobPost.id);
+export const addJobPosting = async (userId: string, jobData: Partial<JobPosting>) => {
+    const profileRef = doc(db, `users/${userId}/profile`, 'mainProfile');
+    return await runTransaction(db, async (transaction) => {
+        const userProfileSnap = await transaction.get(profileRef);
+        if (!userProfileSnap.exists()) throw new Error("User profile not found.");
+        const userProfile = userProfileSnap.data() as UserProfile;
+        const thirtyDaysFromNow = new Date();
+        thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+        const dataToSave = { ...cleanupObject(jobData), userId, isFilled: false, createdAt: serverTimestamp(), expiresAt: Timestamp.fromDate(thirtyDaysFromNow), contactEmail: userProfile.email || '', };
+        const newDocRef = doc(collection(db, 'jobPostings'));
+        transaction.set(newDocRef, dataToSave);
+        return newDocRef;
+    });
 };
-
-export const sendJobOffer = async (applicationMessage: Message): Promise<void> => {
+export const reportJobPost = (postId: string) => updateDoc(doc(db, 'jobPostings', postId), { reportCount: increment(1) });
+export const sendJobApplicationMessage = (applicantId: string, applicantProfile: UserProfile, jobPost: JobPosting) => sendAppMessage(applicantId, applicantProfile.name || 'A Ten99 User', [jobPost.userId], `Application for: ${jobPost.title}`, `${applicantProfile.name} has applied for your job posting: "${jobPost.title}".\n\nYou can view their public profile here:\n${getBaseUrl()}/profile/${applicantId}`, 'application', jobPost.id);
+export const sendJobOffer = async (applicationMessage: Message) => {
     if (!applicationMessage.jobPostId || !applicationMessage.id) return;
+    const jobPosterProfileSnap = await getDoc(doc(db, `users/${applicationMessage.recipientId}/profile`, 'mainProfile'));
+    const jobPosterName = jobPosterProfileSnap.data()?.name || "The Job Poster";
     const batch = writeBatch(db);
-    
-    // Update the application message status for the job poster
-    const posterMessageRef = doc(db, 'users', applicationMessage.recipientId, 'messages', applicationMessage.id);
-    batch.update(posterMessageRef, { status: 'offer-pending' });
-    
-    // Update the job post to mark a pending applicant
-    const jobPostRef = doc(db, 'jobPostings', applicationMessage.jobPostId);
-    batch.update(jobPostRef, { pendingApplicantId: applicationMessage.senderId });
-
-    // Send a new "offer" message to the applicant
-    const offerSubject = `Job Offer for "${applicationMessage.subject.replace('New Application for ', '')}"`;
-    const offerBody = `Congratulations! You have received a job offer. Please review and respond.`;
-    
-    // We need the job poster's name for the message
-    const jobPosterProfileSnap = await getDoc(doc(db, 'users', applicationMessage.recipientId));
-    const jobPosterName = jobPosterProfileSnap.exists() ? jobPosterProfileSnap.data().name : "The Job Poster";
-
-    // This is an internal function call, so it's okay to call it directly.
-    // It creates the message docs in Firestore.
-    const offerMessageData: Partial<Message> = {
-        senderId: applicationMessage.recipientId,
-        senderName: jobPosterName,
-        recipientId: applicationMessage.senderId,
-        subject: offerSubject,
-        body: offerBody,
-        isRead: false,
-        status: 'new',
-        createdAt: serverTimestamp(),
-        type: 'offer',
-        jobPostId: applicationMessage.jobPostId
-    };
-    const applicantMessageRef = doc(collection(db, `users/${applicationMessage.senderId}/messages`));
-    batch.set(applicantMessageRef, offerMessageData);
-    
-    const sentOfferCopyRef = doc(collection(db, `users/${applicationMessage.recipientId}/messages`));
-    batch.set(sentOfferCopyRef, { ...offerMessageData, recipientId: applicationMessage.senderId, isRead: true });
-    
+    batch.update(doc(db, 'jobPostings', applicationMessage.jobPostId), { pendingApplicantId: applicationMessage.senderId });
+    batch.update(doc(db, 'users', applicationMessage.recipientId, 'messages', applicationMessage.id), { status: 'offer-pending' });
     await batch.commit();
+    await sendAppMessage(applicationMessage.recipientId, jobPosterName, [applicationMessage.senderId], `Job Offer for: ${applicationMessage.subject.replace('Application for: ', '')}`, `Congratulations! You have been offered the job. Please review the offer and accept or decline it from your mailbox.`, 'offer', applicationMessage.jobPostId);
+};
+export const declineJobApplication = async (applicationMessage: Message) => {
+    if (!applicationMessage.id) return;
+    await sendAppMessage(applicationMessage.recipientId, "Job Poster", [applicationMessage.senderId], `Regarding your application for: ${applicationMessage.subject.replace('Application for: ', '')}`, `Thank you for your interest. Unfortunately, another candidate has been selected. We wish you the best in your job search.`);
+    await updateDoc(doc(db, 'users', applicationMessage.recipientId, 'messages', applicationMessage.id), { status: 'declined' });
+};
+export const acceptJobOffer = async (offerMessage: Message): Promise<void> => {
+    if (!offerMessage.id || !offerMessage.jobPostId || offerMessage.type !== 'offer') throw new Error("Invalid offer message.");
+    const jobPost = await getJobPostingById(offerMessage.jobPostId);
+    if (!jobPost) throw new Error("Job posting not found.");
+    if (jobPost.isFilled) throw new Error("This job has already been filled.");
+    const batch = writeBatch(db);
+    batch.update(doc(db, 'jobPostings', jobPost.id!), { isFilled: true, pendingApplicantId: '' });
+    batch.update(doc(db, 'users', offerMessage.recipientId, 'messages', offerMessage.id), { status: 'approved' });
+    await batch.commit();
+    const newAppointmentData: Partial<Appointment> = {
+        subject: jobPost.title, date: new Date().toISOString().split('T')[0], time: '09:00',
+        status: 'pending-confirmation', locationType: jobPost.jobType === 'Virtual' ? 'virtual' : 'physical',
+        address: jobPost.location,
+        notes: `This appointment was created from your successful application... Please confirm or update the date and time.`,
+    };
+    await addAppointment(offerMessage.recipientId, newAppointmentData);
+    await sendAppMessage(offerMessage.recipientId, "Ten99 System", [jobPost.userId], `Offer Accepted: ${jobPost.title}`, `${offerMessage.senderName} has accepted your offer for "${jobPost.title}". An event has been added to their calendar for confirmation.`);
+};
+export const declineJobOffer = async (offerMessage: Message): Promise<void> => {
+    if (!offerMessage.id || !offerMessage.jobPostId || offerMessage.type !== 'offer') throw new Error("Invalid offer message.");
+    await updateDoc(doc(db, 'jobPostings', offerMessage.jobPostId), { pendingApplicantId: '' });
+    await updateDoc(doc(db, 'users', offerMessage.recipientId, 'messages', offerMessage.id), { status: 'declined' });
+    await sendAppMessage(offerMessage.recipientId, "Ten99 System", [offerMessage.senderId], `Offer Declined: ${offerMessage.subject.replace('Job Offer for: ', '')}`, `The applicant has declined your offer. The job post "${offerMessage.subject.replace('Job Offer for: ', '')}" has been made available for other applicants.`);
+};
+export const rescindJobOffer = async (applicationMessage: Message): Promise<void> => {
+    if (!applicationMessage.id || !applicationMessage.jobPostId) return;
+    await updateDoc(doc(db, 'jobPostings', applicationMessage.jobPostId), { pendingApplicantId: '' });
+    await updateDoc(doc(db, 'users', applicationMessage.recipientId, 'messages', applicationMessage.id), { status: 'offer-rescinded' });
+    await sendAppMessage(applicationMessage.recipientId, "Job Poster", [applicationMessage.senderId], `Offer Rescinded for: ${applicationMessage.subject.replace('Application for: ', '')}`, `The job offer for "${applicationMessage.subject.replace('Application for: ', '')}" has been rescinded.`);
 };
 
-// ... other job board functions would continue here ...
 
 // --- MAGIC MAILBOX ACTION FUNCTIONS ---
-export const confirmInboundOffer = async (userId: string, message: Message): Promise<void> => { /* implementation needed */ };
-export const acceptInboundOfferPending = async (userId: string, message: Message): Promise<void> => { /* implementation needed */ };
-export const declineInboundOffer = async (userId: string, message: Message): Promise<void> => { /* implementation needed */ };
-export const markAsEducation = async (userId: string, message: Message): Promise<void> => { /* implementation needed */ };
-export const createEducationAppointmentFromMessage = async (userId: string, message: Message, appointmentData: Partial<Appointment>): Promise<void> => { /* implementation needed */ };
+
+export const confirmInboundOffer = async (userId: string, message: Message) => {
+    if (!message.id || !message.appointmentId) throw new Error("Cannot confirm offer: Missing linked appointment ID.");
+    const batch = writeBatch(db);
+    batch.update(doc(db, `users/${userId}/messages`, message.id), { status: 'approved' });
+    const appointmentRef = doc(db, `users/${userId}/appointments`, message.appointmentId);
+    const appointmentSnap = await getDoc(appointmentRef);
+    if (!appointmentSnap.exists()) throw new Error("Could not find the linked appointment to confirm.");
+    batch.update(appointmentRef, { status: 'scheduled', subject: appointmentSnap.data().subject.replace('Pending: ', '') });
+    await batch.commit();
+};
+export const acceptInboundOfferPending = async (userId: string, message: Message) => {
+    if (!message.id) throw new Error("Message ID is missing.");
+    const userProfileSnap = await getDoc(doc(db, `users/${userId}/profile`, 'mainProfile'));
+    const userName = userProfileSnap.data()?.name || "The Freelancer";
+    const q = query(collection(db, `users/${userId}/templates`), where("type", "==", "pending"), limit(1));
+    const templateSnapshot = await getDocs(q);
+    if (!templateSnapshot.empty) {
+        const template = templateSnapshot.docs[0].data() as Template;
+        await sendAppMessage(userId, userName, [message.senderId], template.subject, template.body);
+    }
+    await updateDoc(doc(db, `users/${userId}/messages`, message.id), { status: 'pending' });
+};
+export const declineInboundOffer = async (userId: string, message: Message) => {
+    if (!message.id) throw new Error("Message ID is missing.");
+    const batch = writeBatch(db);
+    batch.update(doc(db, `users/${userId}/messages`, message.id), { status: 'declined' });
+    if (message.appointmentId) {
+        batch.update(doc(db, `users/${userId}/appointments`, message.appointmentId), { status: 'canceled' });
+    }
+    const userProfileSnap = await getDoc(doc(db, `users/${userId}/profile`, 'mainProfile'));
+    const userName = userProfileSnap.data()?.name || "The Freelancer";
+    const q = query(collection(db, `users/${userId}/templates`), where("type", "==", "decline"), limit(1));
+    const templateSnapshot = await getDocs(q);
+    if (!templateSnapshot.empty) {
+        const template = templateSnapshot.docs[0].data() as Template;
+        await sendAppMessage(userId, userName, [message.senderId], template.subject, template.body);
+    }
+    await batch.commit();
+};
+export const markAsEducation = async (userId: string, message: Message) => {
+    if (!message.id || !message.appointmentId) throw new Error("Cannot process education event: Missing linked appointment ID.");
+    const batch = writeBatch(db);
+    batch.update(doc(db, `users/${userId}/messages`, message.id), { status: 'archived-education' });
+    batch.update(doc(db, `users/${userId}/appointments`, message.appointmentId), { status: 'scheduled', eventType: 'education' });
+    await batch.commit();
+};
+export const createEducationAppointmentFromMessage = async (userId: string, message: Message, appointmentData: Partial<Appointment>): Promise<void> => {
+    if (!message.id) throw new Error("Cannot create event: Message ID is missing.");
+    const batch = writeBatch(db);
+    const newAppointmentRef = doc(collection(db, `users/${userId}/appointments`));
+    batch.set(newAppointmentRef, { ...cleanupObject(appointmentData), createdAt: serverTimestamp() });
+    batch.update(doc(db, `users/${userId}/messages`, message.id), { status: 'archived-education', appointmentId: newAppointmentRef.id });
+    await batch.commit();
+};
